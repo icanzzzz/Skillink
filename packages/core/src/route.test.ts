@@ -293,6 +293,50 @@ describe('route entries', () => {
     ).rejects.toMatchObject({ code: 'VERSION_NOT_FOUND' });
   });
 
+  it('rejects removing an entry when the remaining graph is invalid', async () => {
+    const { paths } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'frontend',
+      requested: '1.2.0',
+    });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'docs',
+      requested: '1.0.0',
+    });
+    const packageFile = await readPackageFile(paths);
+    packageFile.packages.base!.versions['2.0.0']!.skills = {
+      pdf: '9.9.9',
+    };
+    await writePackageFile(paths, packageFile);
+
+    await expect(
+      removeRouteEntry({
+        paths,
+        targetId: 'project-a',
+        name: 'docs',
+      }),
+    ).rejects.toMatchObject({ code: 'ROUTE_INVALID' });
+
+    const route = await readRouteFile(paths);
+    expect(route.targets[0]?.packages.docs).toBeDefined();
+
+    await expect(
+      removeRouteEntry({
+        paths,
+        targetId: 'project-a',
+        name: 'docs',
+        force: true,
+      }),
+    ).resolves.toBe(true);
+    expect(
+      (await readRouteFile(paths)).targets[0]?.packages.docs,
+    ).toBeUndefined();
+  });
+
   it('removes a route entry without touching the target directory', async () => {
     const { paths, targetPath } = await setup();
     await addRouteEntry({

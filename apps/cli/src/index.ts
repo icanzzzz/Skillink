@@ -569,13 +569,21 @@ export async function runCli(
     .description('Remove a package assignment from a target')
     .argument('<target-id>', 'Target id')
     .argument('<package>', 'Package name')
-    .action(async (targetId: string, name: string) => {
-      const paths = await ensureHome(context.home);
-      const removed = await removeRouteEntry({ paths, targetId, name });
-      context.stdout(
-        removed ? `Removed route ${targetId}/${name}` : 'No route found.',
-      );
-    });
+    .option('--force', 'Remove even if the remaining graph is invalid')
+    .action(
+      async (targetId: string, name: string, options: { force?: boolean }) => {
+        const paths = await ensureHome(context.home);
+        const removed = await removeRouteEntry({
+          paths,
+          targetId,
+          name,
+          force: options.force,
+        });
+        context.stdout(
+          removed ? `Removed route ${targetId}/${name}` : 'No route found.',
+        );
+      },
+    );
 
   program
     .command('gc')

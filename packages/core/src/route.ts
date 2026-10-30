@@ -107,6 +107,7 @@ export interface RemoveRouteEntryInput {
   paths: SkillinkPaths;
   targetId: string;
   name: string;
+  force?: boolean;
 }
 
 export async function removeRouteEntry(
@@ -128,6 +129,32 @@ export async function removeRouteEntry(
   }
 
   delete target.packages[input.name];
+
+  if (!input.force) {
+    const packageFile = await readPackageFile(input.paths);
+    const skillFile = await readSkillFile(input.paths);
+    const roots = Object.entries(target.packages)
+      .filter(([, lock]) => lock.enabled !== false)
+      .map(([name, lock]) => ({ name, version: lock.resolved }));
+
+    try {
+      resolvePackageGraph(packageFile, skillFile, roots);
+    } catch (error) {
+      throw new SkillinkError(
+        'ROUTE_INVALID',
+        `Cannot remove route "${input.name}" from target "${input.targetId}" because the remaining graph is invalid: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        {
+          targetId: input.targetId,
+          name: input.name,
+          cause: error instanceof Error ? error.message : String(error),
+        },
+        { cause: error },
+      );
+    }
+  }
+
   await withHistory(input.paths, 'remove-route-entry', async () => {
     await writeRouteFile(input.paths, route);
   });
