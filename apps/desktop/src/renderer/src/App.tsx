@@ -93,6 +93,7 @@ export function App({ api }: AppProps) {
     }
 
     setBusy(true);
+    setApplyReport(null);
     try {
       await action();
       await refresh();

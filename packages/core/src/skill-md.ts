@@ -25,7 +25,7 @@ export function parseSkillFrontmatter(
   }
 
   const end = lines.findIndex(
-    (line, index) => index > 0 && line.trim() === '---',
+    (line, index) => index > 0 && line === '---',
   );
   if (end === -1) {
     return undefined;

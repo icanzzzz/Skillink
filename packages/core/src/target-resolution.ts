@@ -3,7 +3,10 @@ import {
   getSkillinkPaths,
   type SkillinkPaths,
 } from '@skillink/shared';
-import { resolvePackageGraph } from './package-graph.js';
+import {
+  computePackageIntegrity,
+  resolvePackageGraph,
+} from './package-graph.js';
 import { readPackageFile } from './package-store.js';
 import { readRouteFile } from './route.js';
 import { readSkillFile } from './skill-store.js';
@@ -35,6 +38,22 @@ export async function summarizeTargetSkills(
       .map(([name, lock]) => ({ name, version: lock.resolved }));
 
     try {
+      for (const [name, lock] of Object.entries(target.packages)) {
+        if (lock.enabled === false) {
+          continue;
+        }
+        const expected = computePackageIntegrity(packageFile, [
+          { name, version: lock.resolved },
+        ]);
+        if (expected !== lock.integrity) {
+          throw new SkillinkError(
+            'PACKAGE_INTEGRITY_MISMATCH',
+            `Route lock for ${name}@${lock.resolved} does not match package.json.`,
+            { name, version: lock.resolved, expected, actual: lock.integrity },
+          );
+        }
+      }
+
       const resolution = resolvePackageGraph(packageFile, skillFile, roots);
       return {
         targetId: target.id,

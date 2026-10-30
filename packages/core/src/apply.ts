@@ -167,7 +167,7 @@ async function planTarget(
     [...resolution.skills.values()].map((skill) => [skill.name, skill]),
   );
 
-  if (target.mode !== 'link' && desired.size > 0) {
+  if (target.mode !== 'link') {
     throw new SkillinkError(
       'COPY_MODE_UNSUPPORTED',
       'Copy mode is not implemented yet; use mode "link" instead.',

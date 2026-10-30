@@ -89,6 +89,18 @@ describe('summarizeTargetSkills', () => {
     ]);
   });
 
+  it('reports stale route lock integrity', async () => {
+    const { paths } = await setup();
+    const route = await readRouteFile(paths);
+    route.targets[0]!.packages.frontend!.integrity = 'sha256-stale';
+    await writeRouteFile(paths, route);
+
+    const result = await summarizeTargetSkills({ paths });
+
+    expect(result[0]?.skills).toEqual([]);
+    expect(result[0]?.error).toContain('PACKAGE_INTEGRITY_MISMATCH');
+  });
+
   it('reports resolution errors instead of throwing', async () => {
     const { paths } = await setup();
     await importSkillVersion(paths.home, 'pdf', '2.0.0');

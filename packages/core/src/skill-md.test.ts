@@ -36,6 +36,21 @@ metadata:
     ).toBeUndefined();
   });
 
+  it('does not end the frontmatter inside a YAML block scalar', () => {
+    const result = parseSkillFrontmatter(`---
+description: |
+  first line
+  ---
+  second line
+metadata:
+  author: Skillink
+---
+`);
+
+    expect(result?.description).toBe('first line\n---\nsecond line\n');
+    expect(result?.metadata).toEqual({ author: 'Skillink' });
+  });
+
   it('does not keep non-scalar metadata values', () => {
     const result = parseSkillFrontmatter(`---
 description: Demo
