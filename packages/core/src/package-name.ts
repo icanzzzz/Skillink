@@ -4,6 +4,61 @@ import { SkillinkError } from '@skillink/shared';
 const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
 const INVALID_WINDOWS_CHARS = /[<>:"/\\|?*\u0000-\u001f]/;
 
+export type NameCollisionKind = 'package' | 'skill' | 'target';
+
+function caseFold(value: string): string {
+  return value.toLocaleLowerCase('en-US');
+}
+
+export function findCaseInsensitiveCollision(
+  existing: Iterable<string>,
+  candidate: string,
+): string | undefined {
+  const folded = caseFold(candidate);
+  for (const name of existing) {
+    if (name !== candidate && caseFold(name) === folded) {
+      return name;
+    }
+  }
+  return undefined;
+}
+
+export function findCaseInsensitiveDuplicates(
+  names: Iterable<string>,
+): Array<[string, string]> {
+  const seen = new Map<string, string>();
+  const duplicates: Array<[string, string]> = [];
+
+  for (const name of names) {
+    const folded = caseFold(name);
+    const existing = seen.get(folded);
+    if (existing !== undefined && existing !== name) {
+      duplicates.push([existing, name]);
+    } else {
+      seen.set(folded, name);
+    }
+  }
+
+  return duplicates;
+}
+
+export function assertNoCaseInsensitiveCollision(
+  existing: Iterable<string>,
+  candidate: string,
+  kind: NameCollisionKind,
+): void {
+  const collision = findCaseInsensitiveCollision(existing, candidate);
+  if (!collision) {
+    return;
+  }
+
+  throw new SkillinkError(
+    kind === 'target' ? 'TARGET_EXISTS' : 'PACKAGE_EXISTS',
+    `A ${kind} named "${collision}" already exists; ${kind} names are case-insensitive.`,
+    { candidate, existing: collision, kind },
+  );
+}
+
 export function assertSafePackageName(name: string): string {
   if (!name || name !== name.trim()) {
     throw new SkillinkError(

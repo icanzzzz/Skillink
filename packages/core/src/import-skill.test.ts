@@ -93,6 +93,27 @@ describe('importSkill', () => {
     expect(await pathExists(getSkillDir(paths, 'demo', '1.0.0'))).toBe(false);
   });
 
+  it('rejects skill names that collide case-insensitively', async () => {
+    const source = await makeSource();
+    const home = await tempDir('skillink-skill-home-');
+
+    await importSkill({
+      sourceDir: source,
+      name: 'Demo',
+      version: '1.0.0',
+      home,
+    });
+
+    await expect(
+      importSkill({
+        sourceDir: source,
+        name: 'demo',
+        version: '1.0.0',
+        home,
+      }),
+    ).rejects.toMatchObject({ code: 'PACKAGE_EXISTS' });
+  });
+
   it('imports a folder with SKILL.md and records it in skill.json', async () => {
     const source = await makeSource();
     const home = await tempDir('skillink-skill-home-');

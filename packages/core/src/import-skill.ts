@@ -28,6 +28,7 @@ import {
   upsertSkillVersion,
 } from './skill-store.js';
 import {
+  assertNoCaseInsensitiveCollision,
   assertSafePackageName,
   createAutoVersion,
   normalizeVersion,
@@ -88,6 +89,7 @@ export async function importSkill(
     normalizeVersion(input.version) ?? createAutoVersion(scan.manifestHash);
   const skillDir = getSkillDir(paths, name, version);
   const skillFile = await readSkillFile(paths);
+  assertNoCaseInsensitiveCollision(Object.keys(skillFile.skills), name, 'skill');
   const existing = skillFile.skills[name]?.versions[version];
 
   if (existing) {

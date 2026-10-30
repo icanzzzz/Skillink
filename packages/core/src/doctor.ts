@@ -23,6 +23,7 @@ import {
   isPathInside,
   isSamePath,
 } from './path-policy.js';
+import { findCaseInsensitiveDuplicates } from './package-name.js';
 import { status } from './status.js';
 
 export type DoctorIssueCode =
@@ -186,6 +187,36 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
         },
       ],
     };
+  }
+
+  for (const [first, second] of findCaseInsensitiveDuplicates(
+    Object.keys(packageFile.packages),
+  )) {
+    issues.push({
+      code: 'INVALID_CONFIG',
+      message: `Package names collide case-insensitively: ${first} / ${second}`,
+      name: second,
+    });
+  }
+
+  for (const [first, second] of findCaseInsensitiveDuplicates(
+    Object.keys(skillFile.skills),
+  )) {
+    issues.push({
+      code: 'INVALID_CONFIG',
+      message: `Skill names collide case-insensitively: ${first} / ${second}`,
+      name: second,
+    });
+  }
+
+  for (const [first, second] of findCaseInsensitiveDuplicates(
+    route.targets.map((target) => target.id),
+  )) {
+    issues.push({
+      code: 'INVALID_CONFIG',
+      message: `Target ids collide case-insensitively: ${first} / ${second}`,
+      targetId: second,
+    });
   }
 
   const targetIds = new Set<string>();

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { assertSafePackageName, normalizeVersion } from './package-name.js';
+import {
+  assertSafePackageName,
+  findCaseInsensitiveCollision,
+  findCaseInsensitiveDuplicates,
+  normalizeVersion,
+} from './package-name.js';
 
 describe('package names', () => {
   it.each(['demo', 'my-package', '我的包', 'a b'])('accepts %s', (name) => {
@@ -12,6 +17,22 @@ describe('package names', () => {
       expect(() => assertSafePackageName(name)).toThrow();
     },
   );
+});
+
+describe('case-insensitive names', () => {
+  it('finds a collision without flagging the exact same name', () => {
+    expect(findCaseInsensitiveCollision(['Demo'], 'demo')).toBe('Demo');
+    expect(findCaseInsensitiveCollision(['Demo'], 'Demo')).toBeUndefined();
+  });
+
+  it('lists duplicate spellings', () => {
+    expect(
+      findCaseInsensitiveDuplicates(['Demo', 'demo', 'DEMO', 'other']),
+    ).toEqual([
+      ['Demo', 'demo'],
+      ['Demo', 'DEMO'],
+    ]);
+  });
 });
 
 describe('versions', () => {

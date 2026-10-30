@@ -6,7 +6,10 @@ import {
   type TargetMode,
   type TargetRoute,
 } from '@skillink/shared';
-import { assertSafePackageName } from './package-name.js';
+import {
+  assertNoCaseInsensitiveCollision,
+  assertSafePackageName,
+} from './package-name.js';
 import { assertSafeTargetPath, isPathInside, isSamePath } from './path-policy.js';
 import { readRouteFile, writeRouteFile } from './route.js';
 import { withHistory } from './history.js';
@@ -36,6 +39,12 @@ export async function addTarget(input: AddTargetInput): Promise<TargetRoute> {
   );
   const id = assertSafePackageName(
     input.id?.trim() || slugify(input.label ?? path.basename(targetPath)),
+  );
+
+  assertNoCaseInsensitiveCollision(
+    route.targets.map((target) => target.id),
+    id,
+    'target',
   );
 
   if (route.targets.some((target) => target.id === id)) {

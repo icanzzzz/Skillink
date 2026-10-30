@@ -233,6 +233,36 @@ describe('doctor', () => {
     ).toEqual([]);
   });
 
+  it('reports names that collide case-insensitively', async () => {
+    const { paths } = await setup();
+    await writePackageFile(paths, {
+      schemaVersion: 2,
+      packages: {
+        Demo: {
+          versions: {
+            '1.0.0': { packages: {}, skills: { pdf: '1.0.0' } },
+          },
+        },
+        demo: {
+          versions: {
+            '1.0.0': { packages: {}, skills: { pdf: '1.0.0' } },
+          },
+        },
+      },
+    });
+
+    const report = await doctor({ paths });
+
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'INVALID_CONFIG',
+          message: expect.stringMatching(/case-insensitive/i),
+        }),
+      ]),
+    );
+  });
+
   it('reports a package that references a missing skill', async () => {
     const { paths } = await setup();
     const packageFile: PackageFile = {

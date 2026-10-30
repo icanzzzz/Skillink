@@ -89,6 +89,19 @@ describe('targets', () => {
     ).rejects.toThrow(/target/i);
   });
 
+  it('rejects target ids that collide case-insensitively', async () => {
+    const { paths, targetPath } = await setup();
+    await addTarget({ paths, id: 'Project-A', path: targetPath });
+
+    await expect(
+      addTarget({
+        paths,
+        id: 'project-a',
+        path: path.join(path.dirname(targetPath), 'other'),
+      }),
+    ).rejects.toMatchObject({ code: 'TARGET_EXISTS' });
+  });
+
   it('rejects duplicate target paths', async () => {
     const { paths, targetPath } = await setup();
     await addTarget({ paths, id: 'project-a', path: targetPath });

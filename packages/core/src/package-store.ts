@@ -17,7 +17,11 @@ import {
   resolvePackageGraph,
   validateAllPackages,
 } from './package-graph.js';
-import { assertSafePackageName, normalizeVersion } from './package-name.js';
+import {
+  assertNoCaseInsensitiveCollision,
+  assertSafePackageName,
+  normalizeVersion,
+} from './package-name.js';
 
 export async function readPackageFile(
   paths: SkillinkPaths,
@@ -141,6 +145,7 @@ export async function createPackageVersion(
 
   const file = await readPackageFile(input.paths);
   const skillFile = await readSkillFile(input.paths);
+  assertNoCaseInsensitiveCollision(Object.keys(file.packages), name, 'package');
   const packageEntry = file.packages[name] ?? { versions: {} };
 
   if (packageEntry.versions[version]) {
@@ -206,6 +211,7 @@ export async function copyPackageVersion(
 
   const file = await readPackageFile(input.paths);
   const skillFile = await readSkillFile(input.paths);
+  assertNoCaseInsensitiveCollision(Object.keys(file.packages), targetName, 'package');
   const sourcePackage = file.packages[input.sourceName];
 
   if (!sourcePackage) {
