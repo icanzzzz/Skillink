@@ -37,9 +37,13 @@ export function isTrustedSenderUrl(
     return false;
   }
 
-  if (policy.devServerUrl) {
+  if (!policy.isPackaged && policy.devServerUrl) {
     const devServer = parseUrl(policy.devServerUrl);
-    if (devServer && candidate.origin === devServer.origin) {
+    if (
+      devServer &&
+      (devServer.protocol === 'http:' || devServer.protocol === 'https:') &&
+      candidate.origin === devServer.origin
+    ) {
       return true;
     }
   }

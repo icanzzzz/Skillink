@@ -54,6 +54,28 @@ describe('isTrustedSenderUrl', () => {
     expect(isTrustedSenderUrl('http://localhost:5174/', policy)).toBe(false);
   });
 
+  it('ignores the dev server URL in a packaged app', () => {
+    const policy = {
+      isPackaged: true,
+      appUrl,
+      devServerUrl: 'http://localhost:5173',
+    };
+
+    expect(isTrustedSenderUrl('http://localhost:5173/', policy)).toBe(false);
+  });
+
+  it('rejects opaque dev server URLs', () => {
+    const policy = {
+      isPackaged: false,
+      appUrl,
+      devServerUrl: 'file:///C:/tmp/renderer.html',
+    };
+
+    expect(
+      isTrustedSenderUrl('file:///C:/tmp/renderer.html', policy),
+    ).toBe(false);
+  });
+
   it('rejects malformed URLs', () => {
     expect(
       isTrustedSenderUrl('not a url', {

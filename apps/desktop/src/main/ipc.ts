@@ -95,21 +95,22 @@ function senderPolicy(): SenderPolicy {
   };
 }
 
-function handle(
-  channel: string,
-  listener: (event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => unknown,
+export function registerIpcHandlers(
+  getMainWindow: () => BrowserWindow | null,
 ): void {
-  ipcMain.handle(channel, (event, ...args) => {
-    assertTrustedSender(
-      event,
-      BrowserWindow.fromWebContents(event.sender),
-      senderPolicy(),
-    );
-    return listener(event, ...args);
-  });
-}
+  const handle = (
+    channel: string,
+    listener: (
+      event: Electron.IpcMainInvokeEvent,
+      ...args: unknown[]
+    ) => unknown,
+  ): void => {
+    ipcMain.handle(channel, (event, ...args) => {
+      assertTrustedSender(event, getMainWindow(), senderPolicy());
+      return listener(event, ...args);
+    });
+  };
 
-export function registerIpcHandlers(): void {
   handle('skillink:snapshot', () => getSnapshot());
   handle('skillink:choose-folder', (event) => chooseFolder(event));
 

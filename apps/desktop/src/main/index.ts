@@ -4,10 +4,6 @@ import { registerIpcHandlers } from './ipc.js';
 
 let mainWindow: BrowserWindow | null = null;
 
-export function getMainWindow(): BrowserWindow | null {
-  return mainWindow;
-}
-
 function createWindow(): void {
   const window = new BrowserWindow({
     width: 1180,
@@ -54,7 +50,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  registerIpcHandlers();
+  registerIpcHandlers(() => mainWindow);
   createWindow();
 
   app.on('activate', () => {
