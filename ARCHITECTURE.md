@@ -712,7 +712,7 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 
 ## 10. 测试策略
 
-当前验证：35 个测试文件、273 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
+当前验证：35 个测试文件、274 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
 
 | 层级 | 内容 |
 |---|---|
@@ -783,7 +783,7 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 
 ### 11.1 当前实现验证
 
-- `pnpm test`：35 个测试文件、273 个测试通过；
+- `pnpm test`：35 个测试文件、274 个测试通过；
 - `pnpm typecheck`：通过；
 - `pnpm build`：CLI 与 Electron 桌面端构建成功；
 - 真实 CLI E2E：skill 安装、package 创建/复制、target/route、apply、status/doctor、冲突修复、history/rollback、gc dry-run 均跑通；
