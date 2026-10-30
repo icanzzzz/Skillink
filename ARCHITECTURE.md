@@ -721,7 +721,7 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 | CLI 测试 | 完整 skill -> package -> route -> apply 闭环、迁移、回滚 |
 | GUI 测试 | IPC schema、页面渲染、空状态、组合展示、target/route 生命周期、apply 预览 |
 | 安全测试 | 恶意源文件夹、路径穿越、断链、只读文件、同名冲突、内容篡改、非受信 IPC |
-| 兼容测试 | Windows 11 必跑；Linux/macOS 待加入 CI |
+| 兼容测试 | Windows 11 本地主验收；Windows/Ubuntu/macOS CI 矩阵 |
 
 重点用例：
 
@@ -748,7 +748,7 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 - apply 的预检和回滚覆盖普通失败与进程内异常，但不能防止进程崩溃/断电留下半完成 target；
 - history restore 在普通写入失败时会回滚三文件，但同样不能防止进程崩溃窗口；
 - Windows 长路径、OneDrive 同步冲突尚未做专项自动化验证；
-- Linux/macOS 代码路径存在，但尚未纳入 CI；
+- Linux/macOS 已加入 CI 矩阵，但尚未在真实设备上手工验证；
 - 当前安装包未配置代码签名和自动更新；
 - doctor/apply 会重新哈希 skill 内容，超大版本库首次检查可能较慢。
 

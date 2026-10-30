@@ -243,6 +243,26 @@ describe('apply', () => {
     });
   });
 
+  it('rejects a migrated copy target before writing links', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'combo',
+      requested: '1.0.0',
+    });
+    const route = await readRouteFile(paths);
+    route.targets[0]!.mode = 'copy';
+    await writeRouteFile(paths, route);
+
+    await expect(apply({ paths })).rejects.toMatchObject({
+      code: 'COPY_MODE_UNSUPPORTED',
+    });
+    await expect(lstat(path.join(targetPath, 'pdf'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
   it('does not create a missing target directory when validation fails', async () => {
     const { paths } = await setup();
     const missingTargetPath = path.join(paths.home, '..', 'not-created');
