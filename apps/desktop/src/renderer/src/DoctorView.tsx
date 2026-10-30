@@ -46,8 +46,8 @@ export function DoctorView({
 
         {report.issues.length === 0 ? (
           <p className="empty">
-            No issues found. route.json, skills.json, the library, and links are
-            consistent.
+            No issues found. route.json, package.json, skill.json, the skill
+            library, and links are consistent.
           </p>
         ) : (
           <div className="issues">

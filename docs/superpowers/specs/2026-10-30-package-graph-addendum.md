@@ -239,7 +239,7 @@ skillink route add project-a frontend@1.1.0
 ## 8. GC 与删除的引用口径
 
 - GC 保护集合 = 任一 route target（含 `enabled: false`）下所有 package lock 的传递闭包 + `skill.json` 中被 tag 指向的版本。
-- 未被 route 引用的 package 版本不保护 skill；GC 后它们可能悬空，doctor 报 `PACKAGE_SKILL_MISSING`。
+- 未被 route 引用的 package 版本不保护 skill；GC 后它们可能悬空，doctor 报 `SKILL_NOT_FOUND`。
 - `skill remove` 只拒绝“被 route 传递闭包引用”或“被 tag 保留”的版本；仅被未引用 package 引用时允许删除。
 - `package remove` 拒绝被任一 route（含 disabled）或其他 package 版本引用的版本。
 - 这样避免“只要 package.json 里还有任何旧配置，GC 就永远无法回收内容”的死锁，同时保证当前期望状态和 tag 永远可用。

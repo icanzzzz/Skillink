@@ -1,56 +1,147 @@
 # Skillink
 
-Skillink 是一个纯本地、pnpm 风格的文件系统包管理器，用于管理任意文件夹的版本、公用库和目标目录投影。
+Skillink 是一个纯本地、以 **skill** 为实体、以 **package** 为组合配置的文件系统包管理器。
 
-- 管理单位是任意文件夹（Package），不要求 `SKILL.md`；
-- 公用库目录：`%USERPROFILE%\.agents\skillink\skills.json` / `~/.agents/skillink/skills.json`；
-- 目标路由：`%USERPROFILE%\.agents\skillink\route.json` / `~/.agents/skillink/route.json`；
-- 目标目录由用户填写，不在项目中生成配置；
-- 单向声明式收敛：`route.json` 是期望状态，目标目录是投影结果。
+```text
+target -> package -> skill -> 实体内容
+```
+
+- **Skill 是唯一安装单位，也是唯一实体**：内容存放在 `%USERPROFILE%\.agents\skillink\skills\<skill>\<version>\`，根目录必须有 `SKILL.md`。
+- **Package 只是配置文件**：`package.json` 描述 package 版本如何组合 skill 和其他 package；它没有内容目录，也不会投影到 target。
+- **Route 只依赖 package**：`route.json` 的 target 声明 package 版本，不直接声明 skill。
+- **Target 最终只包含 skill**：apply 会把 package 图展开为 skill 集合，再链接/复制 skill 文件夹。
+- **三个全局配置**：`route.json`、`package.json`、`skill.json` 同级，均位于控制面。
+- **可复现**：route 锁定 package 版本；package 版本锁定精确 skill/package 版本；package 使用传递闭包哈希校验。
+- **不在项目中生成配置**：target 是普通目录，只放投影结果。
 
 完整架构见 [ARCHITECTURE.md](./ARCHITECTURE.md)。
 
 ## 当前状态
 
-MVP 基础切片已可用：
-
-- 任意本地文件夹导入公用库；
-- `skills.json` + `route.json`；
-- target 由用户填写；
+- skill 导入强制检查根级 `SKILL.md`；
+- `skill.json` 管理所有 skill 版本、完整性、标签；
+- `package.json` 管理 package 组合，支持 package 嵌套 package；
+- DFS 环检测、skill 同版本去重、不同版本冲突报错；
+- `package copy` 支持复制 package 并覆盖/删除依赖，用于解决 skill 版本冲突；
+- `route.json` 只写 package lock；
 - Windows junction / POSIX symlink 投影；
-- `apply` / `status` / `doctor`；
-- 历史快照与成对回滚（`route.json` + `skills.json`）；
-- 公用库标签、版本删除（进入 `trash/`）与 GC；
-- GUI 的 Targets / Library / History / Doctor 管理页面；
+- `apply` / `status` / `doctor` / `gc`；
+- 三个配置文件的历史快照与成对回滚；
+- v1 `skills.json` -> v2 全有或全无迁移；
+- GUI 的 Targets / Skills / Packages / History / Doctor 页面；
 - Electron 打包（NSIS + portable）。
 
+## 快速开始
+
+```bash
+# 初始化控制面：route.json + package.json + skill.json
+pnpm dev:cli -- init
+
+# 导入 skill；文件夹根目录必须有 SKILL.md
+pnpm dev:cli -- skill add <folder-with-SKILL.md> --name pdf --version 1.0.0
+
+# 创建 package：组合 skill 和其他 package
+pnpm dev:cli -- package create base@1.0.0 --skill pdf@1.0.0
+pnpm dev:cli -- package create frontend@1.0.0 \
+  --package base@1.0.0 \
+  --skill review@1.0.0
+
+# 添加 target，并把 package 分配给 target
+pnpm dev:cli -- target add <empty-target-dir> --id project-a
+pnpm dev:cli -- route add project-a frontend@1.0.0
+
+# 投影 skill 到 target
+pnpm dev:cli -- apply
+
+# 查看状态 / 健康检查
+pnpm dev:cli -- status
+pnpm dev:cli -- doctor
+```
+
+`target` 下最终只会出现 skill 文件夹，例如：
+
 ```text
-skillink library list
-skillink library tag <package@version> <tag>
-skillink library remove <package@version>
-skillink add <folder> --name <name> --version <version>
-skillink target add <path> --label <label>
-skillink route add <target-id> <package>@<version>
+<target>/
+├─ pdf     -> ~/.agents/skillink/skills/pdf/1.0.0
+└─ review  -> ~/.agents/skillink/skills/review/1.0.0
+```
+
+不会出现 `frontend` 或 `base` 目录，因为 package 只是配置。
+
+## 解决 skill 版本冲突
+
+同一个 target 中，同一个 skill 只能有一个版本：
+
+```text
+frontend@1.0.0 -> pdf@1.2.0
+docs@1.0.0     -> pdf@1.3.0
+=> SKILL_VERSION_CONFLICT
+```
+
+用 `package copy` 复制其中一个 package，覆盖依赖后把 route 指向新版本：
+
+```bash
+pnpm dev:cli -- package copy frontend@1.0.0 frontend@1.1.0 --skill pdf@1.3.0
+pnpm dev:cli -- route add project-a frontend@1.1.0
+pnpm dev:cli -- apply
+```
+
+嵌套冲突时先复制嵌套 package，再复制父 package：
+
+```bash
+pnpm dev:cli -- package copy base@2.0.0 base@2.1.0 --skill pdf@1.3.0
+pnpm dev:cli -- package copy frontend@1.0.0 frontend@1.1.0 --package base@2.1.0
+```
+
+## 常用命令
+
+```bash
+skillink init
+skillink migrate
+
+skillink skill add <folder> [--name <name>] [--version <version>]
+skillink skill list [--json]
+skillink skill tag <skill@version> <tag>
+skillink skill remove <skill@version>
+
+skillink package create <name@version> --skill <skill@version>... [--package <package@version>...] [--description <text>]
+skillink package copy <source@version> <target@version> [--skill ...] [--package ...] [--drop-skill ...] [--drop-package ...] [--description <text>]
+skillink package list [--json]
+skillink package tag <package@version> <tag>
+skillink package remove <package@version>
+
+skillink target add <path> [--id <id>] [--label <label>] [--mode link|copy]
+skillink target list [--json]
+skillink target remove <id>
+
+skillink route add <target-id> <package@range-or-tag>
+skillink route remove <target-id> <package>
+skillink route list [--json]
+
 skillink apply [--target <id>] [--dry-run] [--prune]
-skillink status [--json]
+skillink status [--json] [--target <id>]
 skillink doctor [--json]
 skillink gc [--apply] [--max-age-days <n>] [--json]
 skillink history [--json]
 skillink rollback <snapshot-id> [--apply] [--json]
 ```
 
-GUI：
+`add` 是 `skill add` 的顶层别名。
+
+## GUI
 
 ```bash
 pnpm dev:desktop
 ```
 
-GUI 提供 Overview / Targets / Library / History / Doctor 五个页面：
+GUI 页面：
 
-- Targets：添加目标目录、分配包版本、应用路由；
-- Library：导入文件夹、打标签、删除未引用版本、GC dry-run/apply；
-- History：查看历史快照并成对回滚 `route.json` + `skills.json`；回滚时会从 `trash/` 恢复快照引用的版本内容，找不到内容则拒绝恢复；
-- Doctor：查看健康问题并重新应用路由。
+- **Overview**：skills、packages、targets、links、doctor 概览；
+- **Targets**：添加 target、分配 package、apply；
+- **Skills**：导入 skill（必须 `SKILL.md`）、标签、删除、GC；
+- **Packages**：创建/复制 package、查看组合、标签、删除；
+- **History**：查看三文件快照并回滚；
+- **Doctor**：健康问题与重新 apply。
 
 ## 开发
 
@@ -88,8 +179,8 @@ pnpm --filter @skillink/desktop package:win
 
 ```text
 apps/cli          CLI
-apps/desktop      Electron GUI（Targets / Library / History / Doctor）
-packages/core     领域逻辑、公用库、路由、apply、history、GC
+apps/desktop      Electron GUI（Overview / Targets / Skills / Packages / History / Doctor）
+packages/core     领域逻辑、package 图、skill 库、route、apply、history、GC、迁移
 packages/shared   类型、zod schema、错误码
 docs/             计划与文档
 ```

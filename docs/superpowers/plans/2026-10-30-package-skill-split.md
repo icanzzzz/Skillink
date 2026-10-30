@@ -733,7 +733,7 @@ git commit -m "feat: diagnose package graph and skill content"
 - 被 route package 嵌套引用 -> 不 candidate。
 - `enabled: false` 的 target/package lock 仍算引用 -> 不 candidate。
 - 被 tag 保留 -> 不 candidate（`keepTagged` true）。
-- 仅被未引用 package 版本引用 -> candidate；删除后 doctor 报 `PACKAGE_SKILL_MISSING`。
+- 仅被未引用 package 版本引用 -> candidate；删除后 doctor 报 `SKILL_NOT_FOUND`。
 - `maxAgeDays` 生效。
 - apply 后内容进 `trash/`，`skill.json` 更新。
 - 写 `skill.json` 失败时内容回滚。

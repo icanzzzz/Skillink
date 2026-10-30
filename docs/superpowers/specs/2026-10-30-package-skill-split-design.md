@@ -363,7 +363,7 @@ skillink route add <target> <package>@<range-or-tag>
 - 引用集合 = 所有 route target 中 package lock 的传递闭包；`enabled: false` 的 target 和 package lock 仍然算引用，因为它们是期望状态的一部分，只是暂时不投影。
 - 另外保留 `skill.json` 中被 tag 指向的 skill 版本。
 - 候选 = skill.json 中未被引用、未被 tag 保留、超过保留期的 skill 版本。
-- 未被任何 route 引用的 package 版本不保护 skill；它们可能在 GC 后变成悬空配置，`doctor` 会报 `PACKAGE_SKILL_MISSING`。
+- 未被任何 route 引用的 package 版本不保护 skill；它们可能在 GC 后变成悬空配置，`doctor` 会报 `SKILL_NOT_FOUND`。
 - 删除时先移入 `trash/`，再更新 skill.json；失败回滚内容。
 - package 配置不参与 GC；未引用的 package 版本只在 doctor 中提示。
 
@@ -476,7 +476,7 @@ IPC 增加：
 | 删除仍被 route 引用的 package 版本 | 拒绝，`VERSION_IN_USE` |
 | 删除仍被其他 package 引用的 package 版本 | 拒绝，`PACKAGE_IN_USE` |
 | 删除仍被 route 传递闭包引用或被 tag 保留的 skill 版本 | 拒绝，`VERSION_IN_USE` |
-| 仅被未引用 package 引用的 skill 版本 | 允许删除；doctor 将被悬空的 package 报 `PACKAGE_SKILL_MISSING` |
+| 仅被未引用 package 引用的 skill 版本 | 允许删除；doctor 将被悬空的 package 报 `SKILL_NOT_FOUND` |
 | 旧 `skills.json` 存在但未迁移 | `init`/`doctor` 提示运行 `skillink migrate` |
 | 迁移遇到没有 `SKILL.md` 的旧条目 | 整体中止，列出问题，旧文件不变 |
 | 旧 history 快照 | 列表忽略；不参与回滚 |
