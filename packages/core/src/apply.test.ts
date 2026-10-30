@@ -243,6 +243,74 @@ describe('apply', () => {
     });
   });
 
+  it('does not create a missing target directory when validation fails', async () => {
+    const { paths } = await setup();
+    const missingTargetPath = path.join(paths.home, '..', 'not-created');
+    await addTarget({
+      paths,
+      id: 'missing-target',
+      path: missingTargetPath,
+      mode: 'link',
+    });
+    const route = await readRouteFile(paths);
+    route.targets.find((target) => target.id === 'missing-target')!.packages = {
+      broken: {
+        requested: '1.0.0',
+        resolved: '1.0.0',
+        integrity: 'sha256-wrong',
+        enabled: true,
+      },
+    };
+    await writeRouteFile(paths, route);
+
+    await expect(apply({ paths })).rejects.toMatchObject({
+      code: 'PACKAGE_NOT_FOUND',
+    });
+    await expect(lstat(missingTargetPath)).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
+  it('does not project earlier targets when a later target fails validation', async () => {
+    const { paths, targetPath } = await setup();
+    const secondTargetPath = path.join(
+      await tempDir('skillink-apply-second-'),
+      'skills',
+    );
+    await addTarget({
+      paths,
+      id: 'project-b',
+      path: secondTargetPath,
+      mode: 'link',
+    });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'docs-pack',
+      requested: '1.0.0',
+    });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-b',
+      name: 'pdf-pack',
+      requested: '1.0.0',
+    });
+    await rm(getSkillDir(paths, 'pdf', '1.0.0'), {
+      recursive: true,
+      force: true,
+    });
+
+    await expect(apply({ paths })).rejects.toMatchObject({
+      code: 'VERSION_NOT_FOUND',
+    });
+    await expect(lstat(path.join(targetPath, 'docs'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    await expect(lstat(secondTargetPath)).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
   it('skips links that already point at the correct skill version', async () => {
     const { paths } = await setup();
     await addRouteEntry({
