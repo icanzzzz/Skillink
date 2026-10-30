@@ -8,6 +8,7 @@ import {
 import { assertSafePackageName } from './package-name.js';
 import { assertSafeTargetPath, isSamePath } from './path-policy.js';
 import { readRouteFile, writeRouteFile } from './route.js';
+import { withHistory } from './history.js';
 
 function slugify(value: string): string {
   const slug = value
@@ -56,8 +57,10 @@ export async function addTarget(input: AddTargetInput): Promise<TargetRoute> {
     skills: {},
   };
 
-  route.targets.push(target);
-  await writeRouteFile(input.paths, route);
+  await withHistory(input.paths, 'add-target', async () => {
+    route.targets.push(target);
+    await writeRouteFile(input.paths, route);
+  });
 
   return target;
 }
@@ -80,7 +83,9 @@ export async function removeTarget(input: RemoveTargetInput): Promise<TargetRout
   }
 
   const [removed] = route.targets.splice(index, 1);
-  await writeRouteFile(input.paths, route);
+  await withHistory(input.paths, 'remove-target', async () => {
+    await writeRouteFile(input.paths, route);
+  });
 
   return removed!;
 }

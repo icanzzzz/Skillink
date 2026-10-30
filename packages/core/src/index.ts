@@ -1,6 +1,7 @@
 export * from './apply.js';
 export * from './doctor.js';
 export * from './folder-scan.js';
+export * from './history.js';
 export * from './import-folder.js';
 export * from './json-store.js';
 export * from './library.js';

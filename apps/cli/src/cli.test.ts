@@ -103,4 +103,80 @@ describe('CLI', () => {
     expect(await runCli(['route', 'add', 'missing', 'broken'], ctx)).toBe(1);
     expect(ctx.err.join('\n')).toMatch(/package@version|invalid/i);
   });
+
+  it('lists history and rolls back the route', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = path.join(root, 'source');
+    const targetPath = path.join(root, 'project', 'packages');
+    await mkdir(source, { recursive: true });
+    await writeFile(path.join(source, 'file.txt'), 'hello', 'utf8');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['add', source, '--name', 'demo', '--version', '1.0.0'], ctx);
+    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
+    ctx.out.length = 0;
+
+    expect(await runCli(['history', '--json'], ctx)).toBe(0);
+    const entries = JSON.parse(ctx.out.join('\n')) as Array<{
+      id: string;
+      createdAt: string;
+      reason: string;
+    }>;
+    expect(entries.length).toBeGreaterThan(0);
+    expect(entries[0]).toMatchObject({
+      id: expect.any(String),
+      createdAt: expect.any(String),
+      reason: expect.any(String),
+    });
+    expect(entries[0]!.id).not.toContain(':');
+
+    const snapshotId = entries[0]!.id;
+    await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
+    const routed = JSON.parse(
+      await readFile(path.join(home, 'route.json'), 'utf8'),
+    ) as { targets: Array<{ skills: Record<string, unknown> }> };
+    expect(routed.targets[0]?.skills.demo).toBeDefined();
+
+    ctx.out.length = 0;
+    expect(await runCli(['rollback', snapshotId, '--json'], ctx)).toBe(0);
+    const restored = JSON.parse(
+      await readFile(path.join(home, 'route.json'), 'utf8'),
+    ) as { targets: Array<{ skills: Record<string, unknown> }> };
+    expect(restored.targets[0]?.skills.demo).toBeUndefined();
+  });
+
+  it('rolls back and applies in one command', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = path.join(root, 'source');
+    const targetPath = path.join(root, 'project', 'packages');
+    await mkdir(source, { recursive: true });
+    await writeFile(path.join(source, 'file.txt'), 'hello', 'utf8');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['add', source, '--name', 'demo', '--version', '1.0.0'], ctx);
+    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
+    await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
+    await runCli(['target', 'add', path.join(root, 'other'), '--id', 'project-b'], ctx);
+
+    ctx.out.length = 0;
+    await runCli(['history', '--json'], ctx);
+    const entries = JSON.parse(ctx.out.join('\n')) as Array<{ id: string }>;
+    const routedSnapshot = entries[0]!.id;
+
+    await runCli(['route', 'remove', 'project-a', 'demo'], ctx);
+    ctx.out.length = 0;
+    expect(await runCli(['rollback', routedSnapshot, '--apply'], ctx)).toBe(0);
+    expect((await lstat(path.join(targetPath, 'demo'))).isSymbolicLink()).toBe(true);
+  });
+
+  it('returns a non-zero code when rolling back a missing snapshot', async () => {
+    const ctx = context(await tempDir('skillink-cli-'));
+
+    expect(await runCli(['rollback', 'missing-snapshot'], ctx)).toBe(1);
+    expect(ctx.err.join('\n')).toMatch(/history|snapshot|not found/i);
+  });
 });

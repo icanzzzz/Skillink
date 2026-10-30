@@ -12,6 +12,7 @@ import {
 } from '@skillink/shared';
 import { readJsonFile, writeJsonAtomic } from './json-store.js';
 import { readSkillsFile } from './library.js';
+import { withHistory } from './history.js';
 
 export async function readRouteFile(paths: SkillinkPaths): Promise<RouteFile> {
   return readJsonFile(paths.routeFile, RouteFileSchema, createEmptyRouteFile());
@@ -114,7 +115,9 @@ export async function addRouteEntry(
   };
 
   target.skills[input.name] = lock;
-  await writeRouteFile(input.paths, route);
+  await withHistory(input.paths, 'add-route-entry', async () => {
+    await writeRouteFile(input.paths, route);
+  });
 
   return lock;
 }
@@ -144,6 +147,8 @@ export async function removeRouteEntry(
   }
 
   delete target.skills[input.name];
-  await writeRouteFile(input.paths, route);
+  await withHistory(input.paths, 'remove-route-entry', async () => {
+    await writeRouteFile(input.paths, route);
+  });
   return true;
 }

@@ -8,6 +8,7 @@ export type SkillinkErrorCode =
   | 'ROUTE_INVALID'
   | 'TARGET_EXISTS'
   | 'TARGET_NOT_FOUND'
+  | 'HISTORY_NOT_FOUND'
   | 'UNMANAGED_CONFLICT'
   | 'LINK_FAILED'
   | 'IO_ERROR';

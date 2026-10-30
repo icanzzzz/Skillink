@@ -14,10 +14,12 @@ import {
   apply,
   doctor,
   importFolder,
+  listHistory,
   readRouteFile,
   readSkillsFile,
   removeRouteEntry,
   removeTarget,
+  restoreHistorySnapshot,
   status,
   writeRouteFile,
   writeSkillsFile,
@@ -279,6 +281,57 @@ export async function runCli(
       const paths = getSkillinkPaths(context.home);
       const removed = await removeRouteEntry({ paths, targetId, name });
       context.stdout(removed ? `Removed route ${targetId}/${name}` : 'No route found.');
+    });
+
+  addCommonOptions(
+    program.command('history').description('List route/library history snapshots'),
+  ).action(async (options: { json?: boolean }) => {
+    const paths = getSkillinkPaths(context.home);
+    const entries = await listHistory(paths);
+
+    if (options.json) {
+      printJson(context, entries);
+      return;
+    }
+
+    if (entries.length === 0) {
+      context.stdout('No history.');
+      return;
+    }
+
+    for (const entry of entries) {
+      context.stdout(`${entry.id}  ${entry.createdAt}  ${entry.reason}`);
+    }
+  });
+
+  program
+    .command('rollback')
+    .description('Restore route.json and skills.json from a history snapshot')
+    .argument('<snapshot-id>', 'History snapshot id')
+    .option('--apply', 'Apply routes after restoring the snapshot')
+    .option('--json', 'Print machine-readable JSON')
+    .action(async (snapshotId: string, options: { apply?: boolean; json?: boolean }) => {
+      const paths = getSkillinkPaths(context.home);
+      await restoreHistorySnapshot(paths, snapshotId);
+      const report = options.apply ? await apply({ paths }) : undefined;
+
+      if (options.json) {
+        printJson(context, { snapshotId, report });
+      } else {
+        context.stdout(`Restored history snapshot ${snapshotId}`);
+        for (const operation of report?.operations ?? []) {
+          context.stdout(
+            `${operation.kind}  ${operation.name ?? operation.targetId}  ${operation.path}`,
+          );
+        }
+        for (const conflict of report?.conflicts ?? []) {
+          context.stderr(`conflict  ${conflict.name}  ${conflict.reason}`);
+        }
+      }
+
+      if (report && report.conflicts.length > 0) {
+        exitCode = 3;
+      }
     });
 
   program

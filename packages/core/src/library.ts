@@ -8,6 +8,7 @@ import {
   type SkillsFile,
 } from '@skillink/shared';
 import { readJsonFile, writeJsonAtomic } from './json-store.js';
+import { withHistory } from './history.js';
 
 export async function readSkillsFile(paths: SkillinkPaths): Promise<SkillsFile> {
   return readJsonFile(paths.skillsFile, SkillsFileSchema, createEmptySkillsFile());
@@ -79,7 +80,9 @@ export async function upsertLibraryVersion(
     },
   };
 
-  await writeSkillsFile(paths, file);
+  await withHistory(paths, 'upsert-library-version', async () => {
+    await writeSkillsFile(paths, file);
+  });
   return { created: true };
 }
 
