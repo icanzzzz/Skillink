@@ -752,6 +752,9 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 - 当前配置已经损坏到无法通过 schema 时，`rollback` 不能作为修复入口（创建回滚前快照会先失败）；需要手工修复或直接从 `history/<id>/` 复制文件；
 - Windows 长路径、OneDrive 同步冲突尚未做专项自动化验证；
 - Linux/macOS 已加入 CI 矩阵，但尚未在真实设备上手工验证；
+- apply 回滚只清理本次创建的 target 目录本身，不追踪 `mkdir({ recursive: true })` 创建的父目录；
+- 导入限制覆盖文件数、字节数和深度，但不限制空目录数量；
+- skill manifest 与 package hash 使用 `localeCompare` 排序；保留该行为以兼容已有库，跨 locale 的极端差异可能影响哈希可复现性；
 - 当前安装包未配置代码签名和自动更新；
 - doctor/apply 会重新哈希 skill 内容，超大版本库首次检查可能较慢。
 
