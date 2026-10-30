@@ -1,6 +1,7 @@
 export * from './apply.js';
 export * from './doctor.js';
 export * from './folder-scan.js';
+export * from './fs-retry.js';
 export * from './gc.js';
 export * from './history.js';
 export * from './import-skill.js';

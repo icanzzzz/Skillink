@@ -16,6 +16,7 @@ import {
 import { readJsonFile, writeJsonAtomic } from './json-store.js';
 import { withHistory } from './history.js';
 import { collectPackageSkillRefs } from './package-graph.js';
+import { withFsRetry } from './fs-retry.js';
 
 export async function readSkillFile(paths: SkillinkPaths): Promise<SkillFile> {
   return readJsonFile(paths.skillFile, SkillFileSchema, createEmptySkillFile());
@@ -187,7 +188,7 @@ async function moveToTrash(
   }
 
   await mkdir(path.dirname(destination), { recursive: true });
-  await rename(source, destination);
+  await withFsRetry(() => rename(source, destination));
   return true;
 }
 
@@ -335,7 +336,9 @@ export async function removeSkillVersion(
     } catch (error) {
       if (moved) {
         await mkdir(path.dirname(source), { recursive: true });
-        await rename(destination, source).catch(() => undefined);
+        await withFsRetry(() => rename(destination, source)).catch(
+          () => undefined,
+        );
       }
       throw error;
     }

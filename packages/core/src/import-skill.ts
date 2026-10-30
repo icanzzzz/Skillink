@@ -21,6 +21,7 @@ import {
   type ScanFolderOptions,
 } from './folder-scan.js';
 import { assertSafeImportSource } from './path-policy.js';
+import { withFsRetry } from './fs-retry.js';
 import {
   assertSkillContent,
   readSkillFile,
@@ -146,14 +147,18 @@ export async function importSkill(
     for (const file of scan.files) {
       const destination = path.join(stagingDir, file.relativePath);
       await mkdir(path.dirname(destination), { recursive: true });
-      await copyFile(path.join(sourceDir, file.relativePath), destination);
+      await withFsRetry(() =>
+        copyFile(path.join(sourceDir, file.relativePath), destination),
+      );
       await chmod(destination, file.mode).catch(() => undefined);
     }
 
     await mkdir(path.dirname(skillDir), { recursive: true });
-    await rename(stagingDir, skillDir);
+    await withFsRetry(() => rename(stagingDir, skillDir));
   } catch (error) {
-    await rm(stagingDir, { recursive: true, force: true });
+    await withFsRetry(() =>
+      rm(stagingDir, { recursive: true, force: true }),
+    ).catch(() => undefined);
     throw error;
   }
 
@@ -166,7 +171,9 @@ export async function importSkill(
       size: scan.totalSize,
     });
   } catch (error) {
-    await rm(skillDir, { recursive: true, force: true });
+    await withFsRetry(() =>
+      rm(skillDir, { recursive: true, force: true }),
+    ).catch(() => undefined);
     throw error;
   }
 

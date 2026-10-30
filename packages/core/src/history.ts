@@ -16,6 +16,7 @@ import {
   type SkillinkPaths,
 } from '@skillink/shared';
 import { readJsonFile, writeJsonAtomic } from './json-store.js';
+import { withFsRetry } from './fs-retry.js';
 import {
   computePackageIntegrity,
   resolvePackageGraph,
@@ -91,7 +92,7 @@ async function pruneHistory(paths: SkillinkPaths): Promise<void> {
   const entries = await listHistory(paths);
 
   for (const entry of entries.slice(MAX_SNAPSHOTS)) {
-    await rm(entry.path, { recursive: true, force: true });
+    await withFsRetry(() => rm(entry.path, { recursive: true, force: true }));
   }
 }
 
@@ -151,7 +152,9 @@ export async function createHistorySnapshot(
       HistoryMetaSchema,
     );
   } catch (error) {
-    await rm(snapshotPath, { recursive: true, force: true });
+    await withFsRetry(() =>
+      rm(snapshotPath, { recursive: true, force: true }),
+    ).catch(() => undefined);
     throw error;
   }
 
@@ -383,9 +386,11 @@ export async function restoreHistorySnapshot(
 
   for (const restore of restores) {
     await mkdir(path.dirname(restore.destination), { recursive: true });
-    await rm(restore.destination, { recursive: true, force: true });
+    await withFsRetry(() =>
+      rm(restore.destination, { recursive: true, force: true }),
+    );
     try {
-      await rename(restore.source, restore.destination);
+      await withFsRetry(() => rename(restore.source, restore.destination));
     } catch (error) {
       throw new SkillinkError(
         'IO_ERROR',

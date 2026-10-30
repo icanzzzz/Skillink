@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { SkillinkError } from '@skillink/shared';
+import { withFsRetry } from './fs-retry.js';
 
 export interface JsonSchema<T> {
   parse(value: unknown): T;
@@ -84,16 +85,19 @@ export async function writeJsonAtomic<T>(
   await mkdir(directory, { recursive: true });
 
   try {
-    await writeFile(tempPath, text, 'utf8');
-    await rename(tempPath, filePath);
+    await withFsRetry(() => writeFile(tempPath, text, 'utf8'));
+    await withFsRetry(() => rename(tempPath, filePath));
   } catch (error) {
-    if (isNodeError(error) && (error.code === 'EEXIST' || error.code === 'EPERM')) {
-      await rm(filePath, { force: true });
-      await rename(tempPath, filePath);
+    if (
+      isNodeError(error) &&
+      (error.code === 'EEXIST' || error.code === 'EPERM')
+    ) {
+      await withFsRetry(() => rm(filePath, { force: true }));
+      await withFsRetry(() => rename(tempPath, filePath));
       return;
     }
 
-    await rm(tempPath, { force: true });
+    await withFsRetry(() => rm(tempPath, { force: true })).catch(() => undefined);
     throw new SkillinkError(
       'IO_ERROR',
       `Failed to write ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
