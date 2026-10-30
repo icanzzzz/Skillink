@@ -1,4 +1,6 @@
-import { BrowserWindow, dialog, ipcMain } from 'electron';
+import { BrowserWindow, app, dialog, ipcMain } from 'electron';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   addRouteEntry,
   addTarget,
@@ -37,6 +39,7 @@ import {
   SkillTagRequestSchema,
 } from '../ipc-schemas.js';
 import type { DesktopSnapshot } from '../shared.js';
+import { assertTrustedSender, type SenderPolicy } from './sender-policy.js';
 
 async function getSnapshot(): Promise<DesktopSnapshot> {
   const paths = getSkillinkPaths();
@@ -73,11 +76,35 @@ async function chooseFolder(
   return result.canceled ? null : (result.filePaths[0] ?? null);
 }
 
-export function registerIpcHandlers(): void {
-  ipcMain.handle('skillink:snapshot', () => getSnapshot());
-  ipcMain.handle('skillink:choose-folder', (event) => chooseFolder(event));
+function senderPolicy(): SenderPolicy {
+  return {
+    isPackaged: app.isPackaged,
+    appUrl: pathToFileURL(
+      path.join(app.getAppPath(), 'out', 'renderer', 'index.html'),
+    ).href,
+    devServerUrl: process.env.ELECTRON_RENDERER_URL,
+  };
+}
 
-  ipcMain.handle('skillink:apply', async (_event, input: unknown) => {
+function handle(
+  channel: string,
+  listener: (event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => unknown,
+): void {
+  ipcMain.handle(channel, (event, ...args) => {
+    assertTrustedSender(
+      event,
+      BrowserWindow.fromWebContents(event.sender),
+      senderPolicy(),
+    );
+    return listener(event, ...args);
+  });
+}
+
+export function registerIpcHandlers(): void {
+  handle('skillink:snapshot', () => getSnapshot());
+  handle('skillink:choose-folder', (event) => chooseFolder(event));
+
+  handle('skillink:apply', async (_event, input: unknown) => {
     const request = ApplyRequestSchema.parse(input ?? {});
     return apply({
       paths: getSkillinkPaths(),
@@ -87,7 +114,7 @@ export function registerIpcHandlers(): void {
     });
   });
 
-  ipcMain.handle('skillink:import-skill', async (_event, input: unknown) => {
+  handle('skillink:import-skill', async (_event, input: unknown) => {
     const request = ImportSkillRequestSchema.parse(input);
     return importSkill({
       sourceDir: request.sourceDir,
@@ -97,7 +124,7 @@ export function registerIpcHandlers(): void {
     });
   });
 
-  ipcMain.handle('skillink:create-package', async (_event, input: unknown) => {
+  handle('skillink:create-package', async (_event, input: unknown) => {
     const request = CreatePackageRequestSchema.parse(input);
     return createPackageVersion({
       paths: getSkillinkPaths(),
@@ -109,7 +136,7 @@ export function registerIpcHandlers(): void {
     });
   });
 
-  ipcMain.handle('skillink:copy-package', async (_event, input: unknown) => {
+  handle('skillink:copy-package', async (_event, input: unknown) => {
     const request = CopyPackageRequestSchema.parse(input);
     return copyPackageVersion({
       paths: getSkillinkPaths(),
@@ -125,7 +152,7 @@ export function registerIpcHandlers(): void {
     });
   });
 
-  ipcMain.handle('skillink:remove-package', async (_event, input: unknown) => {
+  handle('skillink:remove-package', async (_event, input: unknown) => {
     const request = PackageRemoveRequestSchema.parse(input);
     await removePackageVersion(
       getSkillinkPaths(),
@@ -134,7 +161,7 @@ export function registerIpcHandlers(): void {
     );
   });
 
-  ipcMain.handle('skillink:package-tag', async (_event, input: unknown) => {
+  handle('skillink:package-tag', async (_event, input: unknown) => {
     const request = PackageTagRequestSchema.parse(input);
     await setPackageTag(
       getSkillinkPaths(),
@@ -144,7 +171,7 @@ export function registerIpcHandlers(): void {
     );
   });
 
-  ipcMain.handle('skillink:skill-tag', async (_event, input: unknown) => {
+  handle('skillink:skill-tag', async (_event, input: unknown) => {
     const request = SkillTagRequestSchema.parse(input);
     await setSkillTag(
       getSkillinkPaths(),
@@ -154,7 +181,7 @@ export function registerIpcHandlers(): void {
     );
   });
 
-  ipcMain.handle('skillink:skill-remove', async (_event, input: unknown) => {
+  handle('skillink:skill-remove', async (_event, input: unknown) => {
     const request = SkillRemoveRequestSchema.parse(input);
     await removeSkillVersion(
       getSkillinkPaths(),
@@ -163,7 +190,7 @@ export function registerIpcHandlers(): void {
     );
   });
 
-  ipcMain.handle('skillink:add-target', async (_event, input: unknown) => {
+  handle('skillink:add-target', async (_event, input: unknown) => {
     const request = AddTargetRequestSchema.parse(input);
     return addTarget({
       paths: getSkillinkPaths(),
@@ -174,7 +201,7 @@ export function registerIpcHandlers(): void {
     });
   });
 
-  ipcMain.handle('skillink:route-add', async (_event, input: unknown) => {
+  handle('skillink:route-add', async (_event, input: unknown) => {
     const request = RouteAddRequestSchema.parse(input);
     return addRouteEntry({
       paths: getSkillinkPaths(),
@@ -184,7 +211,7 @@ export function registerIpcHandlers(): void {
     });
   });
 
-  ipcMain.handle('skillink:route-remove', async (_event, input: unknown) => {
+  handle('skillink:route-remove', async (_event, input: unknown) => {
     const request = RouteRemoveRequestSchema.parse(input);
     return removeRouteEntry({
       paths: getSkillinkPaths(),
@@ -193,14 +220,14 @@ export function registerIpcHandlers(): void {
     });
   });
 
-  ipcMain.handle('skillink:gc', async (_event, input: unknown) => {
+  handle('skillink:gc', async (_event, input: unknown) => {
     const request = GcRequestSchema.parse(input ?? {});
     return gc(getSkillinkPaths(), request);
   });
 
-  ipcMain.handle('skillink:history', () => listHistory(getSkillinkPaths()));
+  handle('skillink:history', () => listHistory(getSkillinkPaths()));
 
-  ipcMain.handle('skillink:rollback', async (_event, input: unknown) => {
+  handle('skillink:rollback', async (_event, input: unknown) => {
     const request = RollbackRequestSchema.parse(input);
     await restoreHistorySnapshot(getSkillinkPaths(), request.id);
   });
