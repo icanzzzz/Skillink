@@ -594,4 +594,68 @@ describe('CLI', () => {
     expect(await pathExists(path.join(invalidHome, 'skills.json'))).toBe(true);
     expect(await pathExists(path.join(invalidHome, 'skill.json'))).toBe(false);
   });
+
+  it('returns one read-only snapshot containing config, health, target skills, and history', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    await runCli(
+      ['skill', 'add', source, '--name', 'pdf', '--version', '1.0.0'],
+      ctx,
+    );
+    await runCli(
+      ['package', 'create', 'demo@1.0.0', '--skill', 'pdf@1.0.0'],
+      ctx,
+    );
+    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
+    await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
+    await runCli(['apply'], ctx);
+
+    ctx.out.length = 0;
+    expect(await runCli(['snapshot', '--json'], ctx)).toBe(0);
+    const snapshot = JSON.parse(ctx.out.join('\n')) as {
+      home: string;
+      skills: { skills: Record<string, unknown> };
+      packages: { packages: Record<string, unknown> };
+      route: { targets: Array<{ id: string }> };
+      status: { entries: Array<{ name: string; state: string }> };
+      doctor: { ok: boolean };
+      targetSkills: Array<{
+        targetId: string;
+        skills: Array<{ name: string; version: string }>;
+      }>;
+      history: unknown[];
+    };
+
+    expect(snapshot.home).toBe(path.resolve(home));
+    expect(snapshot.skills.skills.pdf).toBeDefined();
+    expect(snapshot.packages.packages.demo).toBeDefined();
+    expect(snapshot.route.targets[0]?.id).toBe('project-a');
+    expect(snapshot.status.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'pdf', state: 'ok' }),
+      ]),
+    );
+    expect(snapshot.doctor.ok).toBe(true);
+    expect(snapshot.targetSkills).toEqual([
+      { targetId: 'project-a', skills: [{ name: 'pdf', version: '1.0.0' }] },
+    ]);
+    expect(snapshot.history.length).toBeGreaterThan(0);
+  });
+
+  it('does not create control-plane files when snapshotting a missing home', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'missing-home');
+    const ctx = context(home);
+
+    expect(await runCli(['snapshot', '--json'], ctx)).toBe(0);
+    for (const name of ['route.json', 'package.json', 'skill.json']) {
+      expect(await pathExists(path.join(home, name))).toBe(false);
+    }
+  });
 });

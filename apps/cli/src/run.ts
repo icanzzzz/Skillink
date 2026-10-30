@@ -29,6 +29,7 @@ import {
   setSkillTag,
   setTargetEnabled,
   status,
+  summarizeTargetSkills,
   writePackageFile,
   writeRouteFile,
   writeSkillFile,
@@ -216,6 +217,57 @@ export async function runCli(
         `Migrated ${result.skillCount} skills, ${result.packageCount} packages, ` +
           `${result.targetCount} targets.`,
       );
+    });
+
+  program
+    .command('snapshot')
+    .description(
+      'Print one read-only snapshot of config, health, target skills, and history',
+    )
+    .option('--json', 'Print machine-readable JSON')
+    .action(async (options: { json?: boolean }) => {
+      const paths = getSkillinkPaths(context.home);
+      const [
+        skills,
+        packages,
+        route,
+        statusReport,
+        doctorReport,
+        targetSkills,
+        history,
+      ] = await Promise.all([
+        readSkillFile(paths),
+        readPackageFile(paths),
+        readRouteFile(paths),
+        status({ paths }),
+        doctor({ paths }),
+        summarizeTargetSkills({ paths }),
+        listHistory(paths),
+      ]);
+
+      const snapshot = {
+        home: paths.home,
+        skills,
+        packages,
+        route,
+        status: statusReport,
+        doctor: doctorReport,
+        targetSkills,
+        history,
+      };
+
+      if (options.json) {
+        printJson(context, snapshot);
+        return;
+      }
+
+      context.stdout(paths.home);
+      context.stdout(
+        `${Object.keys(skills.skills).length} skills, ` +
+          `${Object.keys(packages.packages).length} packages, ` +
+          `${route.targets.length} targets`,
+      );
+      context.stdout(statusReport.healthy ? 'healthy' : 'unhealthy');
     });
 
   const skill = program.command('skill').description('Manage installed skills');
