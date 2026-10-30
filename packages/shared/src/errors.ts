@@ -1,0 +1,34 @@
+export type SkillinkErrorCode =
+  | 'INVALID_NAME'
+  | 'INVALID_VERSION'
+  | 'UNSAFE_PATH'
+  | 'PACKAGE_EXISTS'
+  | 'PACKAGE_NOT_FOUND'
+  | 'VERSION_NOT_FOUND'
+  | 'ROUTE_INVALID'
+  | 'TARGET_EXISTS'
+  | 'TARGET_NOT_FOUND'
+  | 'UNMANAGED_CONFLICT'
+  | 'LINK_FAILED'
+  | 'IO_ERROR';
+
+export class SkillinkError extends Error {
+  readonly code: SkillinkErrorCode;
+  readonly details?: Record<string, unknown>;
+
+  constructor(
+    code: SkillinkErrorCode,
+    message: string,
+    details?: Record<string, unknown>,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = 'SkillinkError';
+    this.code = code;
+    this.details = details;
+  }
+}
+
+export function isSkillinkError(error: unknown): error is SkillinkError {
+  return error instanceof SkillinkError;
+}
