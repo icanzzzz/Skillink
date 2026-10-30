@@ -4,6 +4,11 @@ import path from 'node:path';
 export interface SkillinkPaths {
   home: string;
   routeFile: string;
+  /** v2 skill catalog */
+  skillFile: string;
+  /** v2 package composition config */
+  packageFile: string;
+  /** v1 catalog; used only by migration */
   skillsFile: string;
   libraryDir: string;
   historyDir: string;
@@ -30,6 +35,8 @@ export function getSkillinkPaths(home = getDefaultSkillinkHome()): SkillinkPaths
   return {
     home: resolvedHome,
     routeFile: path.join(resolvedHome, 'route.json'),
+    skillFile: path.join(resolvedHome, 'skill.json'),
+    packageFile: path.join(resolvedHome, 'package.json'),
     skillsFile: path.join(resolvedHome, 'skills.json'),
     libraryDir: path.join(resolvedHome, 'skills'),
     historyDir: path.join(resolvedHome, 'history'),
@@ -40,10 +47,19 @@ export function getSkillinkPaths(home = getDefaultSkillinkHome()): SkillinkPaths
   };
 }
 
-export function getPackageDir(
+export function getSkillDir(
   paths: SkillinkPaths,
   name: string,
   version: string,
 ): string {
   return path.join(paths.libraryDir, name, version);
+}
+
+/** @deprecated use getSkillDir */
+export function getPackageDir(
+  paths: SkillinkPaths,
+  name: string,
+  version: string,
+): string {
+  return getSkillDir(paths, name, version);
 }
