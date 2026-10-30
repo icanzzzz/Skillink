@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+out/
+release/
+build/
+*.tsbuildinfo
+
+# Test output
+coverage/
+test-results/
+playwright-report/
+.vitest/
+
+# Electron
+.electron-vite/
+dist-electron/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Local env
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Local worktrees
+.worktrees/
+worktrees/
