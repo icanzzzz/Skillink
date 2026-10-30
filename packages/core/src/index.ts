@@ -19,3 +19,23 @@ export * from './skill-store.js';
 export * from './status.js';
 export * from './target.js';
 export * from './target-resolution.js';
+export type {
+  ApplyConflict,
+  ApplyOperation,
+  ApplyOperationKind,
+  ApplyReport,
+  CliErrorEnvelope,
+  DoctorIssue,
+  DoctorIssueCode,
+  DoctorReport,
+  GcCandidate,
+  GcPlan,
+  GcReport,
+  HistoryEntry,
+  ImportSkillResult,
+  SnapshotReport,
+  StatusEntry,
+  StatusReport,
+  StatusState,
+  TargetSkillSummary,
+} from '@skillink/shared';

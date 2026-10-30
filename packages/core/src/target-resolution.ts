@@ -2,6 +2,7 @@ import {
   SkillinkError,
   getSkillinkPaths,
   type SkillinkPaths,
+  type TargetSkillSummary,
 } from '@skillink/shared';
 import {
   computePackageIntegrity,
@@ -10,12 +11,6 @@ import {
 import { readPackageFile } from './package-store.js';
 import { readRouteFile } from './route.js';
 import { readSkillFile } from './skill-store.js';
-
-export interface TargetSkillSummary {
-  targetId: string;
-  skills: Array<{ name: string; version: string }>;
-  error?: string;
-}
 
 export interface SummarizeTargetSkillsInput {
   paths?: SkillinkPaths;

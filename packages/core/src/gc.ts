@@ -3,6 +3,9 @@ import path from 'node:path';
 import {
   SkillinkError,
   getSkillDir,
+  type GcCandidate,
+  type GcPlan,
+  type GcReport,
   type SkillinkPaths,
 } from '@skillink/shared';
 import {
@@ -22,24 +25,6 @@ export interface GcOptions {
   dryRun?: boolean;
   maxAgeDays?: number;
   keepTagged?: boolean;
-}
-
-export interface GcCandidate {
-  name: string;
-  version: string;
-  path: string;
-  size: number;
-  modifiedAt: string;
-}
-
-export interface GcPlan {
-  dryRun: boolean;
-  candidates: GcCandidate[];
-  freedBytes: number;
-}
-
-export interface GcReport extends GcPlan {
-  removed: GcCandidate[];
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

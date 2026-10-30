@@ -15,6 +15,8 @@ const emptySnapshot: DesktopSnapshot = {
   route: createEmptyRouteFile(),
   status: { healthy: true, entries: [] },
   doctor: { ok: true, issues: [] },
+  targetSkills: [],
+  history: [],
 };
 
 describe('SnapshotView', () => {

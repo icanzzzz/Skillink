@@ -15,6 +15,7 @@ import {
   expandPath,
   getSkillDir,
   getSkillinkPaths,
+  type ImportSkillResult,
 } from '@skillink/shared';
 import {
   DEFAULT_IMPORT_LIMITS,
@@ -43,16 +44,6 @@ export interface ImportSkillInput {
   version?: string;
   home?: string;
   limits?: ScanFolderOptions;
-}
-
-export interface ImportSkillResult {
-  name: string;
-  version: string;
-  integrity: string;
-  path: string;
-  fileCount: number;
-  size: number;
-  created: boolean;
 }
 
 function sourceError(message: string, sourceDir: string): SkillinkError {

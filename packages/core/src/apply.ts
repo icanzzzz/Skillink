@@ -5,6 +5,10 @@ import {
   assertSafeSegment,
   assertSafeVersion,
   getSkillinkPaths,
+  type ApplyConflict,
+  type ApplyOperation,
+  type ApplyOperationKind,
+  type ApplyReport,
   type PackageFile,
   type SkillinkPaths,
   type TargetRoute,
@@ -28,37 +32,6 @@ import {
   computePackageIntegrity,
   resolvePackageGraph,
 } from './package-graph.js';
-
-export type ApplyOperationKind =
-  | 'create-target'
-  | 'create-link'
-  | 'replace-link'
-  | 'remove-link'
-  | 'skip';
-
-export interface ApplyOperation {
-  kind: ApplyOperationKind;
-  targetId: string;
-  targetPath: string;
-  name?: string;
-  version?: string;
-  path: string;
-  sourcePath?: string;
-}
-
-export interface ApplyConflict {
-  targetId: string;
-  name: string;
-  path: string;
-  reason: string;
-}
-
-export interface ApplyReport {
-  dryRun: boolean;
-  ok: boolean;
-  operations: ApplyOperation[];
-  conflicts: ApplyConflict[];
-}
 
 export interface ApplyInput {
   paths?: SkillinkPaths;

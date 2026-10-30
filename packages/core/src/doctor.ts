@@ -4,6 +4,9 @@ import {
   SkillinkError,
   getSkillDir,
   getSkillinkPaths,
+  type DoctorIssue,
+  type DoctorIssueCode,
+  type DoctorReport,
   type PackageFile,
   type RouteFile,
   type SkillFile,
@@ -25,39 +28,6 @@ import {
 } from './path-policy.js';
 import { findCaseInsensitiveDuplicates } from './package-name.js';
 import { status } from './status.js';
-
-export type DoctorIssueCode =
-  | 'MISSING_CONTENT'
-  | 'ORPHAN_CONTENT'
-  | 'ROUTE_MISSING_VERSION'
-  | 'PACKAGE_INTEGRITY_MISMATCH'
-  | 'SKILL_NOT_FOUND'
-  | 'SKILL_MD_MISSING'
-  | 'SKILL_INTEGRITY_MISMATCH'
-  | 'SKILL_VERSION_CONFLICT'
-  | 'UNSUPPORTED_MODE'
-  | 'PACKAGE_CYCLE'
-  | 'PACKAGE_MISSING_VERSION'
-  | 'UNUSED_PACKAGE_VERSION'
-  | 'LINK_ISSUE'
-  | 'UNSAFE_PATH'
-  | 'INVALID_CONFIG';
-
-export interface DoctorIssue {
-  code: DoctorIssueCode;
-  message: string;
-  name?: string;
-  version?: string;
-  targetId?: string;
-  path?: string;
-  packageName?: string;
-  details?: Record<string, unknown>;
-}
-
-export interface DoctorReport {
-  ok: boolean;
-  issues: DoctorIssue[];
-}
 
 export interface DoctorInput {
   paths?: SkillinkPaths;

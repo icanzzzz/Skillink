@@ -50,15 +50,23 @@ import { assertTrustedSender, type SenderPolicy } from './sender-policy.js';
 
 async function getSnapshot(): Promise<DesktopSnapshot> {
   const paths = getSkillinkPaths();
-  const [skills, packages, route, statusReport, doctorReport, targetSkills] =
-    await Promise.all([
-      readSkillFile(paths),
-      readPackageFile(paths),
-      readRouteFile(paths),
-      status({ paths }),
-      doctor({ paths }),
-      summarizeTargetSkills({ paths }),
-    ]);
+  const [
+    skills,
+    packages,
+    route,
+    statusReport,
+    doctorReport,
+    targetSkills,
+    history,
+  ] = await Promise.all([
+    readSkillFile(paths),
+    readPackageFile(paths),
+    readRouteFile(paths),
+    status({ paths }),
+    doctor({ paths }),
+    summarizeTargetSkills({ paths }),
+    listHistory(paths),
+  ]);
 
   return {
     home: paths.home,
@@ -68,6 +76,7 @@ async function getSnapshot(): Promise<DesktopSnapshot> {
     status: statusReport,
     doctor: doctorReport,
     targetSkills,
+    history,
   };
 }
 

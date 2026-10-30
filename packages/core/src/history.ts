@@ -10,6 +10,7 @@ import {
   createEmptyRouteFile,
   createEmptySkillFile,
   getSkillDir,
+  type HistoryEntry,
   type PackageFile,
   type RouteFile,
   type SkillFile,
@@ -24,13 +25,6 @@ import {
   resolvePackageGraph,
   validateAllPackages,
 } from './package-graph.js';
-
-export interface HistoryEntry {
-  id: string;
-  path: string;
-  createdAt: string;
-  reason: string;
-}
 
 export interface ConfigSet {
   route: RouteFile;

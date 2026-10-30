@@ -6,6 +6,9 @@ import {
   getSkillinkPaths,
   type SkillinkErrorCode,
   type SkillinkPaths,
+  type StatusEntry,
+  type StatusReport,
+  type StatusState,
 } from '@skillink/shared';
 import { inspectPath, isManagedLink } from './links.js';
 import {
@@ -20,33 +23,6 @@ import {
   computePackageIntegrity,
   resolvePackageGraph,
 } from './package-graph.js';
-
-export type StatusState =
-  | 'ok'
-  | 'missing'
-  | 'wrong-version'
-  | 'broken-link'
-  | 'conflict'
-  | 'unmanaged'
-  | 'extra'
-  | 'disabled';
-
-export interface StatusEntry {
-  targetId: string;
-  targetPath: string;
-  name: string;
-  version: string;
-  state: StatusState;
-  path: string;
-  sourcePath?: string;
-  packageName?: string;
-  detail?: string;
-}
-
-export interface StatusReport {
-  healthy: boolean;
-  entries: StatusEntry[];
-}
 
 export interface StatusInput {
   paths?: SkillinkPaths;

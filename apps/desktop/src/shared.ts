@@ -4,16 +4,14 @@ import type {
   GcReport,
   HistoryEntry,
   ImportSkillResult,
-  StatusReport,
-  TargetSkillSummary,
-} from '@skillink/core';
-import type {
   PackageFile,
   PackageLock,
   PackageVersion,
   RouteFile,
   SkillFile,
+  StatusReport,
   TargetRoute,
+  TargetSkillSummary,
 } from '@skillink/shared';
 import type {
   AddTargetRequest,
@@ -41,7 +39,8 @@ export interface DesktopSnapshot {
   route: RouteFile;
   status: StatusReport;
   doctor: DoctorReport;
-  targetSkills?: TargetSkillSummary[];
+  targetSkills: TargetSkillSummary[];
+  history: HistoryEntry[];
 }
 
 export interface DesktopApi {
