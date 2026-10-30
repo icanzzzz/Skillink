@@ -92,9 +92,34 @@ export async function writeJsonAtomic<T>(
       isNodeError(error) &&
       (error.code === 'EEXIST' || error.code === 'EPERM')
     ) {
-      await withFsRetry(() => rm(filePath, { force: true }));
-      await withFsRetry(() => rename(tempPath, filePath));
-      return;
+      const backup = await readFile(filePath).catch(() => undefined);
+      try {
+        await withFsRetry(() => rm(filePath, { force: true }));
+        await withFsRetry(() => rename(tempPath, filePath));
+        return;
+      } catch (fallbackError) {
+        if (backup) {
+          await withFsRetry(() => writeFile(filePath, backup)).catch(
+            () => undefined,
+          );
+        }
+        await withFsRetry(() => rm(tempPath, { force: true })).catch(
+          () => undefined,
+        );
+        throw new SkillinkError(
+          'IO_ERROR',
+          `Failed to replace ${filePath}: ${
+            fallbackError instanceof Error
+              ? fallbackError.message
+              : String(fallbackError)
+          }`,
+          {
+            filePath,
+            backupRestored: backup !== undefined,
+          },
+          { cause: fallbackError },
+        );
+      }
     }
 
     await withFsRetry(() => rm(tempPath, { force: true })).catch(() => undefined);
