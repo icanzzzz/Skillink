@@ -615,6 +615,48 @@ apps/desktop/release/
 - `pnpm package:win` 会先构建 CLI，再构建桌面端；
 - `pnpm package:desktop` 只生成 `win-unpacked`，不生成安装包。
 
+#### 7.3.1 NSIS 安装包与 portable 的区别
+
+| 维度 | NSIS 安装包 | portable |
+|---|---|---|
+| 文件 | `Skillink Setup <version>.exe` | `Skillink <version>.exe` |
+| 形式 | 安装向导，可选择安装目录 | 单文件自解压，运行即用 |
+| 系统写入 | 开始菜单、卸载项、Add/Remove Programs、用户 PATH | 基本不写；删除 exe 即可 |
+| CLI 入口 | `resources\cli` 加入 HKCU PATH，`skillink` 可直接调用 | 不修改 PATH；CLI 文件在包内，但 GUI 优先 |
+| 卸载 | 控制面板/开始菜单卸载，自动移除 PATH 条目 | 删除 exe |
+| 管理员权限 | 默认 `perMachine: false`，按当前用户安装，一般不需要管理员 | 不需要 |
+| 升级 | 运行新安装包覆盖 | 替换 exe |
+| 适用场景 | 日常使用，需要 GUI + CLI 双入口 | 试用、便携、不想安装 |
+
+NSIS 安装细节：
+
+- `oneClick: false`，允许用户选择安装目录；
+- 安装时执行 `skillink-path.ps1 add`，把 `$INSTDIR\resources\cli` 放到当前用户 PATH 前面；
+- 卸载时执行 `skillink-path.ps1 remove`，只移除该条目；
+- 安装/卸载后广播 `WM_WININICHANGE`，新终端可直接识别 `skillink`。
+
+portable 细节：
+
+- electron-builder 生成单文件自解压 exe，运行时会解压到临时目录；
+- 不会创建开始菜单、卸载项或 PATH 条目；
+- CLI bundle 仍在包内，但不像 NSIS 安装包那样暴露为稳定的 `skillink` 命令；
+- 需要 GUI + CLI 双入口时，应使用 NSIS 安装包。
+
+两种包的数据位置：
+
+- 默认都使用 `%USERPROFILE%\.agents\skillink\`，因此 portable 和 NSIS 默认共享同一控制面；
+- portable 不会自动把数据放在 exe 旁边；
+- GUI 和 CLI 必须指向同一个 `SKILLINK_HOME`，才会管理同一空间。
+
+需要真正便携时，在启动前设置：
+
+```powershell
+$env:SKILLINK_HOME = "$PSScriptRoot\skillink-data"
+.\Skillink <version>.exe
+```
+
+当前两种包都未配置代码签名和自动更新；Windows 可能对未签名安装包显示 SmartScreen 提示。
+
 ---
 
 ## 8. 安全与跨平台
