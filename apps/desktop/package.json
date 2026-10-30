@@ -16,7 +16,7 @@
     "package:win": "electron-vite build && electron-builder --win nsis portable"
   },
   "dependencies": {
-    "@skillink/core": "workspace:*",
+    "@skillink/cli": "workspace:*",
     "@skillink/shared": "workspace:*",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

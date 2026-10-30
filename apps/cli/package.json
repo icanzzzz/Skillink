@@ -3,6 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "main": "./src/run.ts",
+  "types": "./src/run.ts",
+  "exports": {
+    ".": "./src/run.ts",
+    "./run": "./src/run.ts"
+  },
   "bin": {
     "skillink": "./dist/index.js"
   },
