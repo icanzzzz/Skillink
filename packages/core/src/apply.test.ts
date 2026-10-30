@@ -389,6 +389,32 @@ describe('apply', () => {
     });
   });
 
+  it('rejects a route whose skill content was modified after import', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'pdf-pack',
+      requested: '1.0.0',
+    });
+    await writeFile(
+      path.join(getSkillDir(paths, 'pdf', '1.0.0'), 'content.txt'),
+      'tampered',
+      'utf8',
+    );
+
+    await expect(apply({ paths })).rejects.toMatchObject({
+      code: 'SKILL_INTEGRITY_MISMATCH',
+      details: expect.objectContaining({
+        name: 'pdf',
+        version: '1.0.0',
+      }),
+    });
+    await expect(
+      lstat(path.join(targetPath, 'pdf')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('rejects unsafe skill references before writing outside the target', async () => {
     const { paths, targetPath } = await setup();
     await writeFile(

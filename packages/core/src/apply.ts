@@ -23,6 +23,7 @@ import {
 import { readRouteFile } from './route.js';
 import { readPackageFile } from './package-store.js';
 import { assertSkillContent, readSkillFile } from './skill-store.js';
+import { assertSkillIntegrity } from './skill-integrity.js';
 import {
   computePackageIntegrity,
   resolvePackageGraph,
@@ -189,6 +190,7 @@ export async function apply(input: ApplyInput = {}): Promise<ApplyReport> {
         skill.name,
         skill.version,
       );
+      await assertSkillIntegrity(paths, skill.name, skill.version, skill.entry);
       const destination = path.join(targetPath, skill.name);
 
       if (

@@ -198,6 +198,27 @@ describe('doctor', () => {
     );
   });
 
+  it('reports skill content that no longer matches skill.json', async () => {
+    const { paths } = await setup();
+    await writeFile(
+      path.join(getSkillDir(paths, 'pdf', '1.0.0'), 'content.txt'),
+      'tampered',
+      'utf8',
+    );
+
+    const report = await doctor({ paths });
+
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'SKILL_INTEGRITY_MISMATCH',
+          name: 'pdf',
+          version: '1.0.0',
+        }),
+      ]),
+    );
+  });
+
   it('does not report an empty removed skill directory as orphan', async () => {
     const { paths } = await setup();
     await importSkillVersion(paths.home, 'temp', '1.0.0');

@@ -12,6 +12,7 @@ export * from './package-name.js';
 export * from './package-store.js';
 export * from './path-policy.js';
 export * from './route.js';
+export * from './skill-integrity.js';
 export * from './skill-store.js';
 export * from './status.js';
 export * from './target.js';

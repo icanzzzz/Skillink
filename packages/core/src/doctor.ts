@@ -12,6 +12,7 @@ import {
 import { readRouteFile } from './route.js';
 import { readPackageFile } from './package-store.js';
 import { readSkillFile } from './skill-store.js';
+import { verifySkillIntegrity } from './skill-integrity.js';
 import {
   computePackageIntegrity,
   resolvePackageGraph,
@@ -47,6 +48,7 @@ export interface DoctorIssue {
   targetId?: string;
   path?: string;
   packageName?: string;
+  details?: Record<string, unknown>;
 }
 
 export interface DoctorReport {
@@ -300,6 +302,41 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
         issues.push({
           code: 'SKILL_MD_MISSING',
           message: `Skill content has no SKILL.md: ${name}@${version}`,
+          name,
+          version,
+          path: contentPath,
+        });
+        continue;
+      }
+
+      try {
+        const integrity = await verifySkillIntegrity(
+          paths,
+          name,
+          version,
+          skillEntry.versions[version]!,
+        );
+        if (!integrity.ok) {
+          issues.push({
+            code: 'SKILL_INTEGRITY_MISMATCH',
+            message: `Skill content does not match skill.json: ${name}@${version}`,
+            name,
+            version,
+            path: contentPath,
+            details: {
+              expectedIntegrity: integrity.expected.integrity,
+              actualIntegrity: integrity.actual.integrity,
+              expectedFileCount: integrity.expected.fileCount,
+              actualFileCount: integrity.actual.fileCount,
+              expectedSize: integrity.expected.size,
+              actualSize: integrity.actual.size,
+            },
+          });
+        }
+      } catch (error) {
+        issues.push({
+          code: 'INVALID_CONFIG',
+          message: error instanceof Error ? error.message : String(error),
           name,
           version,
           path: contentPath,
