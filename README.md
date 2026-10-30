@@ -19,16 +19,24 @@ MVP 基础切片已可用：
 - target 由用户填写；
 - Windows junction / POSIX symlink 投影；
 - `apply` / `status` / `doctor`；
-- CLI 与 Electron GUI 基础壳。
+- 历史快照与成对回滚（`route.json` + `skills.json`）；
+- 公用库标签、版本删除（进入 `trash/`）与 GC；
+- GUI 的 Targets / Library / History / Doctor 管理页面；
+- Electron 打包（NSIS + portable）。
 
 ```text
 skillink library list
+skillink library tag <package@version> <tag>
+skillink library remove <package@version>
 skillink add <folder> --name <name> --version <version>
 skillink target add <path> --label <label>
 skillink route add <target-id> <package>@<version>
 skillink apply [--target <id>] [--dry-run] [--prune]
 skillink status [--json]
 skillink doctor [--json]
+skillink gc [--apply] [--max-age-days <n>] [--json]
+skillink history [--json]
+skillink rollback <snapshot-id> [--apply] [--json]
 ```
 
 GUI：
@@ -59,12 +67,22 @@ $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
 pnpm setup:electron
 ```
 
+## 打包桌面应用
+
+```bash
+# 生成未压缩目录：apps/desktop/release/win-unpacked/Skillink.exe
+pnpm package:desktop
+
+# 生成 NSIS 安装包与 portable 包
+pnpm --filter @skillink/desktop package:win
+```
+
 ## 目录
 
 ```text
 apps/cli          CLI
-apps/desktop      Electron GUI 基础壳
-packages/core     领域逻辑、公用库、路由、apply
+apps/desktop      Electron GUI（Targets / Library / History / Doctor）
+packages/core     领域逻辑、公用库、路由、apply、history、GC
 packages/shared   类型、zod schema、错误码
 docs/             计划与文档
 ```

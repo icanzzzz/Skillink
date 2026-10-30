@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "start": "electron-vite preview"
+    "start": "electron-vite preview",
+    "package:dir": "electron-vite build && electron-builder --dir",
+    "package:win": "electron-vite build && electron-builder --win nsis portable"
   },
   "dependencies": {
     "@skillink/core": "workspace:*",
@@ -21,6 +23,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "^45.1.0",
+    "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0"
   }
 }
