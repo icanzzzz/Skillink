@@ -2,7 +2,9 @@ import { lstat, mkdir, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
   SkillinkError,
+  getSkillDir,
   getSkillinkPaths,
+  type PackageFile,
   type SkillinkPaths,
   type TargetRoute,
 } from '@skillink/shared';
@@ -12,9 +14,14 @@ import {
   isManagedLink,
   removeLink,
 } from './links.js';
-import { assertSafeTargetPath, isPathInside, isSamePath } from './path-policy.js';
-import { findTarget, readRouteFile } from './route.js';
-import { readSkillsFile } from './library.js';
+import { assertSafeTargetPath, isSamePath } from './path-policy.js';
+import { readRouteFile } from './route.js';
+import { readPackageFile } from './package-store.js';
+import { readSkillFile } from './skill-store.js';
+import {
+  computePackageIntegrity,
+  resolvePackageGraph,
+} from './package-graph.js';
 
 export type ApplyOperationKind =
   | 'create-target'
@@ -84,83 +91,33 @@ async function ensureTargetDirectory(
   }
 }
 
-async function validateRouteSkill(
-  paths: SkillinkPaths,
+async function validatePackageLocks(
+  packageFile: PackageFile,
   target: TargetRoute,
-  name: string,
-): Promise<{ version: string; sourceDir: string }> {
-  const library = await readSkillsFile(paths);
-  const lock = target.skills[name];
+): Promise<void> {
+  for (const [name, lock] of Object.entries(target.packages)) {
+    if (lock.enabled === false) {
+      continue;
+    }
 
-  if (!lock) {
-    throw new SkillinkError(
-      'ROUTE_INVALID',
-      `Missing route lock for ${name} in target ${target.id}.`,
-      { targetId: target.id, name },
-    );
-  }
-
-  const packageEntry = library.packages[name];
-  if (!packageEntry) {
-    throw new SkillinkError(
-      'PACKAGE_NOT_FOUND',
-      `Package "${name}" is not in the public library.`,
-      { name },
-    );
-  }
-
-  const entry = packageEntry.versions[lock.resolved];
-  if (!entry) {
-    throw new SkillinkError(
-      'VERSION_NOT_FOUND',
-      `Version "${lock.resolved}" of package "${name}" is missing from skills.json.`,
+    const expected = computePackageIntegrity(packageFile, [
       { name, version: lock.resolved },
-    );
+    ]);
+    if (expected !== lock.integrity) {
+      throw new SkillinkError(
+        'PACKAGE_INTEGRITY_MISMATCH',
+        `Route lock for ${name}@${lock.resolved} does not match package.json.`,
+        { name, version: lock.resolved, expected, actual: lock.integrity },
+      );
+    }
   }
-
-  if (entry.integrity !== lock.integrity || entry.source !== lock.source) {
-    throw new SkillinkError(
-      'ROUTE_INVALID',
-      `Route lock for ${name}@${lock.resolved} does not match skills.json.`,
-      { name, version: lock.resolved },
-    );
-  }
-
-  const sourceDir = path.resolve(paths.home, entry.source);
-  if (
-    !isSamePath(sourceDir, paths.libraryDir) &&
-    !isPathInside(sourceDir, paths.libraryDir)
-  ) {
-    throw new SkillinkError(
-      'ROUTE_INVALID',
-      `Library source escapes the control plane: ${entry.source}`,
-      { name, version: lock.resolved, source: entry.source },
-    );
-  }
-
-  const sourceStat = await stat(sourceDir).catch((error: unknown) => {
-    throw new SkillinkError(
-      'VERSION_NOT_FOUND',
-      `Package content is missing: ${name}@${lock.resolved}`,
-      { name, version: lock.resolved, sourceDir },
-      { cause: error },
-    );
-  });
-
-  if (!sourceStat.isDirectory()) {
-    throw new SkillinkError(
-      'VERSION_NOT_FOUND',
-      `Package content is not a directory: ${name}@${lock.resolved}`,
-      { name, version: lock.resolved, sourceDir },
-    );
-  }
-
-  return { version: lock.resolved, sourceDir };
 }
 
 export async function apply(input: ApplyInput = {}): Promise<ApplyReport> {
   const paths = input.paths ?? getSkillinkPaths(input.home);
   const route = await readRouteFile(paths);
+  const packageFile = await readPackageFile(paths);
+  const skillFile = await readSkillFile(paths);
   const selectedTargets = input.targetId
     ? route.targets.filter((target) => target.id === input.targetId)
     : route.targets;
@@ -201,24 +158,48 @@ export async function apply(input: ApplyInput = {}): Promise<ApplyReport> {
     }
 
     await ensureTargetDirectory(targetPath, input.dryRun ?? false);
+    await validatePackageLocks(packageFile, target);
 
-    const desired = new Set(
-      Object.entries(target.skills)
-        .filter(([, lock]) => lock.enabled !== false)
-        .map(([name]) => name),
+    const roots = Object.entries(target.packages)
+      .filter(([, lock]) => lock.enabled !== false)
+      .map(([name, lock]) => ({ name, version: lock.resolved }));
+    const resolution = resolvePackageGraph(packageFile, skillFile, roots);
+    const desired = new Map(
+      [...resolution.skills.values()].map((skill) => [skill.name, skill]),
     );
 
-    for (const name of desired) {
-      if (target.mode !== 'link') {
+    if (target.mode !== 'link' && desired.size > 0) {
+      throw new SkillinkError(
+        'LINK_FAILED',
+        'Copy mode is not implemented in the MVP yet.',
+        { targetId: target.id, mode: target.mode },
+      );
+    }
+
+    for (const skill of desired.values()) {
+      const sourceDir = getSkillDir(paths, skill.name, skill.version);
+      const sourceStat = await stat(sourceDir).catch((error: unknown) => {
         throw new SkillinkError(
-          'LINK_FAILED',
-          'Copy mode is not implemented in the MVP yet.',
-          { targetId: target.id, name, mode: target.mode },
+          'VERSION_NOT_FOUND',
+          `Skill content is missing: ${skill.name}@${skill.version}`,
+          {
+            name: skill.name,
+            version: skill.version,
+            sourceDir,
+          },
+          { cause: error },
+        );
+      });
+
+      if (!sourceStat.isDirectory()) {
+        throw new SkillinkError(
+          'VERSION_NOT_FOUND',
+          `Skill content is not a directory: ${skill.name}@${skill.version}`,
+          { name: skill.name, version: skill.version, sourceDir },
         );
       }
 
-      const { version, sourceDir } = await validateRouteSkill(paths, target, name);
-      const destination = path.join(targetPath, name);
+      const destination = path.join(targetPath, skill.name);
       const inspection = await inspectPath(destination);
 
       if (inspection.kind === 'missing') {
@@ -226,8 +207,8 @@ export async function apply(input: ApplyInput = {}): Promise<ApplyReport> {
           kind: 'create-link',
           targetId: target.id,
           targetPath,
-          name,
-          version,
+          name: skill.name,
+          version: skill.version,
           path: destination,
           sourcePath: sourceDir,
         });
@@ -243,8 +224,8 @@ export async function apply(input: ApplyInput = {}): Promise<ApplyReport> {
             kind: 'skip',
             targetId: target.id,
             targetPath,
-            name,
-            version,
+            name: skill.name,
+            version: skill.version,
             path: destination,
             sourcePath: sourceDir,
           });
@@ -256,8 +237,8 @@ export async function apply(input: ApplyInput = {}): Promise<ApplyReport> {
             kind: 'replace-link',
             targetId: target.id,
             targetPath,
-            name,
-            version,
+            name: skill.name,
+            version: skill.version,
             path: destination,
             sourcePath: sourceDir,
           });
@@ -271,7 +252,7 @@ export async function apply(input: ApplyInput = {}): Promise<ApplyReport> {
 
       conflicts.push({
         targetId: target.id,
-        name,
+        name: skill.name,
         path: destination,
         reason:
           inspection.kind === 'link'
