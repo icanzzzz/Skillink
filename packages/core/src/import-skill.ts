@@ -24,6 +24,7 @@ import {
 import { assertSafeImportSource } from './path-policy.js';
 import { withFsRetry } from './fs-retry.js';
 import { parseSkillFrontmatter } from './skill-md.js';
+import { assertSkillIntegrity } from './skill-integrity.js';
 import {
   assertSkillContent,
   readSkillFile,
@@ -106,6 +107,7 @@ export async function importSkill(
   if (existing) {
     if (existing.integrity === scan.integrity) {
       await assertSkillContent(paths, name, version);
+      await assertSkillIntegrity(paths, name, version, existing);
       await upsertSkillVersion(paths, {
         name,
         version,

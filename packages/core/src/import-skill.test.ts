@@ -219,6 +219,32 @@ metadata:
     );
   });
 
+  it('rejects re-import when the library copy was tampered with', async () => {
+    const source = await makeSource();
+    const home = await tempDir('skillink-skill-home-');
+    const paths = getSkillinkPaths(home);
+    await importSkill({
+      sourceDir: source,
+      name: 'demo',
+      version: '1.0.0',
+      home,
+    });
+    await writeFile(
+      path.join(getSkillDir(paths, 'demo', '1.0.0'), 'notes.txt'),
+      'tampered',
+      'utf8',
+    );
+
+    await expect(
+      importSkill({
+        sourceDir: source,
+        name: 'demo',
+        version: '1.0.0',
+        home,
+      }),
+    ).rejects.toMatchObject({ code: 'SKILL_INTEGRITY_MISMATCH' });
+  });
+
   it('preserves directory modes so imported content matches its integrity', async () => {
     const source = await makeSource();
     const nested = path.join(source, 'nested');
