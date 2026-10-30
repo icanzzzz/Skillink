@@ -1,18 +1,35 @@
 import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
+  SkillinkError,
+  getSkillDir,
   getSkillinkPaths,
+  type PackageFile,
+  type RouteFile,
+  type SkillFile,
   type SkillinkPaths,
 } from '@skillink/shared';
 import { readRouteFile } from './route.js';
-import { readSkillsFile } from './library.js';
+import { readPackageFile } from './package-store.js';
+import { readSkillFile } from './skill-store.js';
+import {
+  computePackageIntegrity,
+  resolvePackageGraph,
+  validateAllPackages,
+} from './package-graph.js';
 import { status } from './status.js';
 
 export type DoctorIssueCode =
   | 'MISSING_CONTENT'
   | 'ORPHAN_CONTENT'
   | 'ROUTE_MISSING_VERSION'
-  | 'ROUTE_INTEGRITY_MISMATCH'
+  | 'PACKAGE_INTEGRITY_MISMATCH'
+  | 'SKILL_NOT_FOUND'
+  | 'SKILL_MD_MISSING'
+  | 'SKILL_VERSION_CONFLICT'
+  | 'PACKAGE_CYCLE'
+  | 'PACKAGE_MISSING_VERSION'
+  | 'UNUSED_PACKAGE_VERSION'
   | 'LINK_ISSUE'
   | 'INVALID_CONFIG';
 
@@ -23,6 +40,7 @@ export interface DoctorIssue {
   version?: string;
   targetId?: string;
   path?: string;
+  packageName?: string;
 }
 
 export interface DoctorReport {
@@ -50,15 +68,105 @@ async function pathIsDirectory(targetPath: string): Promise<boolean> {
     });
 }
 
+async function pathIsFile(targetPath: string): Promise<boolean> {
+  return stat(targetPath)
+    .then((info) => info.isFile())
+    .catch((error: unknown) => {
+      if (isNodeError(error) && error.code === 'ENOENT') {
+        return false;
+      }
+      throw error;
+    });
+}
+
+function detailString(
+  error: SkillinkError,
+  key: string,
+): string | undefined {
+  const value = error.details?.[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+function issueFromGraphError(
+  error: unknown,
+  targetId?: string,
+): DoctorIssue {
+  if (!(error instanceof SkillinkError)) {
+    return {
+      code: 'INVALID_CONFIG',
+      message: error instanceof Error ? error.message : String(error),
+      targetId,
+    };
+  }
+
+  const name = detailString(error, 'skillName') ?? detailString(error, 'name');
+  const version =
+    detailString(error, 'version') ?? detailString(error, 'resolved');
+  const packageName = detailString(error, 'packageName');
+
+  switch (error.code) {
+    case 'SKILL_VERSION_CONFLICT':
+      return {
+        code: 'SKILL_VERSION_CONFLICT',
+        message: error.message,
+        name,
+        version,
+        targetId,
+        packageName,
+      };
+    case 'PACKAGE_CYCLE':
+      return { code: 'PACKAGE_CYCLE', message: error.message, targetId };
+    case 'VERSION_NOT_FOUND':
+      if (detailString(error, 'skillName')) {
+        return {
+          code: 'SKILL_NOT_FOUND',
+          message: error.message,
+          name,
+          version,
+          targetId,
+          packageName,
+        };
+      }
+      return {
+        code: 'PACKAGE_MISSING_VERSION',
+        message: error.message,
+        name,
+        version,
+        targetId,
+        packageName,
+      };
+    case 'PACKAGE_NOT_FOUND':
+      return {
+        code: 'PACKAGE_MISSING_VERSION',
+        message: error.message,
+        name,
+        version,
+        targetId,
+        packageName,
+      };
+    default:
+      return {
+        code: 'INVALID_CONFIG',
+        message: error.message,
+        name,
+        version,
+        targetId,
+        packageName,
+      };
+  }
+}
+
 export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
   const paths = input.paths ?? getSkillinkPaths(input.home);
   const issues: DoctorIssue[] = [];
 
-  let route;
-  let library;
+  let route: RouteFile;
+  let packageFile: PackageFile;
+  let skillFile: SkillFile;
   try {
     route = await readRouteFile(paths);
-    library = await readSkillsFile(paths);
+    packageFile = await readPackageFile(paths);
+    skillFile = await readSkillFile(paths);
   } catch (error) {
     return {
       ok: false,
@@ -71,23 +179,76 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
     };
   }
 
-  for (const [name, packageEntry] of Object.entries(library.packages)) {
-    for (const [version, versionEntry] of Object.entries(packageEntry.versions)) {
-      const sourcePath = path.resolve(paths.home, versionEntry.source);
+  try {
+    validateAllPackages(packageFile, skillFile);
+  } catch (error) {
+    issues.push(issueFromGraphError(error));
+  }
 
-      if (!(await pathIsDirectory(sourcePath))) {
+  for (const [packageName, packageEntry] of Object.entries(
+    packageFile.packages,
+  )) {
+    for (const [version, versionEntry] of Object.entries(
+      packageEntry.versions,
+    )) {
+      for (const [skillName, skillVersion] of Object.entries(
+        versionEntry.skills,
+      )) {
+        if (!skillFile.skills[skillName]?.versions[skillVersion]) {
+          issues.push({
+            code: 'SKILL_NOT_FOUND',
+            message: `Package ${packageName}@${version} references missing skill ${skillName}@${skillVersion}.`,
+            name: skillName,
+            version: skillVersion,
+            packageName,
+          });
+        }
+      }
+
+      for (const [nestedName, nestedVersion] of Object.entries(
+        versionEntry.packages,
+      )) {
+        if (!packageFile.packages[nestedName]?.versions[nestedVersion]) {
+          issues.push({
+            code: 'PACKAGE_MISSING_VERSION',
+            message: `Package ${packageName}@${version} references missing package ${nestedName}@${nestedVersion}.`,
+            name: nestedName,
+            version: nestedVersion,
+            packageName,
+          });
+        }
+      }
+    }
+  }
+
+  for (const [name, skillEntry] of Object.entries(skillFile.skills)) {
+    for (const version of Object.keys(skillEntry.versions)) {
+      const contentPath = getSkillDir(paths, name, version);
+
+      if (!(await pathIsDirectory(contentPath))) {
         issues.push({
           code: 'MISSING_CONTENT',
-          message: `Library content is missing: ${name}@${version}`,
+          message: `Skill content is missing: ${name}@${version}`,
           name,
           version,
-          path: sourcePath,
+          path: contentPath,
+        });
+        continue;
+      }
+
+      if (!(await pathIsFile(path.join(contentPath, 'SKILL.md')))) {
+        issues.push({
+          code: 'SKILL_MD_MISSING',
+          message: `Skill content has no SKILL.md: ${name}@${version}`,
+          name,
+          version,
+          path: contentPath,
         });
       }
     }
   }
 
-  const packageDirectories = await readdir(paths.libraryDir, {
+  const skillDirectories = await readdir(paths.libraryDir, {
     withFileTypes: true,
   }).catch((error: unknown) => {
     if (isNodeError(error) && error.code === 'ENOENT') {
@@ -96,24 +257,24 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
     throw error;
   });
 
-  for (const packageDirectory of packageDirectories) {
-    if (!packageDirectory.isDirectory()) {
+  for (const skillDirectory of skillDirectories) {
+    if (!skillDirectory.isDirectory()) {
       continue;
     }
 
-    const packageEntry = library.packages[packageDirectory.name];
-    if (!packageEntry) {
+    const skillEntry = skillFile.skills[skillDirectory.name];
+    if (!skillEntry) {
       issues.push({
         code: 'ORPHAN_CONTENT',
-        message: `Library directory is not in skills.json: ${packageDirectory.name}`,
-        name: packageDirectory.name,
-        path: path.join(paths.libraryDir, packageDirectory.name),
+        message: `Library directory is not in skill.json: ${skillDirectory.name}`,
+        name: skillDirectory.name,
+        path: path.join(paths.libraryDir, skillDirectory.name),
       });
       continue;
     }
 
     const versionDirectories = await readdir(
-      path.join(paths.libraryDir, packageDirectory.name),
+      path.join(paths.libraryDir, skillDirectory.name),
       { withFileTypes: true },
     ).catch(() => []);
 
@@ -122,15 +283,15 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
         continue;
       }
 
-      if (!packageEntry.versions[versionDirectory.name]) {
+      if (!skillEntry.versions[versionDirectory.name]) {
         issues.push({
           code: 'ORPHAN_CONTENT',
-          message: `Library version is not in skills.json: ${packageDirectory.name}@${versionDirectory.name}`,
-          name: packageDirectory.name,
+          message: `Library version is not in skill.json: ${skillDirectory.name}@${versionDirectory.name}`,
+          name: skillDirectory.name,
           version: versionDirectory.name,
           path: path.join(
             paths.libraryDir,
-            packageDirectory.name,
+            skillDirectory.name,
             versionDirectory.name,
           ),
         });
@@ -138,15 +299,19 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
     }
   }
 
+  const referencedPackages = new Set<string>();
+
   for (const target of route.targets) {
-    for (const [name, lock] of Object.entries(target.skills)) {
-      const packageEntry = library.packages[name];
+    for (const [name, lock] of Object.entries(target.packages)) {
+      referencedPackages.add(`${name}@${lock.resolved}`);
+
+      const packageEntry = packageFile.packages[name];
       const versionEntry = packageEntry?.versions[lock.resolved];
 
       if (!packageEntry || !versionEntry) {
         issues.push({
           code: 'ROUTE_MISSING_VERSION',
-          message: `Route references a version missing from skills.json: ${name}@${lock.resolved}`,
+          message: `Route references a package version missing from package.json: ${name}@${lock.resolved}`,
           name,
           version: lock.resolved,
           targetId: target.id,
@@ -154,16 +319,49 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
         continue;
       }
 
-      if (
-        versionEntry.integrity !== lock.integrity ||
-        versionEntry.source !== lock.source
-      ) {
+      try {
+        const expected = computePackageIntegrity(packageFile, [
+          { name, version: lock.resolved },
+        ]);
+        if (expected !== lock.integrity) {
+          issues.push({
+            code: 'PACKAGE_INTEGRITY_MISMATCH',
+            message: `Route lock does not match package.json: ${name}@${lock.resolved}`,
+            name,
+            version: lock.resolved,
+            targetId: target.id,
+          });
+        }
+      } catch (error) {
+        issues.push(issueFromGraphError(error, target.id));
+      }
+    }
+
+    try {
+      resolvePackageGraph(
+        packageFile,
+        skillFile,
+        Object.entries(target.packages)
+          .filter(([, lock]) => lock.enabled !== false)
+          .map(([name, lock]) => ({
+            name,
+            version: lock.resolved,
+          })),
+      );
+    } catch (error) {
+      issues.push(issueFromGraphError(error, target.id));
+    }
+  }
+
+  for (const [name, packageEntry] of Object.entries(packageFile.packages)) {
+    for (const version of Object.keys(packageEntry.versions)) {
+      if (!referencedPackages.has(`${name}@${version}`)) {
         issues.push({
-          code: 'ROUTE_INTEGRITY_MISMATCH',
-          message: `Route lock does not match skills.json: ${name}@${lock.resolved}`,
+          code: 'UNUSED_PACKAGE_VERSION',
+          message: `Package version is not referenced by any route: ${name}@${version}`,
           name,
-          version: lock.resolved,
-          targetId: target.id,
+          version,
+          packageName: name,
         });
       }
     }
@@ -174,6 +372,9 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
     if (entry.state === 'ok' || entry.state === 'disabled') {
       continue;
     }
+    if (entry.name.startsWith('<')) {
+      continue;
+    }
 
     issues.push({
       code: 'LINK_ISSUE',
@@ -182,6 +383,7 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
       version: entry.version || undefined,
       targetId: entry.targetId,
       path: entry.path,
+      packageName: entry.packageName,
     });
   }
 
