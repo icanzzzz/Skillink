@@ -68,6 +68,10 @@ function skillCountLabel(count: number): string {
   return `${count} skill${count === 1 ? '' : 's'}`;
 }
 
+function confirmRemoval(message: string): boolean {
+  return typeof window === 'undefined' ? true : window.confirm(message);
+}
+
 export function TargetsView({
   targets,
   statusEntries = [],
@@ -255,7 +259,15 @@ export function TargetsView({
                       className="danger"
                       type="button"
                       disabled={busy || !onRemoveTarget}
-                      onClick={() => onRemoveTarget?.({ id: target.id })}
+                      onClick={() => {
+                        if (
+                          confirmRemoval(
+                            `Remove target "${target.label ?? target.id}" from route.json?`,
+                          )
+                        ) {
+                          onRemoveTarget?.({ id: target.id });
+                        }
+                      }}
                     >
                       Remove target
                     </button>
@@ -314,9 +326,15 @@ export function TargetsView({
                     className="danger"
                     type="button"
                     disabled={busy || !onRemoveRoute}
-                    onClick={() =>
-                      onRemoveRoute?.({ targetId: target.id, name })
-                    }
+                    onClick={() => {
+                      if (
+                        confirmRemoval(
+                          `Remove package "${name}" from target "${target.label ?? target.id}"?`,
+                        )
+                      ) {
+                        onRemoveRoute?.({ targetId: target.id, name });
+                      }
+                    }}
                   >
                     Remove route
                   </button>
