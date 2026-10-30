@@ -490,9 +490,11 @@ ok | missing | wrong-version | broken-link | conflict | unmanaged | extra | disa
 - 每次修改配置前，把 `route.json`、`package.json`、`skill.json` 一起快照；
 - 快照目录：`history/<timestamp>/{route.json,package.json,skill.json,meta.json}`；
 - `meta.json` 包含 `format: 2`；
-- 回滚前校验 package 图和 route lock；
-- skill 内容目录必须存在且含 `SKILL.md`；缺失时优先从 `trash/` 恢复，找不到则拒绝回滚；
+- 回滚前校验 package 图、route lock 和 skill 内容完整性；
+- skill 内容目录必须存在且与快照 integrity 一致；缺失或不匹配时优先从 `trash/` 恢复有效副本，找不到则拒绝回滚；
 - 写入顺序：`skill.json` -> `package.json` -> `route.json`；
+- 普通写入失败会尝试恢复三文件；如果恢复写入本身失败，报 `IO_ERROR` 并列出 `restoreFailures`，此时可能需要人工修复；
+- 进程崩溃/断电仍可能留下混合状态；
 - 旧 v1 快照不列出、不可回滚。
 
 ### 6.10 迁移
@@ -712,7 +714,7 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 
 ## 10. 测试策略
 
-当前验证：35 个测试文件、274 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
+当前验证：35 个测试文件、291 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
 
 | 层级 | 内容 |
 |---|---|
@@ -746,7 +748,7 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 
 - `mode: copy` 投影尚未实现；v2.0 在 `target add` 时返回 `COPY_MODE_UNSUPPORTED`，迁移遗留 copy target 由 doctor 报 `UNSUPPORTED_MODE`，计划 v2.1 实现；
 - apply 的预检和回滚覆盖普通失败与进程内异常，但不能防止进程崩溃/断电留下半完成 target；
-- history restore 在普通写入失败时会回滚三文件，但同样不能防止进程崩溃窗口；
+- history restore 在普通写入失败时会尝试回滚三文件；若恢复写入本身失败，会报 `IO_ERROR` 并列出 `restoreFailures`，此时可能需要人工修复；进程崩溃窗口仍存在；
 - Windows 长路径、OneDrive 同步冲突尚未做专项自动化验证；
 - Linux/macOS 已加入 CI 矩阵，但尚未在真实设备上手工验证；
 - 当前安装包未配置代码签名和自动更新；
@@ -783,7 +785,7 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 
 ### 11.1 当前实现验证
 
-- `pnpm test`：35 个测试文件、274 个测试通过；
+- `pnpm test`：35 个测试文件、291 个测试通过；
 - `pnpm typecheck`：通过；
 - `pnpm build`：CLI 与 Electron 桌面端构建成功；
 - 真实 CLI E2E：skill 安装、package 创建/复制、target/route、apply、status/doctor、冲突修复、history/rollback、gc dry-run 均跑通；

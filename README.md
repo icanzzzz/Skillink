@@ -28,7 +28,7 @@ target -> package -> skill -> 实体内容
 - Windows junction / POSIX symlink 投影；
 - `apply` / `status` / `doctor` / `gc`；
 - apply 先完成全量预检再写文件系统，执行失败有进程内回滚；
-- 三个配置文件的历史快照；回滚写入失败会恢复三文件；
+- 三个配置文件的历史快照；普通写入失败会尝试恢复三文件，恢复本身失败会报 `IO_ERROR` 并列出 `restoreFailures`；
 - v1 `skills.json` -> v2 全有或全无迁移；
 - target/import 路径支持 `~`、`%USERPROFILE%`、`$HOME`；
 - Windows 大小写不敏感名称冲突检测、文件占用重试；

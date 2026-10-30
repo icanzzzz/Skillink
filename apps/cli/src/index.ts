@@ -6,7 +6,6 @@ import {
   SkillinkError,
   getSkillinkPaths,
   isSkillinkError,
-  type TargetMode,
 } from '@skillink/shared';
 import {
   addRouteEntry,
@@ -460,11 +459,10 @@ export async function runCli(
     .argument('<path>', 'Target directory')
     .option('--id <id>', 'Stable target id')
     .option('--label <label>', 'Display label')
-    .option('--mode <mode>', 'link or copy', 'link')
     .action(
       async (
         targetPath: string,
-        options: { id?: string; label?: string; mode: string },
+        options: { id?: string; label?: string },
       ) => {
         const paths = await ensureHome(context.home);
         const created = await addTarget({
@@ -472,7 +470,7 @@ export async function runCli(
           id: options.id,
           label: options.label,
           path: targetPath,
-          mode: options.mode as TargetMode,
+          mode: 'link',
         });
         context.stdout(`Added target ${created.id} -> ${created.path}`);
       },
