@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import {
@@ -7,7 +7,9 @@ import {
   SkillsFileSchema,
   createEmptyRouteFile,
   createEmptySkillsFile,
+  getPackageDir,
   type SkillinkPaths,
+  type SkillsFile,
 } from '@skillink/shared';
 import { readJsonFile, writeJsonAtomic } from './json-store.js';
 
@@ -157,6 +159,71 @@ export async function listHistory(paths: SkillinkPaths): Promise<HistoryEntry[]>
   });
 }
 
+interface ContentRestore {
+  source: string;
+  destination: string;
+}
+
+interface MissingContent {
+  name: string;
+  version: string;
+}
+
+async function findTrashCopy(
+  paths: SkillinkPaths,
+  name: string,
+  version: string,
+): Promise<string | undefined> {
+  const directories = await readdir(paths.trashDir, { withFileTypes: true }).catch(
+    (error: unknown) => {
+      if (isNodeError(error) && error.code === 'ENOENT') {
+        return [];
+      }
+      throw error;
+    },
+  );
+
+  const newestFirst = directories
+    .filter((directory) => directory.isDirectory())
+    .sort((left, right) => right.name.localeCompare(left.name));
+
+  for (const directory of newestFirst) {
+    const candidate = path.join(paths.trashDir, directory.name, name, version);
+    if (await directoryExists(candidate)) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
+async function planContentRestores(
+  paths: SkillinkPaths,
+  skills: SkillsFile,
+): Promise<{ restores: ContentRestore[]; missing: MissingContent[] }> {
+  const restores: ContentRestore[] = [];
+  const missing: MissingContent[] = [];
+
+  for (const [name, packageEntry] of Object.entries(skills.packages)) {
+    for (const version of Object.keys(packageEntry.versions)) {
+      const destination = getPackageDir(paths, name, version);
+
+      if (await directoryExists(destination)) {
+        continue;
+      }
+
+      const source = await findTrashCopy(paths, name, version);
+      if (source) {
+        restores.push({ source, destination });
+      } else {
+        missing.push({ name, version });
+      }
+    }
+  }
+
+  return { restores, missing };
+}
+
 export async function restoreHistorySnapshot(
   paths: SkillinkPaths,
   id: string,
@@ -189,7 +256,30 @@ export async function restoreHistorySnapshot(
     );
   }
 
+  const { restores, missing } = await planContentRestores(paths, skills);
+  if (missing.length > 0) {
+    throw new SkillinkError(
+      'VERSION_NOT_FOUND',
+      `Cannot restore history snapshot "${id}": library content is missing and was not found in trash.`,
+      { id, missing },
+    );
+  }
+
   await createHistorySnapshot(paths, `restore:${id}`);
+
+  for (const restore of restores) {
+    await mkdir(path.dirname(restore.destination), { recursive: true });
+    try {
+      await rename(restore.source, restore.destination);
+    } catch (error) {
+      throw new SkillinkError(
+        'IO_ERROR',
+        `Failed to restore library content: ${restore.destination}`,
+        { snapshotId: id, source: restore.source, destination: restore.destination },
+        { cause: error },
+      );
+    }
+  }
 
   // Write skills.json first so route.json never references a version that is
   // absent from the restored library.

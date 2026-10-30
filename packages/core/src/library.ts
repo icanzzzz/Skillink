@@ -10,7 +10,7 @@ import {
   type SkillinkPaths,
   type SkillsFile,
 } from '@skillink/shared';
-import { lstat, mkdir, rename, rm, stat } from 'node:fs/promises';
+import { lstat, mkdir, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { readJsonFile, writeJsonAtomic } from './json-store.js';
 import { withHistory } from './history.js';
@@ -264,7 +264,8 @@ export async function removeLibraryVersion(
       await writeSkillsFile(paths, current);
     } catch (error) {
       if (moved) {
-        await rm(destination, { recursive: true, force: true });
+        // Leave the content in trash if it cannot be moved back; never delete
+        // the only remaining copy.
         await mkdir(path.dirname(source), { recursive: true });
         await rename(destination, source).catch(() => undefined);
       }

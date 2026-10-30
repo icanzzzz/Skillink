@@ -803,6 +803,7 @@ apply --target <id>
 
 - 从 `history/<timestamp>/` 选择快照；
 - 同时恢复快照中的 `route.json` 和 `skills.json`；
+- 校验快照引用的版本目录；缺失时优先从 `trash/` 恢复内容，无法恢复则拒绝回滚并保持当前配置不变；
 - 恢复 `targets[].skills` 的版本信息；
 - 执行 `apply --target`；
 - 可选生成新的历史快照，保留审计链。

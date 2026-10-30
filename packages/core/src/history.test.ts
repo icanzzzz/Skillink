@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -9,8 +9,8 @@ import {
   listHistory,
   restoreHistorySnapshot,
 } from './history.js';
-import { readRouteFile } from './route.js';
-import { readSkillsFile } from './library.js';
+import { readRouteFile, addRouteEntry } from './route.js';
+import { readSkillsFile, removeLibraryVersion } from './library.js';
 import { addTarget } from './target.js';
 
 const tempDirs: string[] = [];
@@ -31,6 +31,12 @@ async function setup(): Promise<{
   const targetPath = path.join(root, 'project', 'packages');
   await mkdir(targetPath, { recursive: true });
   return { root, paths, targetPath };
+}
+
+async function pathExists(targetPath: string): Promise<boolean> {
+  return stat(targetPath)
+    .then(() => true)
+    .catch(() => false);
 }
 
 afterEach(async () => {
@@ -157,5 +163,64 @@ describe('history snapshots', () => {
     }
 
     expect((await listHistory(paths)).length).toBeLessThanOrEqual(50);
+  });
+
+  it('restores content moved to trash when the snapshot references it', async () => {
+    const { root, paths, targetPath } = await setup();
+    const source = path.join(root, 'source');
+    await mkdir(source, { recursive: true });
+    await writeFile(path.join(source, 'file.txt'), 'content', 'utf8');
+    await importFolder({
+      sourceDir: source,
+      name: 'demo',
+      version: '1.0.0',
+      home: paths.home,
+    });
+    await importFolder({
+      sourceDir: source,
+      name: 'demo',
+      version: '1.1.0',
+      home: paths.home,
+    });
+    await addTarget({ paths, id: 'project-a', path: targetPath });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'demo',
+      requested: '1.0.0',
+    });
+
+    const snapshot = (await listHistory(paths))[0]!;
+    const removedContent = path.join(paths.libraryDir, 'demo', '1.1.0');
+    await removeLibraryVersion(paths, 'demo', '1.1.0');
+    expect(await pathExists(removedContent)).toBe(false);
+
+    await restoreHistorySnapshot(paths, snapshot.id);
+
+    expect(await pathExists(removedContent)).toBe(true);
+    const restoredSkills = await readSkillsFile(paths);
+    expect(restoredSkills.packages.demo?.versions['1.1.0']).toBeDefined();
+  });
+
+  it('refuses to restore when snapshot content is missing and not in trash', async () => {
+    const { root, paths } = await setup();
+    const source = path.join(root, 'source');
+    await mkdir(source, { recursive: true });
+    await writeFile(path.join(source, 'file.txt'), 'content', 'utf8');
+    await importFolder({
+      sourceDir: source,
+      name: 'demo',
+      version: '1.0.0',
+      home: paths.home,
+    });
+    const snapshot = await createHistorySnapshot(paths, 'manual');
+    const content = path.join(paths.libraryDir, 'demo', '1.0.0');
+    await rm(content, { recursive: true, force: true });
+    const routeBefore = await readRouteFile(paths);
+
+    await expect(restoreHistorySnapshot(paths, snapshot.id)).rejects.toMatchObject({
+      code: 'VERSION_NOT_FOUND',
+    });
+    await expect(readRouteFile(paths)).resolves.toEqual(routeBefore);
   });
 });

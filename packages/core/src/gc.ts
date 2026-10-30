@@ -146,45 +146,55 @@ export async function gc(
   await withHistory(paths, 'gc', async () => {
     const library = await readSkillsFile(paths);
     const trashDirectory = await createTrashDirectory(paths);
+    const moved: Array<{ source: string; destination: string }> = [];
 
-    for (const candidate of candidates) {
-      const packageEntry = library.packages[candidate.name];
-      if (!packageEntry?.versions[candidate.version]) {
-        continue;
-      }
-
-      const destination = path.join(trashDirectory, candidate.name, candidate.version);
-      await mkdir(path.dirname(destination), { recursive: true });
-      try {
-        await rename(candidate.path, destination);
-      } catch (error) {
-        if (!(isNodeError(error) && error.code === 'ENOENT')) {
-          throw error;
+    try {
+      for (const candidate of candidates) {
+        const packageEntry = library.packages[candidate.name];
+        if (!packageEntry?.versions[candidate.version]) {
+          continue;
         }
+
+        const destination = path.join(trashDirectory, candidate.name, candidate.version);
+        await mkdir(path.dirname(destination), { recursive: true });
+        try {
+          await rename(candidate.path, destination);
+          moved.push({ source: candidate.path, destination });
+        } catch (error) {
+          if (!(isNodeError(error) && error.code === 'ENOENT')) {
+            throw error;
+          }
+        }
+
+        const remainingVersions = { ...packageEntry.versions };
+        delete remainingVersions[candidate.version];
+
+        if (Object.keys(remainingVersions).length === 0) {
+          delete library.packages[candidate.name];
+        } else {
+          const tags = Object.fromEntries(
+            Object.entries(packageEntry.tags ?? {}).filter(
+              ([, taggedVersion]) => taggedVersion !== candidate.version,
+            ),
+          );
+          library.packages[candidate.name] = {
+            ...packageEntry,
+            versions: remainingVersions,
+            tags,
+          };
+        }
+
+        removed.push(candidate);
       }
 
-      const remainingVersions = { ...packageEntry.versions };
-      delete remainingVersions[candidate.version];
-
-      if (Object.keys(remainingVersions).length === 0) {
-        delete library.packages[candidate.name];
-      } else {
-        const tags = Object.fromEntries(
-          Object.entries(packageEntry.tags ?? {}).filter(
-            ([, taggedVersion]) => taggedVersion !== candidate.version,
-          ),
-        );
-        library.packages[candidate.name] = {
-          ...packageEntry,
-          versions: remainingVersions,
-          tags,
-        };
+      await writeSkillsFile(paths, library);
+    } catch (error) {
+      for (const item of moved.reverse()) {
+        await mkdir(path.dirname(item.source), { recursive: true });
+        await rename(item.destination, item.source).catch(() => undefined);
       }
-
-      removed.push(candidate);
+      throw error;
     }
-
-    await writeSkillsFile(paths, library);
   });
 
   return {
