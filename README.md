@@ -171,8 +171,39 @@ pnpm setup:electron
 # 生成未压缩目录：apps/desktop/release/win-unpacked/Skillink.exe
 pnpm package:desktop
 
-# 生成 NSIS 安装包与 portable 包
-pnpm --filter @skillink/desktop package:win
+# 生成 NSIS 安装包与 portable 包（同时携带 CLI）
+pnpm package:win
+```
+
+`package:win` 会先构建 CLI，再构建桌面端，最后生成：
+
+```text
+apps/desktop/release/Skillink Setup 0.0.0.exe   # NSIS 安装包
+apps/desktop/release/Skillink 0.0.0.exe         # portable
+apps/desktop/release/win-unpacked/              # 未压缩目录
+```
+
+安装包里同时包含两个入口：
+
+- `Skillink.exe`：GUI；
+- `skillink`：CLI 启动器。
+
+NSIS 安装包会把 CLI 注册到 PATH；portable 版以 GUI 为主，CLI 文件仍在解包资源中，但不会修改 PATH，可直接运行 `resources\cli\skillink.cmd`。
+
+CLI bundle 位于 `resources/cli/skillink.mjs`，启动器是 `resources/cli/skillink.cmd`。NSIS 安装时会把 `resources\cli` 加入当前用户 PATH；卸载时移除。启动器通过 `ELECTRON_RUN_AS_NODE=1` 使用安装包自带的 Electron 运行 CLI，因此不需要另外安装 Node.js。
+
+GUI 和 CLI 共用同一个控制面：
+
+```text
+%USERPROFILE%\.agents\skillink\     # 或 SKILLINK_HOME
+```
+
+两者读取和写入完全相同的 `route.json`、`package.json`、`skill.json` 与 `skills/` 内容。
+
+安装后如果当前终端找不到 `skillink`，重新打开一个终端，或直接运行：
+
+```text
+<install-dir>\resources\cli\skillink.cmd
 ```
 
 ## 目录

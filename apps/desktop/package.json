@@ -2,13 +2,17 @@
   "name": "@skillink/desktop",
   "version": "0.0.0",
   "private": true,
+  "description": "Skillink desktop GUI and CLI",
+  "author": "Skillink",
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
+    "prepackage:dir": "pnpm -w build:cli",
     "package:dir": "electron-vite build && electron-builder --dir",
+    "prepackage:win": "pnpm -w build:cli",
     "package:win": "electron-vite build && electron-builder --win nsis portable"
   },
   "dependencies": {

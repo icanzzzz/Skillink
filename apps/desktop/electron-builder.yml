@@ -6,6 +6,13 @@ electronDist: node_modules/electron/dist
 files:
   - out/**/*
   - package.json
+extraResources:
+  - from: ../cli/dist/index.js
+    to: cli/skillink.mjs
+  - from: build/cli/skillink.cmd
+    to: cli/skillink.cmd
+  - from: build/cli/skillink-path.ps1
+    to: cli/skillink-path.ps1
 asar: true
 win:
   target:
@@ -14,3 +21,4 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  include: build/installer.nsh

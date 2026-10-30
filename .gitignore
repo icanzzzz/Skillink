@@ -7,6 +7,9 @@ dist/
 out/
 release/
 build/
+# Electron builder resources are source files, not build output
+!apps/desktop/build/
+!apps/desktop/build/**
 *.tsbuildinfo
 
 # Test output

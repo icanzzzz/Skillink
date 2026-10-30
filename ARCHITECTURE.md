@@ -583,6 +583,38 @@ drift / missing       -> apply
 - **History**：三文件快照与回滚；
 - **Doctor**：健康检查。
 
+### 7.3 双入口与安装包
+
+GUI 和 CLI 是两个入口，但共用同一套 Core 和同一个控制面：
+
+```text
+%USERPROFILE%\.agents\skillink\     # 默认
+$env:SKILLINK_HOME                  # 覆盖
+```
+
+两者读取/写入完全相同的 `route.json`、`package.json`、`skill.json` 和 `skills/`。在 GUI 里做的修改，CLI 下一条命令即可看到；反之亦然。
+
+Windows 安装包由 `pnpm package:win` 生成：
+
+```text
+apps/desktop/release/
+├─ Skillink Setup 0.0.0.exe     # NSIS 安装包
+├─ Skillink 0.0.0.exe           # portable
+└─ win-unpacked/
+   ├─ Skillink.exe              # GUI 入口
+   └─ resources/cli/
+      ├─ skillink.cmd           # CLI 启动器
+      ├─ skillink.mjs           # CLI bundle
+      └─ skillink-path.ps1      # PATH 安装/卸载辅助
+```
+
+- 安装包携带 CLI，不要求用户另装 Node.js；
+- `skillink.cmd` 使用 `ELECTRON_RUN_AS_NODE=1` 调用安装包自带的 Electron 运行 CLI；
+- NSIS 安装时把 `resources\cli` 加入当前用户 PATH，卸载时移除；
+- portable 版以 GUI 为主，CLI 文件在解包资源中但不会修改 PATH；
+- `pnpm package:win` 会先构建 CLI，再构建桌面端；
+- `pnpm package:desktop` 只生成 `win-unpacked`，不生成安装包。
+
 ---
 
 ## 8. 安全与跨平台
