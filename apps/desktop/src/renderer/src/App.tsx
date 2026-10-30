@@ -2,24 +2,36 @@ import { useEffect, useState } from 'react';
 import type { GcReport, HistoryEntry } from '@skillink/core';
 import type {
   AddTargetRequest,
-  ImportFolderRequest,
-  LibraryRemoveRequest,
-  LibraryTagRequest,
+  CopyPackageRequest,
+  CreatePackageRequest,
+  ImportSkillRequest,
+  PackageRemoveRequest,
+  PackageTagRequest,
   RouteAddRequest,
+  SkillRemoveRequest,
+  SkillTagRequest,
 } from '../../ipc-schemas.js';
 import type { DesktopApi, DesktopSnapshot } from '../../shared.js';
 import { DoctorView } from './DoctorView.js';
 import { HistoryView } from './HistoryView.js';
-import { LibraryView } from './LibraryView.js';
+import { PackagesView } from './PackagesView.js';
+import { SkillsView } from './SkillsView.js';
 import { SnapshotView } from './SnapshotView.js';
 import { TargetsView } from './TargetsView.js';
 
-type ViewId = 'overview' | 'targets' | 'library' | 'history' | 'doctor';
+type ViewId =
+  | 'overview'
+  | 'targets'
+  | 'skills'
+  | 'packages'
+  | 'history'
+  | 'doctor';
 
 const NAV_ITEMS: Array<{ id: ViewId; label: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'targets', label: 'Targets' },
-  { id: 'library', label: 'Library' },
+  { id: 'skills', label: 'Skills' },
+  { id: 'packages', label: 'Packages' },
   { id: 'history', label: 'History' },
   { id: 'doctor', label: 'Doctor' },
 ];
@@ -27,7 +39,8 @@ const NAV_ITEMS: Array<{ id: ViewId; label: string }> = [
 const VIEW_TITLES: Record<ViewId, string> = {
   overview: 'Overview',
   targets: 'Targets',
-  library: 'Public library',
+  skills: 'Installed skills',
+  packages: 'Package compositions',
   history: 'History',
   doctor: 'Doctor',
 };
@@ -37,7 +50,8 @@ export interface AppProps {
 }
 
 export function App({ api }: AppProps) {
-  const client = api ?? (typeof window !== 'undefined' ? window.skillink : undefined);
+  const client =
+    api ?? (typeof window !== 'undefined' ? window.skillink : undefined);
   const [view, setView] = useState<ViewId>('overview');
   const [snapshot, setSnapshot] = useState<DesktopSnapshot | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -96,21 +110,45 @@ export function App({ api }: AppProps) {
     });
   }
 
-  function importFolder(input: ImportFolderRequest): void {
+  function importSkill(input: ImportSkillRequest): void {
     void runAction(async () => {
-      await client!.importFolder(input);
+      await client!.importSkill(input);
     });
   }
 
-  function libraryTag(input: LibraryTagRequest): void {
+  function createPackage(input: CreatePackageRequest): void {
     void runAction(async () => {
-      await client!.libraryTag(input);
+      await client!.createPackage(input);
     });
   }
 
-  function libraryRemove(input: LibraryRemoveRequest): void {
+  function copyPackage(input: CopyPackageRequest): void {
     void runAction(async () => {
-      await client!.libraryRemove(input);
+      await client!.copyPackage(input);
+    });
+  }
+
+  function packageTag(input: PackageTagRequest): void {
+    void runAction(async () => {
+      await client!.packageTag(input);
+    });
+  }
+
+  function packageRemove(input: PackageRemoveRequest): void {
+    void runAction(async () => {
+      await client!.removePackage(input);
+    });
+  }
+
+  function skillTag(input: SkillTagRequest): void {
+    void runAction(async () => {
+      await client!.skillTag(input);
+    });
+  }
+
+  function skillRemove(input: SkillRemoveRequest): void {
+    void runAction(async () => {
+      await client!.skillRemove(input);
     });
   }
 
@@ -143,7 +181,7 @@ export function App({ api }: AppProps) {
           <span className="brand-mark">S</span>
           <div>
             <strong>Skillink</strong>
-            <span>filesystem package manager</span>
+            <span>skill and package manager</span>
           </div>
         </div>
 
@@ -174,11 +212,7 @@ export function App({ api }: AppProps) {
           </div>
           <div className="topbar-actions">
             {busy ? <span className="busy">Working…</span> : null}
-            <button
-              className="primary"
-              onClick={applyRoutes}
-              disabled={busy}
-            >
+            <button className="primary" onClick={applyRoutes} disabled={busy}>
               Apply routes
             </button>
           </div>
@@ -198,16 +232,26 @@ export function App({ api }: AppProps) {
               onRouteAdd={routeAdd}
               onApply={applyRoutes}
             />
-          ) : view === 'library' ? (
-            <LibraryView
-              library={snapshot.library}
+          ) : view === 'skills' ? (
+            <SkillsView
+              skills={snapshot.skills}
               gcReport={gcReport}
               busy={busy}
               onBrowse={() => client?.chooseFolder() ?? null}
-              onImport={importFolder}
-              onTag={libraryTag}
-              onRemove={libraryRemove}
+              onImportSkill={importSkill}
+              onTag={skillTag}
+              onRemove={skillRemove}
               onGc={runGc}
+            />
+          ) : view === 'packages' ? (
+            <PackagesView
+              packages={snapshot.packages}
+              skills={snapshot.skills}
+              busy={busy}
+              onCreatePackage={createPackage}
+              onCopyPackage={copyPackage}
+              onTag={packageTag}
+              onRemove={packageRemove}
             />
           ) : view === 'history' ? (
             <HistoryView entries={history} busy={busy} onRollback={rollback} />

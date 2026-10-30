@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { lstat, readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { SkillinkError, type PackageKind } from '@skillink/shared';
+import { SkillinkError } from '@skillink/shared';
+
+export type FolderKind = 'skill' | 'folder';
 
 export interface ScannedFile {
   relativePath: string;
@@ -23,7 +25,7 @@ export interface FolderScan {
   totalSize: number;
   manifestHash: string;
   integrity: string;
-  kind: PackageKind;
+  kind: FolderKind;
 }
 
 async function hashFile(filePath: string): Promise<Buffer> {

@@ -90,7 +90,23 @@ export function TargetsView({
     setRouteVersion('');
   }
 
-  const statusById = new Map(statusEntries.map((entry) => [entry.targetId, entry]));
+  const statusByTarget = new Map<string, StatusEntry[]>();
+  for (const entry of statusEntries) {
+    const bucket = statusByTarget.get(entry.targetId) ?? [];
+    bucket.push(entry);
+    statusByTarget.set(entry.targetId, bucket);
+  }
+
+  function targetStatus(targetIdValue: string): string {
+    const entries = statusByTarget.get(targetIdValue);
+    if (!entries || entries.length === 0) {
+      return '—';
+    }
+    const issue = entries.find(
+      (entry) => entry.state !== 'ok' && entry.state !== 'disabled',
+    );
+    return issue ? issue.state : 'ok';
+  }
 
   return (
     <main className="view">
@@ -100,14 +116,18 @@ export function TargetsView({
             <p className="eyebrow">ROUTES</p>
             <h2>Target directories</h2>
           </div>
-          <button className="primary" onClick={onApply} disabled={busy || !onApply}>
+          <button
+            className="primary"
+            onClick={onApply}
+            disabled={busy || !onApply}
+          >
             Apply routes
           </button>
         </div>
 
         {targets.length === 0 ? (
           <p className="empty">
-            No targets yet. Choose a directory that should directly contain package
+            No targets yet. Choose a directory that should directly contain skill
             folders.
           </p>
         ) : (
@@ -120,8 +140,7 @@ export function TargetsView({
               <span>Status</span>
             </div>
             {targets.map((target) => {
-              const count = Object.keys(target.skills).length;
-              const status = statusById.get(target.id);
+              const count = Object.keys(target.packages).length;
               return (
                 <div className="table-row" key={target.id}>
                   <span>
@@ -131,7 +150,7 @@ export function TargetsView({
                   <span className="path-value">{target.path}</span>
                   <span>{target.mode}</span>
                   <span>{packageCountLabel(count)}</span>
-                  <span>{status ? (status.state === 'ok' ? 'ok' : status.state) : '—'}</span>
+                  <span>{targetStatus(target.id)}</span>
                 </div>
               );
             })}
@@ -155,7 +174,7 @@ export function TargetsView({
                 <input
                   value={targetPath}
                   onChange={(event) => setTargetPath(event.target.value)}
-                  placeholder="C:/Projects/ProjectA/packages"
+                  placeholder="C:/Projects/ProjectA/skills"
                   required
                 />
                 <button
@@ -188,14 +207,20 @@ export function TargetsView({
               <span>Mode</span>
               <select
                 value={mode}
-                onChange={(event) => setMode(event.target.value as TargetMode)}
+                onChange={(event) =>
+                  setMode(event.target.value as TargetMode)
+                }
               >
                 <option value="link">link</option>
                 <option value="copy">copy (coming later)</option>
               </select>
             </label>
             <div className="form-actions">
-              <button className="primary" type="submit" disabled={busy || !onAddTarget}>
+              <button
+                className="primary"
+                type="submit"
+                disabled={busy || !onAddTarget}
+              >
                 Add target
               </button>
             </div>
@@ -217,7 +242,9 @@ export function TargetsView({
                 value={routeTarget}
                 onChange={(event) => setRouteTarget(event.target.value)}
               >
-                {targets.length === 0 ? <option value="">No targets</option> : null}
+                {targets.length === 0 ? (
+                  <option value="">No targets</option>
+                ) : null}
                 {targets.map((target) => (
                   <option value={target.id} key={target.id}>
                     {target.label ?? target.id}
@@ -230,7 +257,7 @@ export function TargetsView({
               <input
                 value={routeName}
                 onChange={(event) => setRouteName(event.target.value)}
-                placeholder="demo"
+                placeholder="frontend"
                 required
               />
             </label>
@@ -244,7 +271,11 @@ export function TargetsView({
               />
             </label>
             <div className="form-actions">
-              <button className="primary" type="submit" disabled={busy || !onRouteAdd}>
+              <button
+                className="primary"
+                type="submit"
+                disabled={busy || !onRouteAdd}
+              >
                 Assign
               </button>
             </div>

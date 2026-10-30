@@ -10,25 +10,54 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function compositionText(value: {
+  skills: Record<string, string>;
+  packages: Record<string, string>;
+}): string {
+  const parts: string[] = [];
+  if (Object.keys(value.skills).length > 0) {
+    parts.push(
+      `skills: ${Object.entries(value.skills)
+        .map(([name, version]) => `${name}@${version}`)
+        .join(', ')}`,
+    );
+  }
+  if (Object.keys(value.packages).length > 0) {
+    parts.push(
+      `packages: ${Object.entries(value.packages)
+        .map(([name, version]) => `${name}@${version}`)
+        .join(', ')}`,
+    );
+  }
+  return parts.join('; ');
+}
+
 export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
-  const packages = Object.entries(snapshot.library.packages);
-  const versionCount = packages.reduce(
+  const skillEntries = Object.entries(snapshot.skills.skills);
+  const skillVersionCount = skillEntries.reduce(
+    (total, [, entry]) => total + Object.keys(entry.versions).length,
+    0,
+  );
+  const packageEntries = Object.entries(snapshot.packages.packages);
+  const packageVersionCount = packageEntries.reduce(
     (total, [, entry]) => total + Object.keys(entry.versions).length,
     0,
   );
   const targetCount = snapshot.route.targets.length;
-  const okLinks = snapshot.status.entries.filter((entry) => entry.state === 'ok').length;
+  const okLinks = snapshot.status.entries.filter(
+    (entry) => entry.state === 'ok',
+  ).length;
   const issueCount = snapshot.doctor.issues.length;
 
   return (
     <main className="snapshot">
       <section className="hero">
         <div>
-          <p className="eyebrow">LOCAL-FIRST PACKAGE CONTROL</p>
+          <p className="eyebrow">LOCAL-FIRST SKILL CONTROL</p>
           <h1>Skillink</h1>
           <p className="lede">
-            Version any folder, keep one public library, and project packages into
-            the target directories you choose.
+            Version skills once, compose them into packages, and project the
+            resolved skills into the target directories you choose.
           </p>
         </div>
         <div className={snapshot.doctor.ok ? 'health ok' : 'health warn'}>
@@ -38,24 +67,29 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
 
       <section className="stats">
         <article className="stat">
-          <span className="stat-label">Public library</span>
-          <strong>{packages.length} packages</strong>
-          <span>{versionCount} versions</span>
+          <span className="stat-label">Skills</span>
+          <strong>{skillEntries.length} skills</strong>
+          <span>{skillVersionCount} versions</span>
+        </article>
+        <article className="stat">
+          <span className="stat-label">Packages</span>
+          <strong>{packageEntries.length} packages</strong>
+          <span>{packageVersionCount} versions</span>
         </article>
         <article className="stat">
           <span className="stat-label">Targets</span>
           <strong>{targetCount} targets</strong>
-          <span>{snapshot.route.targets.filter((target) => target.enabled).length} enabled</span>
+          <span>
+            {
+              snapshot.route.targets.filter((target) => target.enabled).length
+            }{' '}
+            enabled
+          </span>
         </article>
         <article className="stat">
           <span className="stat-label">Links</span>
           <strong>{okLinks} healthy</strong>
           <span>{snapshot.status.entries.length} checked</span>
-        </article>
-        <article className="stat">
-          <span className="stat-label">Control plane</span>
-          <strong className="path-value">{snapshot.home}</strong>
-          <span>route.json + skills.json</span>
         </article>
       </section>
 
@@ -88,7 +122,7 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
                 </span>
                 <span className="path-value">{target.path}</span>
                 <span>{target.mode}</span>
-                <span>{Object.keys(target.skills).length}</span>
+                <span>{Object.keys(target.packages).length}</span>
               </div>
             ))}
           </div>
@@ -98,23 +132,59 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">PUBLIC LIBRARY</p>
-            <h2>Packages</h2>
+            <p className="eyebrow">PACKAGES</p>
+            <h2>Compositions</h2>
           </div>
-          <span className="count">{packages.length}</span>
+          <span className="count">{packageEntries.length}</span>
         </div>
 
-        {packages.length === 0 ? (
+        {packageEntries.length === 0 ? (
           <p className="empty">
-            No packages yet. Import any folder with <code>skillink add &lt;folder&gt;</code>.
+            No packages yet. Create a package from installed skills.
           </p>
         ) : (
           <div className="package-grid">
-            {packages.map(([name, entry]) => (
+            {packageEntries.map(([name, entry]) => (
               <article className="package-card" key={name}>
                 <div className="package-title">
                   <strong>{name}</strong>
-                  <span>{entry.kind}</span>
+                  <span>package</span>
+                </div>
+                {entry.description ? <p>{entry.description}</p> : null}
+                <div className="version-list">
+                  {Object.entries(entry.versions).map(([version, value]) => (
+                    <div className="version-row" key={version}>
+                      <code>{version}</code>
+                      <span>{compositionText(value)}</span>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">SKILLS</p>
+            <h2>Installed skills</h2>
+          </div>
+          <span className="count">{skillEntries.length}</span>
+        </div>
+
+        {skillEntries.length === 0 ? (
+          <p className="empty">
+            No skills yet. Import a folder containing <code>SKILL.md</code>.
+          </p>
+        ) : (
+          <div className="package-grid">
+            {skillEntries.map(([name, entry]) => (
+              <article className="package-card" key={name}>
+                <div className="package-title">
+                  <strong>{name}</strong>
+                  <span>skill</span>
                 </div>
                 {entry.description ? <p>{entry.description}</p> : null}
                 <div className="version-list">

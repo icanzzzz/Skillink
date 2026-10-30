@@ -6,15 +6,14 @@ import { TargetsView } from './TargetsView.js';
 const target: TargetRoute = {
   id: 'project-a',
   label: 'Project A',
-  path: 'C:/Projects/ProjectA/packages',
+  path: 'C:/Projects/ProjectA/skills',
   mode: 'link',
   enabled: true,
-  skills: {
-    demo: {
+  packages: {
+    frontend: {
       requested: '1.0.0',
       resolved: '1.0.0',
-      integrity: 'sha512-abc',
-      source: 'skills/demo/1.0.0',
+      integrity: 'sha256-abc',
       enabled: true,
     },
   },
@@ -25,15 +24,17 @@ describe('TargetsView', () => {
     const html = renderToStaticMarkup(<TargetsView targets={[]} />);
 
     expect(html).toContain('No targets yet');
+    expect(html).toContain('skill folders');
   });
 
   it('renders target paths and package counts', () => {
     const html = renderToStaticMarkup(<TargetsView targets={[target]} />);
 
-    expect(html).toContain('C:/Projects/ProjectA/packages');
+    expect(html).toContain('C:/Projects/ProjectA/skills');
     expect(html).toContain('Project A');
     expect(html).toContain('1 package');
     expect(html).toContain('Add target');
+    expect(html).toContain('Assign package');
     expect(html).toContain('Apply routes');
   });
 });
