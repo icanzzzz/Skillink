@@ -52,6 +52,13 @@ pnpm build
 pnpm setup:electron
 ```
 
+如果 Electron 官方下载超时，可改用镜像：
+
+```powershell
+$env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
+pnpm setup:electron
+```
+
 ## 目录
 
 ```text
