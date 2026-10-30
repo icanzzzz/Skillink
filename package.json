@@ -12,6 +12,8 @@
     "build:cli": "tsup",
     "build:desktop": "pnpm --filter @skillink/desktop build",
     "dev:cli": "tsx apps/cli/src/index.ts",
+    "setup:electron": "node apps/desktop/node_modules/electron/install.js",
+    "predev:desktop": "pnpm setup:electron",
     "dev:desktop": "pnpm --filter @skillink/desktop dev"
   },
   "devDependencies": {

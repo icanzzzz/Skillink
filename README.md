@@ -46,6 +46,12 @@ pnpm typecheck
 pnpm build
 ```
 
+首次运行 GUI 前如 Electron 二进制缺失，执行：
+
+```bash
+pnpm setup:electron
+```
+
 ## 目录
 
 ```text

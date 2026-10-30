@@ -1,6 +1,6 @@
 # Skillink MVP Foundation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 打通 Skillink MVP 的首个可用闭环：导入任意本地文件夹到公用库、写入 `skills.json`、配置 `route.json`、apply 到用户指定目标目录，并能 status/doctor。
 
@@ -54,25 +54,25 @@
 **Interfaces:**
 - Produces: `RouteFileSchema`, `SkillsFileSchema`, `RouteFile`, `SkillsFile`, `SkillinkError`, `getSkillinkPaths(home?)`, `getDefaultSkillinkHome(env?)`.
 
-- [ ] **Step 1: Write failing schema tests**
+- [x] **Step 1: Write failing schema tests**
 
 Test that a minimal `route.json` and `skills.json` parse, that malformed target mode fails, and that missing `integrity` in a library version fails.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test packages/shared/src/schemas.test.ts`
 Expected: FAIL because schemas do not exist.
 
-- [ ] **Step 3: Implement scaffold and schemas**
+- [x] **Step 3: Implement scaffold and schemas**
 
 Create workspace files and zod schemas matching `ARCHITECTURE.md` sections 8.1–8.5.
 
-- [ ] **Step 4: Run tests and typecheck**
+- [x] **Step 4: Run tests and typecheck**
 
 Run: `pnpm test packages/shared/src/schemas.test.ts && pnpm typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add package.json pnpm-workspace.yaml tsconfig.base.json tsconfig.json vitest.config.ts packages/shared
@@ -95,25 +95,25 @@ git commit -m "chore: scaffold workspace and shared schemas"
 - Consumes: `getSkillinkPaths`, schemas.
 - Produces: `readJsonFile`, `writeJsonAtomic`, `assertSafeTargetPath`, `assertSafePackageName`, `normalizeVersion`.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Cover: atomic write leaves valid JSON; invalid schema rejected; target path inside `SKILLINK_HOME` rejected; drive root rejected; unsafe package names (`..`, `CON`, `a/b`) rejected; `0.0.0+abc12345` accepted.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pnpm test packages/core/src/json-store.test.ts packages/core/src/path-policy.test.ts packages/core/src/package-name.test.ts`
 Expected: FAIL because implementations do not exist.
 
-- [ ] **Step 3: Implement persistence and policies**
+- [x] **Step 3: Implement persistence and policies**
 
 Use `fs.mkdtemp`/temp file + `fs.rename`; no schema mutation on read; reject unsafe paths with `SkillinkError` codes.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `pnpm test packages/core/src/json-store.test.ts packages/core/src/path-policy.test.ts packages/core/src/package-name.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core
@@ -133,25 +133,25 @@ git commit -m "feat: add atomic JSON store and path policies"
 - Consumes: `readJsonFile`, `writeJsonAtomic`, `assertSafePackageName`, `normalizeVersion`.
 - Produces: `readSkillsFile`, `writeSkillsFile`, `importFolder(input): Promise<ImportResult>`.
 
-- [ ] **Step 1: Write failing import tests**
+- [x] **Step 1: Write failing import tests**
 
 Cover: arbitrary folder without `SKILL.md` imports; `skills.json` gets name/version/integrity/fileCount/size; empty directory preserved; hidden file copied; symlink rejected; same version + same content reuses; same version + different content rejects.
 
-- [ ] **Step 2: Run tests to verify fail**
+- [x] **Step 2: Run tests to verify fail**
 
 Run: `pnpm test packages/core/src/import-folder.test.ts`
 Expected: FAIL because `importFolder` does not exist.
 
-- [ ] **Step 3: Implement folder scan and import**
+- [x] **Step 3: Implement folder scan and import**
 
 Scan recursively, reject symlinks, compute a canonical manifest hash, copy to staging, move to `skills/<name>/<version>/`, then atomically update `skills.json`.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `pnpm test packages/core/src/import-folder.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core
@@ -170,25 +170,25 @@ git commit -m "feat: import arbitrary local folders into public library"
 - Consumes: `readJsonFile`, `writeJsonAtomic`, `readSkillsFile`, `assertSafeTargetPath`, `normalizeVersion`.
 - Produces: `readRouteFile`, `writeRouteFile`, `addTarget`, `removeTarget`, `addRouteEntry`, `removeRouteEntry`, `resolveVersion`.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Cover: add target with user path; duplicate target id rejected; add route with exact version; semver range resolves highest matching version from `skills.json`; missing version rejected; remove target removes its route entry; target path remains untouched.
 
-- [ ] **Step 2: Run tests to verify fail**
+- [x] **Step 2: Run tests to verify fail**
 
 Run: `pnpm test packages/core/src/route.test.ts packages/core/src/target.test.ts`
 Expected: FAIL because implementations do not exist.
 
-- [ ] **Step 3: Implement route/target services**
+- [x] **Step 3: Implement route/target services**
 
 Route entries store exact `resolved`, `integrity`, `source`; `requested` optional. `addRouteEntry` validates cross-file references.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `pnpm test packages/core/src/route.test.ts packages/core/src/target.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core
@@ -209,25 +209,25 @@ git commit -m "feat: manage targets and route entries"
 - Consumes: `readRouteFile`, `readSkillsFile`, `assertSafeTargetPath`.
 - Produces: `apply(input): Promise<ApplyReport>`, `status(input): Promise<StatusReport>`, `doctor(input): Promise<DoctorReport>`.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Cover: apply creates per-package links; dry-run makes no changes; existing correct link is skipped; wrong managed link is replaced; unmanaged real folder conflicts and is not deleted; `--prune` removes only managed links; missing library version fails apply; status reports drift; doctor reports missing content/orphan directory.
 
-- [ ] **Step 2: Run tests to verify fail**
+- [x] **Step 2: Run tests to verify fail**
 
 Run: `pnpm test packages/core/src/apply.test.ts packages/core/src/status.test.ts packages/core/src/doctor.test.ts`
 Expected: FAIL because implementations do not exist.
 
-- [ ] **Step 3: Implement apply/status/doctor**
+- [x] **Step 3: Implement apply/status/doctor**
 
 Use `lstat` to distinguish links from real directories; Windows `junction`, POSIX `symlink`; never follow unknown links for deletion.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `pnpm test packages/core/src/apply.test.ts packages/core/src/status.test.ts packages/core/src/doctor.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core
@@ -246,25 +246,25 @@ git commit -m "feat: apply routes with safe link reconciliation"
 - Consumes: all core services.
 - Produces: `skillink init`, `library list`, `add`, `target add/list/remove`, `route add/list/remove`, `apply`, `status`, `doctor`.
 
-- [ ] **Step 1: Write failing CLI tests**
+- [x] **Step 1: Write failing CLI tests**
 
 Cover: `--help` exits 0; `add` imports a temp folder; `target add` then `route add` then `apply` creates a link; `status --json` is valid JSON.
 
-- [ ] **Step 2: Run tests to verify fail**
+- [x] **Step 2: Run tests to verify fail**
 
 Run: `pnpm test apps/cli/src/cli.test.ts`
 Expected: FAIL because CLI does not exist.
 
-- [ ] **Step 3: Implement Commander CLI**
+- [x] **Step 3: Implement Commander CLI**
 
 Use `SKILLINK_HOME` and core services; human-readable output by default, `--json` for status/doctor/list.
 
-- [ ] **Step 4: Run tests and typecheck**
+- [x] **Step 4: Run tests and typecheck**
 
 Run: `pnpm test apps/cli/src/cli.test.ts && pnpm typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/cli
@@ -285,25 +285,25 @@ git commit -m "feat: add Skillink CLI"
 - Consumes: core services via typed IPC.
 - Produces: a running Electron window with four views: Library, Targets, Status, Settings.
 
-- [ ] **Step 1: Write failing renderer test**
+- [x] **Step 1: Write failing renderer test**
 
 Test that the app renders package list from a mocked typed IPC client and shows empty state.
 
-- [ ] **Step 2: Run test to verify fail**
+- [x] **Step 2: Run test to verify fail**
 
 Run: `pnpm test apps/desktop/src/renderer/App.test.tsx`
 Expected: FAIL because app does not exist.
 
-- [ ] **Step 3: Implement minimal Electron shell**
+- [x] **Step 3: Implement minimal Electron shell**
 
 Use electron-vite, React, Tailwind, contextIsolation, sandbox. Main process calls core; preload exposes typed methods.
 
-- [ ] **Step 4: Run test/typecheck**
+- [x] **Step 4: Run test/typecheck**
 
 Run: `pnpm test apps/desktop/src/renderer/App.test.tsx && pnpm typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/desktop
