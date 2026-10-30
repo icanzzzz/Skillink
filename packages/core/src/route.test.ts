@@ -375,6 +375,37 @@ describe('route entries', () => {
     ).rejects.toMatchObject({ code: 'PACKAGE_NOT_FOUND' });
   });
 
+  it('rejects enabling a package when the resulting graph conflicts', async () => {
+    const { paths } = await setup();
+    await createPackageVersion({
+      paths,
+      name: 'old',
+      version: '1.0.0',
+      skills: { pdf: '1.0.0' },
+    });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'frontend',
+      requested: '1.2.0',
+    });
+    await setPackageEnabled(paths, 'project-a', 'frontend', false);
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'old',
+      requested: '1.0.0',
+    });
+
+    await expect(
+      setPackageEnabled(paths, 'project-a', 'frontend', true),
+    ).rejects.toMatchObject({ code: 'SKILL_VERSION_CONFLICT' });
+
+    expect(
+      (await readRouteFile(paths)).targets[0]?.packages.frontend?.enabled,
+    ).toBe(false);
+  });
+
   it('rejects prototype-like package names without polluting Object.prototype', async () => {
     const { paths } = await setup();
     await addRouteEntry({

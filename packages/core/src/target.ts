@@ -15,7 +15,11 @@ import {
   isPathInside,
   isSamePath,
 } from './path-policy.js';
-import { readRouteFile, writeRouteFile } from './route.js';
+import {
+  readRouteFile,
+  validateTargetRoute,
+  writeRouteFile,
+} from './route.js';
 import { withHistory } from './history.js';
 
 function slugify(value: string): string {
@@ -115,6 +119,9 @@ export async function setTargetEnabled(
   }
 
   target.enabled = enabled;
+  if (enabled) {
+    await validateTargetRoute(paths, target);
+  }
   await withHistory(paths, enabled ? 'enable-target' : 'disable-target', async () => {
     await writeRouteFile(paths, route);
   });
