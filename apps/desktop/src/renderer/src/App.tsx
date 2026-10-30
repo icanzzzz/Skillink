@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { ApplyReport, GcReport, HistoryEntry } from '@skillink/core';
+import type {
+  ApplyReport,
+  GcReport,
+  HistoryEntry,
+} from '@skillink/shared';
 import type {
   AddTargetRequest,
   CopyPackageRequest,
@@ -73,12 +77,9 @@ export function App({ api }: AppProps) {
     }
 
     try {
-      const [nextSnapshot, nextHistory] = await Promise.all([
-        client.getSnapshot(),
-        client.history(),
-      ]);
+      const nextSnapshot = await client.getSnapshot();
       setSnapshot(nextSnapshot);
-      setHistory(nextHistory);
+      setHistory(nextSnapshot.history);
       setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));

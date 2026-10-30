@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createCliAdapter,
   type CliRunner,
@@ -131,5 +134,36 @@ describe('CLI adapter', () => {
       home: 'C:/home',
     });
     expect(seen).toEqual([['snapshot', '--json']]);
+  });
+
+  it('runs end-to-end against the real CLI', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'skillink-adapter-'));
+    const home = path.join(root, 'home');
+    const source = path.join(root, 'source');
+    await mkdir(source, { recursive: true });
+    await writeFile(path.join(source, 'SKILL.md'), '# pdf', 'utf8');
+    await writeFile(path.join(source, 'file.txt'), 'hello', 'utf8');
+
+    vi.stubEnv('SKILLINK_HOME', home);
+    try {
+      const adapter = createCliAdapter();
+
+      await adapter.invoke([
+        'skill',
+        'add',
+        source,
+        '--name',
+        'pdf',
+        '--version',
+        '1.0.0',
+      ]);
+      const snapshot = await adapter.snapshot();
+
+      expect(snapshot.home).toBe(path.resolve(home));
+      expect(snapshot.skills.skills.pdf).toBeDefined();
+    } finally {
+      vi.unstubAllEnvs();
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

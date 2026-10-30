@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import type { GcReport } from '@skillink/core';
+import type { GcReport } from '@skillink/shared';
 import type { SkillFile } from '@skillink/shared';
 
 export interface ImportSkillFormInput {

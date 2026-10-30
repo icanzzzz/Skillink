@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { HistoryEntry } from '@skillink/core';
+import type { HistoryEntry } from '@skillink/shared';
 
 export interface HistoryViewProps {
   entries: HistoryEntry[];

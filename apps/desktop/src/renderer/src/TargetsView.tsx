@@ -3,7 +3,7 @@ import type {
   ApplyReport,
   StatusEntry,
   TargetSkillSummary,
-} from '@skillink/core';
+} from '@skillink/shared';
 import type { TargetMode, TargetRoute } from '@skillink/shared';
 
 export interface AddTargetFormInput {

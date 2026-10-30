@@ -1,17 +1,11 @@
 import type {
   ApplyReport,
-  DoctorReport,
   GcReport,
-  HistoryEntry,
   ImportSkillResult,
-  PackageFile,
   PackageLock,
   PackageVersion,
-  RouteFile,
-  SkillFile,
-  StatusReport,
+  SnapshotReport,
   TargetRoute,
-  TargetSkillSummary,
 } from '@skillink/shared';
 import type {
   AddTargetRequest,
@@ -32,16 +26,7 @@ import type {
   TargetRemoveRequest,
 } from './ipc-schemas.js';
 
-export interface DesktopSnapshot {
-  home: string;
-  skills: SkillFile;
-  packages: PackageFile;
-  route: RouteFile;
-  status: StatusReport;
-  doctor: DoctorReport;
-  targetSkills: TargetSkillSummary[];
-  history: HistoryEntry[];
-}
+export type DesktopSnapshot = SnapshotReport;
 
 export interface DesktopApi {
   getSnapshot(): Promise<DesktopSnapshot>;
@@ -61,6 +46,5 @@ export interface DesktopApi {
   routeRemove(input: RouteRemoveRequest): Promise<boolean>;
   routeEnable(input: RouteEnableRequest): Promise<PackageLock>;
   gc(input?: GcRequest): Promise<GcReport>;
-  history(): Promise<HistoryEntry[]>;
   rollback(input: RollbackRequest): Promise<void>;
 }

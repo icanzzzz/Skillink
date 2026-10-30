@@ -1,4 +1,4 @@
-import type { DoctorReport } from '@skillink/core';
+import type { DoctorReport } from '@skillink/shared';
 
 export interface DoctorViewProps {
   report: DoctorReport;

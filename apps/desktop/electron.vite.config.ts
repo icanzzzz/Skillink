@@ -5,7 +5,7 @@ export default defineConfig({
   main: {
     plugins: [
       externalizeDepsPlugin({
-        exclude: ['@skillink/core', '@skillink/shared'],
+        exclude: ['@skillink/cli', '@skillink/core', '@skillink/shared'],
       }),
     ],
   },
