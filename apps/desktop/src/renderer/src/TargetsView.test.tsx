@@ -33,6 +33,23 @@ describe('TargetsView', () => {
     expect(html).toMatch(/<option value="copy"[^>]*disabled/);
   });
 
+  it('renders package and resolved skill counts', () => {
+    const html = renderToStaticMarkup(
+      <TargetsView
+        targets={[target]}
+        targetSkills={[
+          {
+            targetId: 'project-a',
+            skills: [{ name: 'pdf', version: '1.0.0' }],
+          },
+        ]}
+      />,
+    );
+
+    expect(html).toContain('1 package');
+    expect(html).toContain('1 skill');
+  });
+
   it('renders target paths and package counts', () => {
     const html = renderToStaticMarkup(<TargetsView targets={[target]} />);
 

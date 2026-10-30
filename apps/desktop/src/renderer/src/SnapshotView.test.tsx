@@ -97,6 +97,12 @@ describe('SnapshotView', () => {
           },
         ],
       },
+      targetSkills: [
+        {
+          targetId: 'project-a',
+          skills: [{ name: 'demo', version: '1.0.0' }],
+        },
+      ],
     };
 
     const html = renderToStaticMarkup(<SnapshotView snapshot={snapshot} />);
@@ -108,5 +114,7 @@ describe('SnapshotView', () => {
     expect(html).toContain('demo-pack');
     expect(html).toContain('demo');
     expect(html).toContain('2.0 KB');
+    expect(html).toContain('<span>Skills</span>');
+    expect(html).toContain('<span>1</span>');
   });
 });

@@ -226,6 +226,7 @@ export function App({ api }: AppProps) {
             <TargetsView
               targets={snapshot.route.targets}
               statusEntries={snapshot.status.entries}
+              targetSkills={snapshot.targetSkills}
               busy={busy}
               onBrowse={() => client?.chooseFolder() ?? null}
               onAddTarget={addTarget}

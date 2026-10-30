@@ -5,6 +5,7 @@ import type {
   HistoryEntry,
   ImportSkillResult,
   StatusReport,
+  TargetSkillSummary,
 } from '@skillink/core';
 import type {
   PackageFile,
@@ -37,6 +38,7 @@ export interface DesktopSnapshot {
   route: RouteFile;
   status: StatusReport;
   doctor: DoctorReport;
+  targetSkills?: TargetSkillSummary[];
 }
 
 export interface DesktopApi {

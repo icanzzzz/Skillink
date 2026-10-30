@@ -21,6 +21,7 @@ import {
   setPackageTag,
   setSkillTag,
   status,
+  summarizeTargetSkills,
 } from '@skillink/core';
 import { getSkillinkPaths } from '@skillink/shared';
 import {
@@ -43,13 +44,14 @@ import { assertTrustedSender, type SenderPolicy } from './sender-policy.js';
 
 async function getSnapshot(): Promise<DesktopSnapshot> {
   const paths = getSkillinkPaths();
-  const [skills, packages, route, statusReport, doctorReport] =
+  const [skills, packages, route, statusReport, doctorReport, targetSkills] =
     await Promise.all([
       readSkillFile(paths),
       readPackageFile(paths),
       readRouteFile(paths),
       status({ paths }),
       doctor({ paths }),
+      summarizeTargetSkills({ paths }),
     ]);
 
   return {
@@ -59,6 +61,7 @@ async function getSnapshot(): Promise<DesktopSnapshot> {
     route,
     status: statusReport,
     doctor: doctorReport,
+    targetSkills,
   };
 }
 

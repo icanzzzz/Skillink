@@ -44,6 +44,12 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
     0,
   );
   const targetCount = snapshot.route.targets.length;
+  const targetSkills = new Map(
+    (snapshot.targetSkills ?? []).map((summary) => [
+      summary.targetId,
+      summary,
+    ]),
+  );
   const okLinks = snapshot.status.entries.filter(
     (entry) => entry.state === 'ok',
   ).length;
@@ -113,18 +119,27 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
               <span>Path</span>
               <span>Mode</span>
               <span>Packages</span>
+              <span>Skills</span>
             </div>
-            {snapshot.route.targets.map((target) => (
-              <div className="table-row" key={target.id}>
-                <span>
-                  <strong>{target.label ?? target.id}</strong>
-                  <small>{target.id}</small>
-                </span>
-                <span className="path-value">{target.path}</span>
-                <span>{target.mode}</span>
-                <span>{Object.keys(target.packages).length}</span>
-              </div>
-            ))}
+            {snapshot.route.targets.map((target) => {
+              const summary = targetSkills.get(target.id);
+              return (
+                <div className="table-row" key={target.id}>
+                  <span>
+                    <strong>{target.label ?? target.id}</strong>
+                    <small>{target.id}</small>
+                  </span>
+                  <span className="path-value">{target.path}</span>
+                  <span>{target.mode}</span>
+                  <span>{Object.keys(target.packages).length}</span>
+                  <span>
+                    {summary?.error
+                      ? 'unresolved'
+                      : (summary?.skills.length ?? 0)}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

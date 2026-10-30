@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import type { StatusEntry } from '@skillink/core';
+import type { StatusEntry, TargetSkillSummary } from '@skillink/core';
 import type { TargetMode, TargetRoute } from '@skillink/shared';
 
 export interface AddTargetFormInput {
@@ -18,6 +18,7 @@ export interface RouteAddFormInput {
 export interface TargetsViewProps {
   targets: TargetRoute[];
   statusEntries?: StatusEntry[];
+  targetSkills?: TargetSkillSummary[];
   busy?: boolean;
   onBrowse?: () => Promise<string | null> | string | null;
   onAddTarget?: (input: AddTargetFormInput) => void;
@@ -29,9 +30,14 @@ function packageCountLabel(count: number): string {
   return `${count} package${count === 1 ? '' : 's'}`;
 }
 
+function skillCountLabel(count: number): string {
+  return `${count} skill${count === 1 ? '' : 's'}`;
+}
+
 export function TargetsView({
   targets,
   statusEntries = [],
+  targetSkills = [],
   busy = false,
   onBrowse,
   onAddTarget,
@@ -97,6 +103,10 @@ export function TargetsView({
     statusByTarget.set(entry.targetId, bucket);
   }
 
+  const skillsByTarget = new Map(
+    targetSkills.map((summary) => [summary.targetId, summary]),
+  );
+
   function targetStatus(targetIdValue: string): string {
     const entries = statusByTarget.get(targetIdValue);
     if (!entries || entries.length === 0) {
@@ -141,6 +151,7 @@ export function TargetsView({
             </div>
             {targets.map((target) => {
               const count = Object.keys(target.packages).length;
+              const resolved = skillsByTarget.get(target.id);
               return (
                 <div className="table-row" key={target.id}>
                   <span>
@@ -149,7 +160,13 @@ export function TargetsView({
                   </span>
                   <span className="path-value">{target.path}</span>
                   <span>{target.mode}</span>
-                  <span>{packageCountLabel(count)}</span>
+                  <span>
+                    {packageCountLabel(count)}
+                    {resolved && !resolved.error
+                      ? ` · ${skillCountLabel(resolved.skills.length)}`
+                      : ''}
+                    {resolved?.error ? ' · unresolved' : ''}
+                  </span>
                   <span>{targetStatus(target.id)}</span>
                 </div>
               );
