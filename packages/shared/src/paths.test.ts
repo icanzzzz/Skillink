@@ -1,3 +1,4 @@
+import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { getSkillDir, getSkillinkPaths } from './paths.js';
@@ -13,6 +14,10 @@ describe('Skillink paths', () => {
     expect(paths.skillFile).toBe(path.join(resolvedHome, 'skill.json'));
     expect(paths.routeFile).toBe(path.join(resolvedHome, 'route.json'));
     expect(paths.libraryDir).toBe(path.join(resolvedHome, 'skills'));
+  });
+
+  it('expands a home-relative control plane path', () => {
+    expect(getSkillinkPaths('~').home).toBe(path.resolve(os.homedir()));
   });
 
   it('builds a skill version directory', () => {

@@ -11,6 +11,7 @@ import {
 import path from 'node:path';
 import {
   SkillinkError,
+  expandPath,
   getSkillDir,
   getSkillinkPaths,
 } from '@skillink/shared';
@@ -51,7 +52,7 @@ export async function importSkill(
   input: ImportSkillInput,
 ): Promise<ImportSkillResult> {
   const paths = getSkillinkPaths(input.home);
-  const sourceDir = path.resolve(input.sourceDir);
+  const sourceDir = path.resolve(expandPath(input.sourceDir));
   const sourceStat = await stat(sourceDir).catch((error: unknown) => {
     throw new SkillinkError(
       'IO_ERROR',

@@ -1,6 +1,7 @@
 import path from 'node:path';
 import {
   SkillinkError,
+  expandPath,
   type SkillinkPaths,
   type TargetMode,
   type TargetRoute,
@@ -29,7 +30,10 @@ export interface AddTargetInput {
 
 export async function addTarget(input: AddTargetInput): Promise<TargetRoute> {
   const route = await readRouteFile(input.paths);
-  const targetPath = assertSafeTargetPath(input.path, input.paths);
+  const targetPath = assertSafeTargetPath(
+    expandPath(input.path),
+    input.paths,
+  );
   const id = assertSafePackageName(
     input.id?.trim() || slugify(input.label ?? path.basename(targetPath)),
   );

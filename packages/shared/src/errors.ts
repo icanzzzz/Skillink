@@ -1,6 +1,7 @@
 export type SkillinkErrorCode =
   | 'INVALID_NAME'
   | 'INVALID_VERSION'
+  | 'INVALID_PATH'
   | 'UNSAFE_PATH'
   | 'PACKAGE_EXISTS'
   | 'PACKAGE_NOT_FOUND'

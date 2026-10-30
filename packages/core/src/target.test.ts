@@ -50,6 +50,20 @@ describe('targets', () => {
     expect(route.targets).toHaveLength(1);
   });
 
+  it('expands a tilde in a target path', async () => {
+    const { paths } = await setup();
+
+    const target = await addTarget({
+      paths,
+      id: 'home-target',
+      path: '~/skillink-target-expansion',
+    });
+
+    expect(target.path).toBe(
+      path.join(os.homedir(), 'skillink-target-expansion'),
+    );
+  });
+
   it('generates a target id when omitted', async () => {
     const { paths, targetPath } = await setup();
 
