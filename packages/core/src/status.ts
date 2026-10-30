@@ -1,13 +1,25 @@
 import { lstat, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
+  SkillinkError,
+  getSkillDir,
   getSkillinkPaths,
+  type SkillinkErrorCode,
   type SkillinkPaths,
 } from '@skillink/shared';
 import { inspectPath, isManagedLink } from './links.js';
-import { assertSafeTargetPath, isPathInside, isSamePath } from './path-policy.js';
+import {
+  assertSafeTargetPath,
+  isPathInside,
+  isSamePath,
+} from './path-policy.js';
 import { readRouteFile } from './route.js';
-import { readSkillsFile } from './library.js';
+import { readPackageFile } from './package-store.js';
+import { readSkillFile } from './skill-store.js';
+import {
+  computePackageIntegrity,
+  resolvePackageGraph,
+} from './package-graph.js';
 
 export type StatusState =
   | 'ok'
@@ -27,6 +39,7 @@ export interface StatusEntry {
   state: StatusState;
   path: string;
   sourcePath?: string;
+  packageName?: string;
   detail?: string;
 }
 
@@ -45,10 +58,31 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && 'code' in error;
 }
 
+function errorCode(error: unknown): SkillinkErrorCode | undefined {
+  return error instanceof SkillinkError ? error.code : undefined;
+}
+
+function errorState(
+  error: unknown,
+): 'missing' | 'conflict' {
+  const code = errorCode(error);
+  return code === 'PACKAGE_NOT_FOUND' || code === 'VERSION_NOT_FOUND'
+    ? 'missing'
+    : 'conflict';
+}
+
+function errorDetail(error: unknown): string {
+  if (error instanceof SkillinkError) {
+    return `${error.code}: ${error.message}`;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function status(input: StatusInput = {}): Promise<StatusReport> {
   const paths = input.paths ?? getSkillinkPaths(input.home);
   const route = await readRouteFile(paths);
-  const library = await readSkillsFile(paths);
+  const packageFile = await readPackageFile(paths);
+  const skillFile = await readSkillFile(paths);
   const entries: StatusEntry[] = [];
   const targets = input.targetId
     ? route.targets.filter((target) => target.id === input.targetId)
@@ -66,18 +100,12 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
         version: '',
         state: 'conflict',
         path: target.path,
-        detail: error instanceof Error ? error.message : String(error),
+        detail: errorDetail(error),
       });
       continue;
     }
 
-    const desired = new Set(
-      Object.entries(target.skills)
-        .filter(([, lock]) => lock.enabled !== false)
-        .map(([name]) => name),
-    );
-
-    for (const [name, lock] of Object.entries(target.skills)) {
+    for (const [name, lock] of Object.entries(target.packages)) {
       if (lock.enabled === false) {
         entries.push({
           targetId: target.id,
@@ -86,26 +114,72 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
           version: lock.resolved,
           state: 'disabled',
           path: path.join(targetPath, name),
+          packageName: name,
         });
-        continue;
       }
+    }
 
-      const packageEntry = library.packages[name];
-      const versionEntry = packageEntry?.versions[lock.resolved];
-      if (!packageEntry || !versionEntry) {
+    const enabledLocks = Object.entries(target.packages).filter(
+      ([, lock]) => lock.enabled !== false,
+    );
+    let targetFailed = false;
+
+    for (const [name, lock] of enabledLocks) {
+      try {
+        const expected = computePackageIntegrity(packageFile, [
+          { name, version: lock.resolved },
+        ]);
+        if (expected !== lock.integrity) {
+          throw new SkillinkError(
+            'PACKAGE_INTEGRITY_MISMATCH',
+            `Route lock for ${name}@${lock.resolved} does not match package.json.`,
+            { name, version: lock.resolved, expected, actual: lock.integrity },
+          );
+        }
+      } catch (error) {
         entries.push({
           targetId: target.id,
           targetPath,
           name,
           version: lock.resolved,
-          state: 'missing',
+          state: errorState(error),
           path: path.join(targetPath, name),
-          detail: 'Package version is missing from skills.json.',
+          packageName: name,
+          detail: errorDetail(error),
         });
-        continue;
+        targetFailed = true;
       }
+    }
 
-      const sourcePath = path.resolve(paths.home, versionEntry.source);
+    if (targetFailed) {
+      continue;
+    }
+
+    let resolution;
+    try {
+      resolution = resolvePackageGraph(
+        packageFile,
+        skillFile,
+        enabledLocks.map(([name, lock]) => ({
+          name,
+          version: lock.resolved,
+        })),
+      );
+    } catch (error) {
+      entries.push({
+        targetId: target.id,
+        targetPath,
+        name: '<package>',
+        version: '',
+        state: errorState(error),
+        path: targetPath,
+        detail: errorDetail(error),
+      });
+      continue;
+    }
+
+    for (const skill of resolution.skills.values()) {
+      const sourcePath = getSkillDir(paths, skill.name, skill.version);
       const sourceExists = await stat(sourcePath)
         .then((info) => info.isDirectory())
         .catch((error: unknown) => {
@@ -119,25 +193,25 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
         entries.push({
           targetId: target.id,
           targetPath,
-          name,
-          version: lock.resolved,
+          name: skill.name,
+          version: skill.version,
           state: 'missing',
-          path: path.join(targetPath, name),
+          path: path.join(targetPath, skill.name),
           sourcePath,
-          detail: 'Library content is missing.',
+          detail: 'Skill content is missing.',
         });
         continue;
       }
 
-      const destination = path.join(targetPath, name);
+      const destination = path.join(targetPath, skill.name);
       const inspection = await inspectPath(destination);
 
       if (inspection.kind === 'missing') {
         entries.push({
           targetId: target.id,
           targetPath,
-          name,
-          version: lock.resolved,
+          name: skill.name,
+          version: skill.version,
           state: 'missing',
           path: destination,
           sourcePath,
@@ -150,8 +224,8 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
           entries.push({
             targetId: target.id,
             targetPath,
-            name,
-            version: lock.resolved,
+            name: skill.name,
+            version: skill.version,
             state: 'ok',
             path: destination,
             sourcePath,
@@ -166,8 +240,8 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
           entries.push({
             targetId: target.id,
             targetPath,
-            name,
-            version: lock.resolved,
+            name: skill.name,
+            version: skill.version,
             state: 'wrong-version',
             path: destination,
             sourcePath,
@@ -179,8 +253,8 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
         entries.push({
           targetId: target.id,
           targetPath,
-          name,
-          version: lock.resolved,
+          name: skill.name,
+          version: skill.version,
           state: 'unmanaged',
           path: destination,
           sourcePath,
@@ -192,8 +266,8 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
       entries.push({
         targetId: target.id,
         targetPath,
-        name,
-        version: lock.resolved,
+        name: skill.name,
+        version: skill.version,
         state: 'conflict',
         path: destination,
         sourcePath,
@@ -201,6 +275,7 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
       });
     }
 
+    const desiredNames = new Set(resolution.skills.keys());
     const children = await readdir(targetPath, { withFileTypes: true }).catch(
       (error: unknown) => {
         if (isNodeError(error) && error.code === 'ENOENT') {
@@ -211,7 +286,7 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
     );
 
     for (const child of children) {
-      if (desired.has(child.name)) {
+      if (desiredNames.has(child.name)) {
         continue;
       }
 
