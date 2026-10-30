@@ -68,12 +68,18 @@ export async function writeConfigSet(
     await write(paths.routeFile, set.route, RouteFileSchema);
   } catch (error) {
     const restoreFailures: unknown[] = [];
-    try {
-      await write(paths.skillFile, previousSkills, SkillFileSchema);
-      await write(paths.packageFile, previousPackages, PackageFileSchema);
-      await write(paths.routeFile, previousRoute, RouteFileSchema);
-    } catch (restoreError) {
-      restoreFailures.push(restoreError);
+    const restores: Array<() => Promise<void>> = [
+      () => write(paths.skillFile, previousSkills, SkillFileSchema),
+      () => write(paths.packageFile, previousPackages, PackageFileSchema),
+      () => write(paths.routeFile, previousRoute, RouteFileSchema),
+    ];
+
+    for (const restore of restores) {
+      try {
+        await restore();
+      } catch (restoreError) {
+        restoreFailures.push(restoreError);
+      }
     }
 
     if (restoreFailures.length > 0) {

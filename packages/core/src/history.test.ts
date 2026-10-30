@@ -96,6 +96,66 @@ afterEach(async () => {
 });
 
 describe('writeConfigSet', () => {
+  it('attempts every restore and reports restore failures', async () => {
+    const { paths } = await setup();
+    await writeRouteFile(paths, { schemaVersion: 2, targets: [] });
+    await writePackageFile(paths, createEmptyPackageFile());
+    await writeSkillFile(paths, { schemaVersion: 2, skills: {} });
+
+    let routeWrites = 0;
+    let packageWrites = 0;
+    const write = async (
+      filePath: string,
+      value: unknown,
+      schema: { parse: (input: unknown) => unknown },
+    ): Promise<void> => {
+      if (filePath.endsWith('route.json')) {
+        routeWrites += 1;
+        if (routeWrites === 1) {
+          throw new Error('initial route failure');
+        }
+      }
+      if (filePath.endsWith('package.json')) {
+        packageWrites += 1;
+        if (packageWrites === 2) {
+          throw new Error('package restore failure');
+        }
+      }
+      await writeJsonAtomic(filePath, value, schema);
+    };
+
+    await expect(
+      writeConfigSet(
+        paths,
+        {
+          route: {
+            schemaVersion: 2,
+            targets: [
+              {
+                id: 'project-a',
+                path: 'C:/tmp/target',
+                mode: 'link',
+                enabled: true,
+                packages: {},
+              },
+            ],
+          },
+          packages: createEmptyPackageFile(),
+          skills: { schemaVersion: 2, skills: {} },
+        },
+        { write },
+      ),
+    ).rejects.toMatchObject({
+      code: 'IO_ERROR',
+      details: expect.objectContaining({
+        restoreFailures: expect.arrayContaining([
+          expect.stringContaining('package restore failure'),
+        ]),
+      }),
+    });
+    expect(routeWrites).toBe(2);
+  });
+
   it('restores all three files when a later write fails', async () => {
     const { paths } = await setup();
     await writeRouteFile(paths, { schemaVersion: 2, targets: [] });
