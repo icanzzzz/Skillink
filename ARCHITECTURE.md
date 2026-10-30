@@ -1,7 +1,7 @@
 # Skillink 项目架构（v2.0）
 
 > 日期：2026-10-30  
-> 状态：已实现（package/skill 三层模型）  
+> 状态：v2.0 MVP + hardening（2026-10-31）  
 > 取代：v1.2 的 `skills.json` 公用库模型  
 > 路径约定：`<user>`、`<repo>` 为占位符；Windows 使用 `%USERPROFILE%`，Linux/macOS 使用 `~`。
 
@@ -142,7 +142,7 @@ route.json
 | `targets[].id` | 是 | 稳定唯一 ID |
 | `targets[].label` | 否 | GUI 显示名 |
 | `targets[].path` | 是 | 用户填写的 target 目录 |
-| `targets[].mode` | 是 | `link` 或 `copy`；MVP 只实现 `link` |
+| `targets[].mode` | 是 | `link` 或 `copy`；v2.0 仅接受 `link`，copy 字段保留给 v2.1 |
 | `targets[].enabled` | 否 | 默认 true；false 时 apply 跳过 |
 | `targets[].packages` | 是 | package 名称 -> package lock |
 | `packages[].requested` | 否 | package 版本范围、精确版本或 tag |
@@ -272,7 +272,8 @@ route.json
 - 不存 `source`；路径固定为 `skills/<name>/<version>/`；
 - 不存 `kind`；所有条目都是 skill；
 - 每个版本的内容目录必须存在，根目录必须有 `SKILL.md`；
-- `integrity` 与目录内容一致；
+- `integrity` 与目录内容一致；`apply`、`doctor`、`history` 回滚会重新计算并校验；
+- `fileCount`、`size` 与目录内容一致；
 - tags 必须指向已存在版本；
 - 写入采用临时文件 + rename。
 
@@ -325,8 +326,8 @@ resolve(node):
 | `package tag` | 目标版本传递闭包 |
 | `package remove` | 不能被 route/其他 package 引用；剩余图仍可解析 |
 | `route add` | 新 target 的全部 package 根：环、skill 冲突、缺失 skill |
-| `route remove` | 剩余 target 仍可解析（建议） |
-| `apply` | 所有启用 target：完整性、环、skill 冲突、内容存在 |
+| `route remove` | 剩余 target 仍可解析；`--force` 用于修复已损坏配置 |
+| `apply` | 所有启用 target：package 完整性、skill 内容完整性、环、skill 冲突、内容存在；全部预检通过后才写文件系统 |
 | `doctor` | 所有 package 版本、所有 target |
 | `history rollback` | 恢复前三文件图必须可解析 |
 
@@ -422,10 +423,13 @@ skillink route add <target-id> <package@range-or-tag>
 
 - target 只创建 skill 链接/副本，不创建 package 目录；
 - 每个 skill 源目录必须存在，且根目录有 `SKILL.md`；
+- 每个 skill 内容的 `integrity/fileCount/size` 必须与 `skill.json` 一致；
 - skill 名/版本必须是安全路径段，源/目标路径必须保持在库和 target 内；
 - `--prune` 只删除受管且不再需要的 skill 链接；
 - 未托管同名内容永不覆盖；
-- MVP `mode: copy` 在需要投影时返回明确错误；
+- 所有 target 先完成配置、package 图、skill 内容、路径和冲突预检，再创建目录/链接；
+- 执行期间创建/替换/prune 的链接有进程内回滚；进程崩溃仍可能留下半完成状态；
+- v2.0 仅支持 `mode: link`；`target add --mode copy` 直接返回 `COPY_MODE_UNSUPPORTED`，迁移遗留 copy target 由 doctor 报 `UNSUPPORTED_MODE`；
 - 失败时三个配置文件保持不变。
 
 ### 6.5 Status
@@ -453,11 +457,14 @@ ok | missing | wrong-version | broken-link | conflict | unmanaged | extra | disa
 - route 引用的 package 版本存在；
 - route lock 的传递闭包哈希一致；
 - skill 内容目录存在，根目录有 `SKILL.md`；
+- skill 内容 `integrity/fileCount/size` 与 `skill.json` 一致（`SKILL_INTEGRITY_MISMATCH`）；
 - skill.json 与 `skills/` 目录一一对应；
 - 孤儿目录、缺失条目；删除后留下的空 skill 父目录不报 orphan；
 - 同一 target 内 skill 版本冲突；
 - 链接健康状态；
-- 未被 route 引用的 package 版本（`UNUSED_PACKAGE_VERSION`）；嵌套 package 通过传递闭包算作已引用。
+- 未被 route 引用的 package 版本（`UNUSED_PACKAGE_VERSION`）；嵌套 package 通过传递闭包算作已引用；
+- 不支持的 target mode（`UNSUPPORTED_MODE`）；
+- package/skill/target 名称大小写冲突（`INVALID_CONFIG`）。
 
 `doctor` 不自动删除任何内容。
 
@@ -474,6 +481,7 @@ ok | missing | wrong-version | broken-link | conflict | unmanaged | extra | disa
 
 - `skill remove`：拒绝删除被 route 传递闭包引用或被 tag 保留的版本；仅被未引用 package 引用时允许，doctor 报悬空；
 - `package remove`：拒绝删除被任一 route（含 disabled）或其他 package 版本引用的版本；
+- `route remove`：默认校验剩余 target 仍可解析；`--force` 可删除损坏配置；
 - `package tag` / `skill tag`：只允许指向已存在版本；
 - 所有删除先进入 `trash/`。
 
@@ -516,12 +524,12 @@ skillink init
 skillink migrate
 skillink skill add|list|tag|remove
 skillink package create|copy|list|tag|remove
-skillink target add|list|remove
-skillink route add|remove|list
+skillink target add|list|remove|enable|disable
+skillink route add|remove|list|enable|disable
 skillink apply|status|doctor|gc|history|rollback
 ```
 
-`add` 是 `skill add` 的顶层别名。
+`add` 是 `skill add` 的顶层别名。`route remove` 支持 `--force`，用于移除会导致剩余图不可解析的 route entry。
 
 **JSON 输出**
 
@@ -577,7 +585,7 @@ drift / missing       -> apply
 ### 7.2 GUI
 
 - **Overview**：skills、packages、targets、links、doctor；
-- **Targets**：target 列表、分配 package、apply；
+- **Targets**：target 列表、package 数、解析后的 skill 数、分配 package、target/package enable/disable、删除 target/route、apply 预览（dry-run）、prune、apply 结果；
 - **Skills**：导入 skill、标签、删除、GC；
 - **Packages**：创建/复制 package、组合列表、标签、删除；
 - **History**：三文件快照与回滚；
@@ -665,7 +673,7 @@ $env:SKILLINK_HOME = "$PSScriptRoot\skillink-data"
 
 | 威胁 | 对策 |
 |---|---|
-| 导入路径异常 | 规范化路径；拒绝系统目录；限制文件数/大小 |
+| 导入路径异常 | 规范化/展开路径；拒绝系统目录、根目录和符号链接源；限制文件数（10000）、大小（512 MiB）和深度（64） |
 | 配置中的恶意 name/version | `SafeNameSchema` / `SafeVersionSchema`；`getSkillDir` 断言安全路径段；apply/GC 做库/target 包含检查 |
 | target 路径不安全/重复/嵌套 | `assertSafeTargetPath`；doctor 检查重复、重叠；`addTarget` 拒绝嵌套 |
 | 源目录符号链接 | MVP 直接拒绝 |
@@ -673,19 +681,20 @@ $env:SKILLINK_HOME = "$PSScriptRoot\skillink-data"
 | route 手工篡改 | 严格 schema、传递闭包哈希、apply/doctor 校验 |
 | package/skill 内容缺失 | `assertSkillContent`：目录存在且根目录有 `SKILL.md` |
 | 删除未托管内容 | 只删除受管链接/副本；默认不 prune |
-| 版本库被篡改 | 只读约定、integrity 校验、doctor 检查 |
+| 版本库被篡改 | `apply`/`doctor`/history 重新计算 skill manifest；检测 `SKILL_INTEGRITY_MISMATCH` |
 | 配置损坏 | schema 校验、原子写、历史快照、交叉校验 |
 | Renderer XSS | contextIsolation、sandbox、nodeIntegration false、CSP |
-| IPC 滥用 | 白名单 API、zod、sender 校验 |
+| IPC 滥用 | 白名单 API、zod、sender/主窗口/顶层 frame 校验（`IPC_FORBIDDEN`） |
+| Windows 文件占用 | 临时文件 + rename；`EBUSY`/`EPERM`/`EACCES`/`ENOTEMPTY` 指数退避重试 |
 
 ### 8.2 跨平台
 
 - Windows 默认 junction，无需管理员权限；
 - Linux/macOS 默认 symlink；
-- 目标路径支持 `~`、`%USERPROFILE%`、`SKILLINK_HOME`；
-- Windows 大小写不敏感，包名/skill 名做冲突检测；
-- 处理长路径、中文路径、空格、OneDrive、Defender 文件锁；
-- 文件被占用时重试并明确提示。
+- 控制面、target、导入源路径支持 `~`、`%USERPROFILE%`、`$HOME`/`${HOME}`；`SKILLINK_HOME` 覆盖控制面；
+- Windows 大小写不敏感：package/skill/target 名称做显式大小写冲突检测，路径比较做归一化；
+- 中文路径、空格由 Node 文件系统 API 处理；长路径/OneDrive 仍需平台验证；
+- 文件被占用时指数退避重试并明确提示。
 
 ---
 
@@ -703,16 +712,16 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 
 ## 10. 测试策略
 
-当前验证：28 个测试文件、212 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
+当前验证：35 个测试文件、273 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
 
 | 层级 | 内容 |
 |---|---|
 | 单元测试 | schema、package 图、环检测、skill 冲突、路径策略、链接计划、历史、GC、迁移 |
 | 集成测试 | 临时目录、真实 junction/symlink、冲突、崩溃恢复 |
 | CLI 测试 | 完整 skill -> package -> route -> apply 闭环、迁移、回滚 |
-| GUI 测试 | IPC schema、页面渲染、空状态、组合展示 |
-| 安全测试 | 恶意源文件夹、路径穿越、断链、只读文件、同名冲突 |
-| 兼容测试 | Windows 11 必跑；Linux/macOS 后续加入 |
+| GUI 测试 | IPC schema、页面渲染、空状态、组合展示、target/route 生命周期、apply 预览 |
+| 安全测试 | 恶意源文件夹、路径穿越、断链、只读文件、同名冲突、内容篡改、非受信 IPC |
+| 兼容测试 | Windows 11 必跑；Linux/macOS 待加入 CI |
 
 重点用例：
 
@@ -735,11 +744,13 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 
 ### 10.1 已知限制
 
-- `mode: copy` 投影尚未实现，会在 apply 时返回明确错误；
-- apply 在校验失败前可能先创建空 target 目录；
-- 暂不解析 `SKILL.md` frontmatter 为 description/metadata；
-- history restore 三文件写入不是完全事务性的；
-- TargetsView 只显示 package 数，未显示解析出的 skill 数。
+- `mode: copy` 投影尚未实现；v2.0 在 `target add` 时返回 `COPY_MODE_UNSUPPORTED`，迁移遗留 copy target 由 doctor 报 `UNSUPPORTED_MODE`，计划 v2.1 实现；
+- apply 的预检和回滚覆盖普通失败与进程内异常，但不能防止进程崩溃/断电留下半完成 target；
+- history restore 在普通写入失败时会回滚三文件，但同样不能防止进程崩溃窗口；
+- Windows 长路径、OneDrive 同步冲突尚未做专项自动化验证；
+- Linux/macOS 代码路径存在，但尚未纳入 CI；
+- 当前安装包未配置代码签名和自动更新；
+- doctor/apply 会重新哈希 skill 内容，超大版本库首次检查可能较慢。
 
 ---
 
@@ -761,16 +772,22 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 14. doctor 能报告不安全/重复/嵌套 target，嵌套 package 不被误报 unused；
 15. 删除最后一个 skill 版本和 GC 后不留下空 orphan 目录；
 16. package create/copy、apply、import 复用、history restore 都要求 `SKILL.md`；
-17. CLI 能完成 init -> skill add -> package create -> target add -> route add -> apply -> status/doctor -> package copy/rollback/gc 的调用闭环。
+17. CLI 能完成 init -> skill add -> package create -> target add -> route add -> apply -> status/doctor -> package copy/rollback/gc 的调用闭环；
+18. 篡改 `skills/<name>/<version>/` 内容后，`apply` 拒绝、`doctor` 报 `SKILL_INTEGRITY_MISMATCH`；
+19. target/import 路径支持 `~`、`%USERPROFILE%`、`$HOME`；导入拒绝系统目录和超限目录；
+20. `target add --mode copy` 返回 `COPY_MODE_UNSUPPORTED`，doctor 能诊断遗留 copy target；
+21. `route remove` 默认校验剩余图，`--force` 可修复；target/package enable/disable 可用；
+22. GUI 能删除 target/route、切换 enable、预览/执行 apply/prune，并显示解析后的 skill 数。
 
 ---
 
 ### 11.1 当前实现验证
 
-- `pnpm test`：28 个测试文件、212 个测试通过；
+- `pnpm test`：35 个测试文件、273 个测试通过；
 - `pnpm typecheck`：通过；
 - `pnpm build`：CLI 与 Electron 桌面端构建成功；
-- 真实 CLI E2E：skill 安装、package 创建/复制、target/route、apply、status/doctor、冲突修复、history/rollback、gc dry-run 均跑通。
+- 真实 CLI E2E：skill 安装、package 创建/复制、target/route、apply、status/doctor、冲突修复、history/rollback、gc dry-run 均跑通；
+- hardening 验证：内容完整性篡改、apply 预检/回滚、导入限制、路径展开、文件锁重试、IPC sender、大小写冲突、frontmatter、GUI 生命周期均有测试覆盖。
 
 ---
 

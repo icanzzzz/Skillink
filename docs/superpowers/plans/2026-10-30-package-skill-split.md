@@ -1,5 +1,7 @@
 # Package/Skill 三层重写实施计划
 
+> **执行状态：已完成（2026-10-31）。** 后续 hardening 见 `ARCHITECTURE.md`、README 和 `.opencode/plan/2026-10-31-skillink-architecture-hardening-plan.md`。复选框保留为原始计划格式。
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把 Skillink 从“target -> package（同时是内容实体）”重写为“target -> package（纯配置）-> skill（唯一实体）”，并支持 package 引用 package、环检测、skill 去重/冲突和 package 复制。

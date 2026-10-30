@@ -107,7 +107,7 @@ route.json       target -> package@version
 ├─ trash\
 ├─ cache\
 ├─ logs\
-└─ state.db
+└─ tmp\
 ```
 
 - `skill.json` 取代原 `skills.json`。
@@ -256,7 +256,7 @@ route.json       target -> package@version
 
 - target 只包含 skill 文件夹，不包含 package 文件夹。
 - link 模式：`target/<skill>` -> `skillink/skills/<skill>/<version>`。
-- copy 模式：把 skill 内容复制到 `target/<skill>`；MVP 可继续保留“copy 未实现”的明确错误，或实现 copy。重写计划中实现 copy 作为可选任务。
+- copy 模式：把 skill 内容复制到 `target/<skill>`；v2.0 明确不实现，`target add --mode copy` 返回 `COPY_MODE_UNSUPPORTED`，迁移遗留 copy target 由 doctor 报 `UNSUPPORTED_MODE`，计划 v2.1 实现。
 - `--prune` 只删除由 Skillink 管理的、且不再被解析出的 skill 链接/副本。
 - 未托管同名内容永不覆盖。
 
@@ -349,12 +349,13 @@ skillink route add <target> <package>@<range-or-tag>
 
 检查：
 
-- 三个文件的 schema、重复 target id/path、嵌套 target。
+- 三个文件的 schema、重复 target id/path、嵌套 target、大小写重复名称。
 - package 版本非空；package 引用的 skill 版本存在于 skill.json。
 - route 引用的 package 版本存在；package 配置哈希一致。
-- skill 内容目录存在，且根目录有 `SKILL.md`。
+- skill 内容目录存在，且根目录有 `SKILL.md`；内容 integrity/fileCount/size 与 skill.json 一致。
 - skill.json 与 `skills/` 目录一一对应；孤儿目录、缺失条目。
 - 同一 target 的 package 展开后是否有 skill 版本冲突。
+- 不支持的 target mode（copy）。
 - 链接健康状态。
 - 未被任何 route 引用的 package 版本（警告，不自动删除）。
 
@@ -422,12 +423,14 @@ skillink package create <name@version> --skill <skill@version>... [--description
 skillink package list [--json]
 skillink package tag <package@version> <tag>
 skillink package remove <package@version>
-skillink target add <path> [--id] [--label] [--mode]
+skillink target add <path> [--id] [--label]
 skillink target list
 skillink target remove <id>
+skillink target enable|disable <id>
 skillink route add <target-id> <package@range-or-tag>
-skillink route remove <target-id> <package>
+skillink route remove <target-id> <package> [--force]
 skillink route list
+skillink route enable|disable <target-id> <package>
 skillink apply [--target] [--dry-run] [--prune]
 skillink status [--json] [--target]
 skillink doctor [--json]
@@ -445,7 +448,7 @@ skillink rollback <snapshot-id> [--apply] [--json]
 页面调整为：
 
 - Overview：skills、packages、targets、links、doctor 概览。
-- Targets：target 列表；分配 package（不是 skill）；显示 package 数和解析出的 skill 数。
+- Targets：target 列表；分配/删除 package（不是 skill）；target/route enable/disable；显示 package 数和解析出的 skill 数；apply 预览/prune；删除 target。
 - Skills：导入 skill（必须 `SKILL.md`）、版本、标签、删除、GC。
 - Packages：创建 package 版本（选择若干 skill@version）、列表、标签、删除。
 - History：三文件快照与回滚。
@@ -502,6 +505,6 @@ IPC 增加：
 - package 传递闭包哈希：对根 package 可达的所有 `name@version` 节点按顺序 `stableStringify({ name, version, entry })`，SHA-256，前缀 `sha256-`。
 - `skill.json` 的 `description` 优先取 frontmatter description；没有则留空。
 - GUI 的 package 创建/复制表单采用“每行一个 `skill@version` / `package@version`”的文本框，保持 MVP 简单；后续再换成选择器。
-- copy 模式如果实现，复用现有链接模块的 `copy` 兜底；如果本期不实现，保留明确错误。
+- copy 模式 v2.0 不实现：`target add --mode copy` 返回 `COPY_MODE_UNSUPPORTED`；迁移遗留 copy target 由 doctor 报 `UNSUPPORTED_MODE`；v2.1 再复用链接模块的 copy 兜底。
 - 旧 v1 历史快照原样保留，不删除；新代码只读取带 `format: 2` 的快照。
 - 迁移采用全有或全无；不提供跳过非法条目的选项，避免产生半合法 v2 状态。
