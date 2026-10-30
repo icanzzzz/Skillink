@@ -1,4 +1,12 @@
-import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -24,8 +32,29 @@ function context(home: string): CliContext & { out: string[]; err: string[] } {
   };
 }
 
+async function makeSkillSource(withSkillMd = true): Promise<string> {
+  const source = await tempDir('skillink-cli-source-');
+  if (withSkillMd) {
+    await writeFile(path.join(source, 'SKILL.md'), '# demo', 'utf8');
+  }
+  await writeFile(path.join(source, 'file.txt'), 'hello', 'utf8');
+  return source;
+}
+
+async function readJson(filePath: string): Promise<Record<string, any>> {
+  return JSON.parse(await readFile(filePath, 'utf8')) as Record<string, any>;
+}
+
+async function pathExists(target: string): Promise<boolean> {
+  return stat(target)
+    .then(() => true)
+    .catch(() => false);
+}
+
 afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  await Promise.all(
+    tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+  );
 });
 
 describe('CLI', () => {
@@ -38,228 +67,370 @@ describe('CLI', () => {
     expect(ctx.out.join('\n')).toContain('Usage');
   });
 
-  it('imports a folder, adds a target, routes a version, and applies it', async () => {
-    const root = await tempDir('skillink-cli-');
-    const home = path.join(root, 'home');
-    const source = path.join(root, 'source');
-    const targetPath = path.join(root, 'project', 'packages');
-    await mkdir(source, { recursive: true });
-    await writeFile(path.join(source, 'file.txt'), 'hello', 'utf8');
-    await mkdir(targetPath, { recursive: true });
+  it('initializes the three global config files', async () => {
+    const home = await tempDir('skillink-cli-');
     const ctx = context(home);
 
-    expect(
-      await runCli(
-        ['add', source, '--name', 'demo', '--version', '1.0.0'],
-        ctx,
-      ),
-    ).toBe(0);
-    expect(
-      await runCli(
-        ['target', 'add', targetPath, '--id', 'project-a', '--label', 'Project A'],
-        ctx,
-      ),
-    ).toBe(0);
-    expect(await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx)).toBe(0);
-    expect(await runCli(['apply'], ctx)).toBe(0);
+    expect(await runCli(['init'], ctx)).toBe(0);
 
-    expect((await lstat(path.join(targetPath, 'demo'))).isSymbolicLink()).toBe(true);
-    const library = JSON.parse(
-      await readFile(path.join(home, 'skills.json'), 'utf8'),
-    ) as { packages: { demo: { versions: Record<string, unknown> } } };
-    expect(library.packages.demo.versions['1.0.0']).toBeDefined();
+    for (const name of ['route.json', 'package.json', 'skill.json']) {
+      expect(await pathExists(path.join(home, name))).toBe(true);
+    }
+    expect(await readJson(path.join(home, 'route.json'))).toEqual({
+      schemaVersion: 2,
+      targets: [],
+    });
   });
 
-  it('prints machine-readable status JSON', async () => {
+  it('rejects a skill folder without SKILL.md', async () => {
+    const home = await tempDir('skillink-cli-');
+    const source = await makeSkillSource(false);
+    const ctx = context(home);
+    await runCli(['init'], ctx);
+
+    expect(
+      await runCli(
+        ['skill', 'add', source, '--name', 'demo', '--version', '1.0.0'],
+        ctx,
+      ),
+    ).toBe(1);
+    expect(ctx.err.join('\n')).toContain('SKILL_MD_REQUIRED');
+  });
+
+  it('imports a skill and supports the top-level add alias', async () => {
+    const home = await tempDir('skillink-cli-');
+    const source = await makeSkillSource();
+    const ctx = context(home);
+    await runCli(['init'], ctx);
+
+    expect(
+      await runCli(['add', source, '--name', 'demo', '--version', '1.0.0'], ctx),
+    ).toBe(0);
+
+    const skillFile = await readJson(path.join(home, 'skill.json'));
+    expect(skillFile.skills.demo.versions['1.0.0']).toBeDefined();
+    expect(skillFile.skills.demo.versions['1.0.0'].source).toBeUndefined();
+  });
+
+  it('runs the skill -> package -> route -> apply workflow', async () => {
     const root = await tempDir('skillink-cli-');
     const home = path.join(root, 'home');
-    const source = path.join(root, 'source');
-    const targetPath = path.join(root, 'project', 'packages');
-    await mkdir(source, { recursive: true });
-    await writeFile(path.join(source, 'file.txt'), 'hello', 'utf8');
+    const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
     await mkdir(targetPath, { recursive: true });
     const ctx = context(home);
 
-    await runCli(['add', source, '--name', 'demo', '--version', '1.0.0'], ctx);
-    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
-    await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
-    await runCli(['apply'], ctx);
-    ctx.out.length = 0;
+    await runCli(['init'], ctx);
+    expect(
+      await runCli(
+        ['skill', 'add', source, '--name', 'pdf', '--version', '1.0.0'],
+        ctx,
+      ),
+    ).toBe(0);
+    expect(
+      await runCli(
+        ['package', 'create', 'demo@1.0.0', '--skill', 'pdf@1.0.0'],
+        ctx,
+      ),
+    ).toBe(0);
+    expect(
+      await runCli(
+        ['target', 'add', targetPath, '--id', 'project-a'],
+        ctx,
+      ),
+    ).toBe(0);
+    expect(await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx)).toBe(
+      0,
+    );
+    expect(await runCli(['apply'], ctx)).toBe(0);
 
+    expect((await lstat(path.join(targetPath, 'pdf'))).isSymbolicLink()).toBe(
+      true,
+    );
+    await expect(lstat(path.join(targetPath, 'demo'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+
+    const routeFile = await readJson(path.join(home, 'route.json'));
+    expect(routeFile.targets[0].packages.demo.resolved).toBe('1.0.0');
+
+    ctx.out.length = 0;
     expect(await runCli(['status', '--json'], ctx)).toBe(0);
-    const report = JSON.parse(ctx.out.join('\n')) as {
-      healthy: boolean;
+    const status = JSON.parse(ctx.out.join('\n')) as {
       entries: Array<{ name: string; state: string }>;
     };
-    expect(report.healthy).toBe(true);
-    expect(report.entries).toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: 'demo', state: 'ok' })]),
+    expect(status.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'pdf', state: 'ok' }),
+      ]),
     );
   });
 
-  it('returns a non-zero code for an invalid package spec', async () => {
-    const ctx = context(await tempDir('skillink-cli-'));
+  it('copies a package with a skill override', async () => {
+    const home = await tempDir('skillink-cli-');
+    const source = await makeSkillSource();
+    const ctx = context(home);
 
-    expect(await runCli(['route', 'add', 'missing', 'broken'], ctx)).toBe(1);
-    expect(ctx.err.join('\n')).toMatch(/package@version|invalid/i);
+    await runCli(['init'], ctx);
+    await runCli(
+      ['skill', 'add', source, '--name', 'pdf', '--version', '1.0.0'],
+      ctx,
+    );
+    await runCli(
+      ['skill', 'add', source, '--name', 'pdf', '--version', '1.1.0'],
+      ctx,
+    );
+    await runCli(
+      ['package', 'create', 'demo@1.0.0', '--skill', 'pdf@1.0.0'],
+      ctx,
+    );
+
+    expect(
+      await runCli(
+        [
+          'package',
+          'copy',
+          'demo@1.0.0',
+          'demo@1.1.0',
+          '--skill',
+          'pdf@1.1.0',
+        ],
+        ctx,
+      ),
+    ).toBe(0);
+
+    const packageFile = await readJson(path.join(home, 'package.json'));
+    expect(
+      packageFile.packages.demo.versions['1.1.0'].skills.pdf,
+    ).toBe('1.1.0');
   });
 
-  it('lists history and rolls back the route', async () => {
+  it('rejects a skill version conflict at route add', async () => {
     const root = await tempDir('skillink-cli-');
     const home = path.join(root, 'home');
-    const source = path.join(root, 'source');
-    const targetPath = path.join(root, 'project', 'packages');
-    await mkdir(source, { recursive: true });
-    await writeFile(path.join(source, 'file.txt'), 'hello', 'utf8');
+    const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
     await mkdir(targetPath, { recursive: true });
     const ctx = context(home);
 
-    await runCli(['add', source, '--name', 'demo', '--version', '1.0.0'], ctx);
+    await runCli(['init'], ctx);
+    for (const version of ['1.0.0', '1.1.0']) {
+      await runCli(
+        ['skill', 'add', source, '--name', 'pdf', '--version', version],
+        ctx,
+      );
+    }
+    await runCli(
+      ['package', 'create', 'old@1.0.0', '--skill', 'pdf@1.0.0'],
+      ctx,
+    );
+    await runCli(
+      ['package', 'create', 'new@1.0.0', '--skill', 'pdf@1.1.0'],
+      ctx,
+    );
     await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
-    ctx.out.length = 0;
+    await runCli(['route', 'add', 'project-a', 'old@1.0.0'], ctx);
 
+    expect(await runCli(['route', 'add', 'project-a', 'new@1.0.0'], ctx)).toBe(
+      1,
+    );
+    expect(ctx.err.join('\n')).toContain('SKILL_VERSION_CONFLICT');
+
+    const routeFile = await readJson(path.join(home, 'route.json'));
+    expect(routeFile.targets[0].packages.old).toBeDefined();
+    expect(routeFile.targets[0].packages.new).toBeUndefined();
+  });
+
+  it('tags and removes skill and package versions', async () => {
+    const home = await tempDir('skillink-cli-');
+    const source = await makeSkillSource();
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    for (const version of ['1.0.0', '1.1.0']) {
+      await runCli(
+        ['skill', 'add', source, '--name', 'demo', '--version', version],
+        ctx,
+      );
+    }
+    expect(await runCli(['skill', 'tag', 'demo@1.1.0', 'latest'], ctx)).toBe(0);
+    expect(await runCli(['skill', 'remove', 'demo@1.0.0'], ctx)).toBe(0);
+
+    const skillFile = await readJson(path.join(home, 'skill.json'));
+    expect(skillFile.skills.demo.versions['1.0.0']).toBeUndefined();
+    expect(skillFile.skills.demo.tags.latest).toBe('1.1.0');
+
+    await runCli(
+      ['package', 'create', 'demo-pack@1.0.0', '--skill', 'demo@1.1.0'],
+      ctx,
+    );
+    await runCli(
+      ['package', 'create', 'demo-pack@1.1.0', '--skill', 'demo@1.1.0'],
+      ctx,
+    );
+    expect(
+      await runCli(['package', 'tag', 'demo-pack@1.0.0', 'stable'], ctx),
+    ).toBe(0);
+    expect(
+      await runCli(['package', 'remove', 'demo-pack@1.0.0'], ctx),
+    ).toBe(0);
+
+    const packageFile = await readJson(path.join(home, 'package.json'));
+    expect(packageFile.packages['demo-pack'].versions['1.0.0']).toBeUndefined();
+    expect(packageFile.packages['demo-pack'].tags?.stable).toBeUndefined();
+  });
+
+  it('lists history and rolls back all three config files', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    await runCli(
+      ['skill', 'add', source, '--name', 'pdf', '--version', '1.0.0'],
+      ctx,
+    );
+    await runCli(
+      ['package', 'create', 'demo@1.0.0', '--skill', 'pdf@1.0.0'],
+      ctx,
+    );
+    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
+
+    ctx.out.length = 0;
     expect(await runCli(['history', '--json'], ctx)).toBe(0);
-    const entries = JSON.parse(ctx.out.join('\n')) as Array<{
-      id: string;
-      createdAt: string;
-      reason: string;
-    }>;
-    expect(entries.length).toBeGreaterThan(0);
-    expect(entries[0]).toMatchObject({
-      id: expect.any(String),
-      createdAt: expect.any(String),
-      reason: expect.any(String),
-    });
-    expect(entries[0]!.id).not.toContain(':');
-
-    const snapshotId = entries[0]!.id;
-    await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
-    const routed = JSON.parse(
-      await readFile(path.join(home, 'route.json'), 'utf8'),
-    ) as { targets: Array<{ skills: Record<string, unknown> }> };
-    expect(routed.targets[0]?.skills.demo).toBeDefined();
-
-    ctx.out.length = 0;
-    expect(await runCli(['rollback', snapshotId, '--json'], ctx)).toBe(0);
-    const restored = JSON.parse(
-      await readFile(path.join(home, 'route.json'), 'utf8'),
-    ) as { targets: Array<{ skills: Record<string, unknown> }> };
-    expect(restored.targets[0]?.skills.demo).toBeUndefined();
-  });
-
-  it('rolls back and applies in one command', async () => {
-    const root = await tempDir('skillink-cli-');
-    const home = path.join(root, 'home');
-    const source = path.join(root, 'source');
-    const targetPath = path.join(root, 'project', 'packages');
-    await mkdir(source, { recursive: true });
-    await writeFile(path.join(source, 'file.txt'), 'hello', 'utf8');
-    await mkdir(targetPath, { recursive: true });
-    const ctx = context(home);
-
-    await runCli(['add', source, '--name', 'demo', '--version', '1.0.0'], ctx);
-    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
-    await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
-    await runCli(['target', 'add', path.join(root, 'other'), '--id', 'project-b'], ctx);
-
-    ctx.out.length = 0;
-    await runCli(['history', '--json'], ctx);
     const entries = JSON.parse(ctx.out.join('\n')) as Array<{ id: string }>;
-    const routedSnapshot = entries[0]!.id;
+    const snapshotId = entries[0]!.id;
 
-    await runCli(['route', 'remove', 'project-a', 'demo'], ctx);
-    ctx.out.length = 0;
-    expect(await runCli(['rollback', routedSnapshot, '--apply'], ctx)).toBe(0);
-    expect((await lstat(path.join(targetPath, 'demo'))).isSymbolicLink()).toBe(true);
-  });
-
-  it('returns a non-zero code when rolling back a missing snapshot', async () => {
-    const ctx = context(await tempDir('skillink-cli-'));
-
-    expect(await runCli(['rollback', 'missing-snapshot'], ctx)).toBe(1);
-    expect(ctx.err.join('\n')).toMatch(/history|snapshot|not found/i);
-  });
-
-  it('tags and removes unreferenced library versions', async () => {
-    const root = await tempDir('skillink-cli-');
-    const home = path.join(root, 'home');
-    const source = path.join(root, 'source');
-    await mkdir(source, { recursive: true });
-    await writeFile(path.join(source, 'file.txt'), 'hello', 'utf8');
-    const ctx = context(home);
-
-    await runCli(['add', source, '--name', 'demo', '--version', '1.0.0'], ctx);
-    await runCli(['add', source, '--name', 'demo', '--version', '1.1.0'], ctx);
-
-    expect(await runCli(['library', 'tag', 'demo@1.0.0', 'stable'], ctx)).toBe(0);
-    const tagged = JSON.parse(
-      await readFile(path.join(home, 'skills.json'), 'utf8'),
-    ) as { packages: { demo: { tags: Record<string, string> } } };
-    expect(tagged.packages.demo.tags.stable).toBe('1.0.0');
-
-    expect(await runCli(['library', 'remove', 'demo@1.0.0'], ctx)).toBe(0);
-    const remaining = JSON.parse(
-      await readFile(path.join(home, 'skills.json'), 'utf8'),
-    ) as { packages: { demo: { versions: Record<string, unknown>; tags?: Record<string, string> } } };
-    expect(remaining.packages.demo.versions['1.0.0']).toBeUndefined();
-    expect(remaining.packages.demo.tags?.stable).toBeUndefined();
-    await expect(lstat(path.join(home, 'skills', 'demo', '1.0.0'))).rejects.toThrow();
-  });
-
-  it('refuses to remove a library version referenced by a route', async () => {
-    const root = await tempDir('skillink-cli-');
-    const home = path.join(root, 'home');
-    const source = path.join(root, 'source');
-    const targetPath = path.join(root, 'project', 'packages');
-    await mkdir(source, { recursive: true });
-    await writeFile(path.join(source, 'file.txt'), 'hello', 'utf8');
-    await mkdir(targetPath, { recursive: true });
-    const ctx = context(home);
-
-    await runCli(['add', source, '--name', 'demo', '--version', '1.0.0'], ctx);
-    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
     await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
+    expect(
+      (await readJson(path.join(home, 'route.json'))).targets[0].packages.demo,
+    ).toBeDefined();
 
-    expect(await runCli(['library', 'remove', 'demo@1.0.0'], ctx)).toBe(1);
-    expect(ctx.err.join('\n')).toMatch(/VERSION_IN_USE|still used/i);
+    expect(await runCli(['rollback', snapshotId, '--apply'], ctx)).toBe(0);
+    const restoredRoute = await readJson(path.join(home, 'route.json'));
+    expect(restoredRoute.targets).toEqual([]);
   });
 
   it('runs gc as a dry run by default and applies with --apply', async () => {
-    const root = await tempDir('skillink-cli-');
-    const home = path.join(root, 'home');
-    const source = path.join(root, 'source');
-    await mkdir(source, { recursive: true });
-    await writeFile(path.join(source, 'file.txt'), 'hello', 'utf8');
+    const home = await tempDir('skillink-cli-');
+    const source = await makeSkillSource();
     const ctx = context(home);
 
-    await runCli(['add', source, '--name', 'demo', '--version', '1.0.0'], ctx);
+    await runCli(['init'], ctx);
+    await runCli(
+      ['skill', 'add', source, '--name', 'demo', '--version', '1.0.0'],
+      ctx,
+    );
 
     ctx.out.length = 0;
-    expect(await runCli(['gc', '--max-age-days', '0', '--json'], ctx)).toBe(0);
+    expect(
+      await runCli(['gc', '--max-age-days', '0', '--json'], ctx),
+    ).toBe(0);
     const dryRun = JSON.parse(ctx.out.join('\n')) as {
       dryRun: boolean;
-      candidates: Array<{ name: string; version: string }>;
-      removed: unknown[];
+      candidates: Array<{ name: string }>;
     };
     expect(dryRun.dryRun).toBe(true);
     expect(dryRun.candidates).toEqual([
-      expect.objectContaining({ name: 'demo', version: '1.0.0' }),
+      expect.objectContaining({ name: 'demo' }),
     ]);
-    expect(dryRun.removed).toEqual([]);
-    await expect(lstat(path.join(home, 'skills', 'demo', '1.0.0'))).resolves.toBeDefined();
 
     ctx.out.length = 0;
     expect(
       await runCli(['gc', '--apply', '--max-age-days', '0', '--json'], ctx),
     ).toBe(0);
     const applied = JSON.parse(ctx.out.join('\n')) as {
-      dryRun: boolean;
-      removed: Array<{ name: string; version: string }>;
+      removed: Array<{ name: string }>;
     };
-    expect(applied.dryRun).toBe(false);
-    expect(applied.removed).toEqual([
-      expect.objectContaining({ name: 'demo', version: '1.0.0' }),
-    ]);
-    await expect(lstat(path.join(home, 'skills', 'demo', '1.0.0'))).rejects.toThrow();
+    expect(applied.removed).toEqual([expect.objectContaining({ name: 'demo' })]);
+    await expect(
+      lstat(path.join(home, 'skills', 'demo', '1.0.0')),
+    ).rejects.toThrow();
+  });
+
+  it('migrates v1 data and refuses entries without SKILL.md', async () => {
+    const home = await tempDir('skillink-cli-');
+    const contentDir = path.join(home, 'skills', 'demo', '1.0.0');
+    await mkdir(contentDir, { recursive: true });
+    await writeFile(path.join(contentDir, 'SKILL.md'), '# demo', 'utf8');
+    await writeFile(
+      path.join(home, 'skills.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        packages: {
+          demo: {
+            versions: {
+              '1.0.0': {
+                integrity: 'sha512-demo',
+                source: 'skills/demo/1.0.0',
+                fileCount: 1,
+                size: 1,
+              },
+            },
+          },
+        },
+      }),
+      'utf8',
+    );
+    await writeFile(
+      path.join(home, 'route.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        targets: [
+          {
+            id: 'project-a',
+            path: 'C:/tmp/project-a',
+            mode: 'link',
+            skills: {
+              demo: {
+                requested: '1.0.0',
+                resolved: '1.0.0',
+                integrity: 'sha512-demo',
+                source: 'skills/demo/1.0.0',
+              },
+            },
+          },
+        ],
+      }),
+      'utf8',
+    );
+    const ctx = context(home);
+
+    expect(await runCli(['migrate'], ctx)).toBe(0);
+    expect(await pathExists(path.join(home, 'skill.json'))).toBe(true);
+    expect(await pathExists(path.join(home, 'package.json'))).toBe(true);
+    expect(await pathExists(path.join(home, 'skills.json'))).toBe(false);
+
+    const invalidHome = await tempDir('skillink-cli-');
+    const invalidContent = path.join(invalidHome, 'skills', 'demo', '1.0.0');
+    await mkdir(invalidContent, { recursive: true });
+    await writeFile(
+      path.join(invalidHome, 'skills.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        packages: {
+          demo: {
+            versions: {
+              '1.0.0': {
+                integrity: 'sha512-demo',
+                source: 'skills/demo/1.0.0',
+                fileCount: 1,
+                size: 1,
+              },
+            },
+          },
+        },
+      }),
+      'utf8',
+    );
+    const invalidCtx = context(invalidHome);
+
+    expect(await runCli(['migrate'], invalidCtx)).toBe(1);
+    expect(invalidCtx.err.join('\n')).toContain('demo');
+    expect(await pathExists(path.join(invalidHome, 'skills.json'))).toBe(true);
+    expect(await pathExists(path.join(invalidHome, 'skill.json'))).toBe(false);
   });
 });

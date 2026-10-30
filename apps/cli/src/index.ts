@@ -1,5 +1,5 @@
 import { Command, CommanderError } from 'commander';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -12,20 +12,27 @@ import {
   addRouteEntry,
   addTarget,
   apply,
+  copyPackageVersion,
+  createPackageVersion,
   doctor,
   gc,
-  importFolder,
+  importSkill,
   listHistory,
+  migrateV1ToV2,
+  readPackageFile,
   readRouteFile,
-  readSkillsFile,
-  removeLibraryVersion,
+  readSkillFile,
+  removePackageVersion,
   removeRouteEntry,
+  removeSkillVersion,
   removeTarget,
   restoreHistorySnapshot,
-  setLibraryTag,
+  setPackageTag,
+  setSkillTag,
   status,
+  writePackageFile,
   writeRouteFile,
-  writeSkillsFile,
+  writeSkillFile,
 } from '@skillink/core';
 
 export interface CliContext {
@@ -39,24 +46,58 @@ function printJson(context: CliContext, value: unknown): void {
   context.stdout(JSON.stringify(value, null, 2));
 }
 
-function parsePackageSpec(spec: string): { name: string; requested: string } {
+function parseSpec(spec: string): { name: string; version: string } {
   const separator = spec.lastIndexOf('@');
   if (separator <= 0 || separator === spec.length - 1) {
     throw new SkillinkError(
       'ROUTE_INVALID',
-      'Invalid package spec; expected package@version.',
+      'Invalid spec; expected name@version.',
       { spec },
     );
   }
 
   return {
     name: spec.slice(0, separator),
-    requested: spec.slice(separator + 1),
+    version: spec.slice(separator + 1),
   };
 }
 
-async function ensureHome(home?: string) {
-  const paths = getSkillinkPaths(home);
+function asArray(value: string[] | string | undefined): string[] {
+  if (value === undefined) {
+    return [];
+  }
+  return Array.isArray(value) ? value : [value];
+}
+
+function collectSpecs(
+  specs: string[] | string | undefined,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+
+  for (const spec of asArray(specs)) {
+    const parsed = parseSpec(spec);
+    result[parsed.name] = parsed.version;
+  }
+
+  return result;
+}
+
+async function pathExists(target: string): Promise<boolean> {
+  return stat(target)
+    .then(() => true)
+    .catch((error: unknown) => {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        (error as NodeJS.ErrnoException).code === 'ENOENT'
+      ) {
+        return false;
+      }
+      throw error;
+    });
+}
+
+async function ensureDirectories(paths: ReturnType<typeof getSkillinkPaths>) {
   await Promise.all([
     mkdir(paths.home, { recursive: true }),
     mkdir(paths.libraryDir, { recursive: true }),
@@ -66,17 +107,51 @@ async function ensureHome(home?: string) {
     mkdir(paths.trashDir, { recursive: true }),
     mkdir(paths.tmpDir, { recursive: true }),
   ]);
+}
 
-  const route = await readRouteFile(paths);
-  const skills = await readSkillsFile(paths);
-  await writeRouteFile(paths, route);
-  await writeSkillsFile(paths, skills);
+async function writeInitialFiles(
+  paths: ReturnType<typeof getSkillinkPaths>,
+): Promise<void> {
+  await writeRouteFile(paths, await readRouteFile(paths));
+  await writePackageFile(paths, await readPackageFile(paths));
+  await writeSkillFile(paths, await readSkillFile(paths));
+}
 
+async function ensureHome(home?: string) {
+  const paths = getSkillinkPaths(home);
+  await ensureDirectories(paths);
+
+  if (
+    (await pathExists(paths.skillsFile)) &&
+    !(await pathExists(paths.skillFile))
+  ) {
+    throw new SkillinkError(
+      'IO_ERROR',
+      'Found v1 skills.json. Run "skillink init" or "skillink migrate" first.',
+      { home: paths.home },
+    );
+  }
+
+  await writeInitialFiles(paths);
   return paths;
 }
 
-function addCommonOptions(command: Command): Command {
-  return command.option('--json', 'Print machine-readable JSON');
+async function runSkillAdd(
+  folder: string,
+  options: { name?: string; version?: string },
+  context: CliContext,
+): Promise<void> {
+  const result = await importSkill({
+    sourceDir: folder,
+    name: options.name,
+    version: options.version,
+    home: context.home,
+  });
+
+  context.stdout(
+    `${result.created ? 'Imported' : 'Already present'} ${result.name}@${result.version} ` +
+      `(${result.fileCount} files, ${result.size} bytes)`,
+  );
 }
 
 export async function runCli(
@@ -91,7 +166,7 @@ export async function runCli(
 
   program
     .name('skillink')
-    .description('Local folder package manager with pnpm-style versioning')
+    .description('Local skill and package manager')
     .version('0.0.0', '-V, --app-version', 'Show the CLI version')
     .exitOverride()
     .configureOutput({
@@ -103,94 +178,284 @@ export async function runCli(
     .command('init')
     .description('Initialize the Skillink control plane')
     .action(async () => {
-      const paths = await ensureHome(context.home);
+      const paths = getSkillinkPaths(context.home);
+      await ensureDirectories(paths);
+
+      if (await pathExists(paths.skillsFile)) {
+        if (await pathExists(paths.skillFile)) {
+          await writeInitialFiles(paths);
+          context.stdout(`Initialized ${paths.home}`);
+          return;
+        }
+
+        const result = await migrateV1ToV2(paths);
+        context.stdout(
+          `Migrated ${result.skillCount} skills, ${result.packageCount} packages, ` +
+            `${result.targetCount} targets to ${paths.home}`,
+        );
+        return;
+      }
+
+      await writeInitialFiles(paths);
       context.stdout(`Initialized ${paths.home}`);
     });
 
-  const library = program.command('library').description('Manage the public library');
+  program
+    .command('migrate')
+    .description('Migrate v1 skills.json data to skill.json and package.json')
+    .action(async () => {
+      const paths = getSkillinkPaths(context.home);
+      await ensureDirectories(paths);
+      const result = await migrateV1ToV2(paths);
+
+      if (!result.migrated) {
+        context.stdout('No v1 skills.json found.');
+        return;
+      }
+
+      context.stdout(
+        `Migrated ${result.skillCount} skills, ${result.packageCount} packages, ` +
+          `${result.targetCount} targets.`,
+      );
+    });
+
+  const skill = program.command('skill').description('Manage installed skills');
 
   addCommonOptions(
-    library
+    skill
       .command('list')
       .alias('ls')
-      .description('List packages and versions in the public library'),
+      .description('List skills and versions in skill.json'),
   ).action(async (options: { json?: boolean }) => {
-    const paths = getSkillinkPaths(context.home);
-    const file = await readSkillsFile(paths);
+    const paths = await ensureHome(context.home);
+    const file = await readSkillFile(paths);
 
     if (options.json) {
       printJson(context, file);
       return;
     }
 
-    const packages = Object.entries(file.packages);
-    if (packages.length === 0) {
-      context.stdout('No packages.');
+    const entries = Object.entries(file.skills);
+    if (entries.length === 0) {
+      context.stdout('No skills.');
       return;
     }
 
-    for (const [name, entry] of packages) {
-      context.stdout(`${name} (${entry.kind})`);
+    for (const [name, entry] of entries) {
+      context.stdout(name);
       for (const [version, info] of Object.entries(entry.versions)) {
         context.stdout(
-          `  ${version}  ${info.fileCount} files, ${info.size} bytes  ${info.source}`,
+          `  ${version}  ${info.fileCount} files, ${info.size} bytes`,
         );
       }
     }
   });
 
-  library
-    .command('tag')
-    .description('Tag a library version, for example latest or stable')
-    .argument('<package@version>', 'Package name and exact version')
-    .argument('<tag>', 'Tag name')
-    .action(async (spec: string, tag: string) => {
-      const paths = getSkillinkPaths(context.home);
-      const parsed = parsePackageSpec(spec);
-      await setLibraryTag(paths, parsed.name, parsed.requested, tag);
-      context.stdout(`Tagged ${parsed.name}@${parsed.requested} as ${tag}`);
-    });
-
-  library
-    .command('remove')
-    .description('Move an unreferenced library version to trash')
-    .argument('<package@version>', 'Package name and exact version')
-    .action(async (spec: string) => {
-      const paths = getSkillinkPaths(context.home);
-      const parsed = parsePackageSpec(spec);
-      await removeLibraryVersion(paths, parsed.name, parsed.requested);
-      context.stdout(`Removed ${parsed.name}@${parsed.requested}`);
-    });
-
-  const addCommand = program
+  const skillAdd = skill
     .command('add')
-    .description('Import a local folder into the public library')
-    .argument('<folder>', 'Folder to import')
-    .option('--name <name>', 'Package name (default: folder name)')
-    .option('--version <version>', 'Package version (default: 0.0.0+hash)');
+    .description('Import a local skill folder; it must contain SKILL.md')
+    .argument('<folder>', 'Skill folder')
+    .option('--name <name>', 'Skill name (default: folder name)')
+    .option('--version <version>', 'Skill version (default: 0.0.0+hash)');
 
-  addCommand.action(
+  skillAdd.action(
     async (folder: string, options: { name?: string; version?: string }) => {
-      const result = await importFolder({
-        sourceDir: folder,
-        name: options.name,
-        version: options.version,
-        home: context.home,
-      });
-
-      context.stdout(
-        `${result.created ? 'Imported' : 'Already present'} ${result.name}@${result.version} ` +
-          `(${result.fileCount} files, ${result.size} bytes)`,
-      );
+      await ensureHome(context.home);
+      await runSkillAdd(folder, options, context);
     },
   );
 
-  const target = program.command('target').description('Manage target directories');
+  program
+    .command('add')
+    .description('Alias for "skill add"')
+    .argument('<folder>', 'Skill folder')
+    .option('--name <name>', 'Skill name (default: folder name)')
+    .option('--version <version>', 'Skill version (default: 0.0.0+hash)')
+    .action(
+      async (folder: string, options: { name?: string; version?: string }) => {
+        await ensureHome(context.home);
+        await runSkillAdd(folder, options, context);
+      },
+    );
+
+  skill
+    .command('tag')
+    .description('Tag a skill version, for example latest or stable')
+    .argument('<skill@version>', 'Skill name and exact version')
+    .argument('<tag>', 'Tag name')
+    .action(async (spec: string, tag: string) => {
+      const paths = await ensureHome(context.home);
+      const parsed = parseSpec(spec);
+      await setSkillTag(paths, parsed.name, parsed.version, tag);
+      context.stdout(`Tagged ${parsed.name}@${parsed.version} as ${tag}`);
+    });
+
+  skill
+    .command('remove')
+    .description('Move an unreferenced skill version to trash')
+    .argument('<skill@version>', 'Skill name and exact version')
+    .action(async (spec: string) => {
+      const paths = await ensureHome(context.home);
+      const parsed = parseSpec(spec);
+      await removeSkillVersion(paths, parsed.name, parsed.version);
+      context.stdout(`Removed ${parsed.name}@${parsed.version}`);
+    });
+
+  const packageCommand = program
+    .command('package')
+    .description('Manage package compositions');
+
+  addCommonOptions(
+    packageCommand
+      .command('list')
+      .alias('ls')
+      .description('List package compositions'),
+  ).action(async (options: { json?: boolean }) => {
+    const paths = await ensureHome(context.home);
+    const file = await readPackageFile(paths);
+
+    if (options.json) {
+      printJson(context, file);
+      return;
+    }
+
+    const entries = Object.entries(file.packages);
+    if (entries.length === 0) {
+      context.stdout('No packages.');
+      return;
+    }
+
+    for (const [name, entry] of entries) {
+      context.stdout(name);
+      for (const [tag, version] of Object.entries(entry.tags ?? {})) {
+        context.stdout(`  ${tag} -> ${version}`);
+      }
+      for (const [version, value] of Object.entries(entry.versions)) {
+        const parts: string[] = [];
+        if (Object.keys(value.skills).length > 0) {
+          parts.push(
+            `skills: ${Object.entries(value.skills)
+              .map(([skillName, skillVersion]) => `${skillName}@${skillVersion}`)
+              .join(', ')}`,
+          );
+        }
+        if (Object.keys(value.packages).length > 0) {
+          parts.push(
+            `packages: ${Object.entries(value.packages)
+              .map(
+                ([packageName, packageVersion]) =>
+                  `${packageName}@${packageVersion}`,
+              )
+              .join(', ')}`,
+          );
+        }
+        context.stdout(`  ${version}  ${parts.join('; ')}`);
+      }
+    }
+  });
+
+  packageCommand
+    .command('create')
+    .description('Create a package version from skills and/or packages')
+    .argument('<name@version>', 'Package name and version')
+    .option('--skill <spec...>', 'Skill dependency as skill@version')
+    .option('--package <spec...>', 'Package dependency as package@version')
+    .option('--description <text>', 'Display description')
+    .action(
+      async (
+        spec: string,
+        options: {
+          skill?: string[] | string;
+          package?: string[] | string;
+          description?: string;
+        },
+      ) => {
+        const paths = await ensureHome(context.home);
+        const parsed = parseSpec(spec);
+        await createPackageVersion({
+          paths,
+          name: parsed.name,
+          version: parsed.version,
+          description: options.description,
+          skills: collectSpecs(options.skill),
+          packages: collectSpecs(options.package),
+        });
+        context.stdout(`Created ${parsed.name}@${parsed.version}`);
+      },
+    );
+
+  packageCommand
+    .command('copy')
+    .description('Copy a package version, optionally overriding dependencies')
+    .argument('<source@version>', 'Source package and version')
+    .argument('<target@version>', 'Target package and version')
+    .option('--skill <spec...>', 'Override or add a skill dependency')
+    .option('--package <spec...>', 'Override or add a package dependency')
+    .option('--drop-skill <name...>', 'Drop a direct skill dependency')
+    .option('--drop-package <name...>', 'Drop a direct package dependency')
+    .option('--description <text>', 'Display description')
+    .action(
+      async (
+        sourceSpec: string,
+        targetSpec: string,
+        options: {
+          skill?: string[] | string;
+          package?: string[] | string;
+          dropSkill?: string[] | string;
+          dropPackage?: string[] | string;
+          description?: string;
+        },
+      ) => {
+        const paths = await ensureHome(context.home);
+        const source = parseSpec(sourceSpec);
+        const target = parseSpec(targetSpec);
+        await copyPackageVersion({
+          paths,
+          sourceName: source.name,
+          sourceVersion: source.version,
+          targetName: target.name,
+          targetVersion: target.version,
+          description: options.description,
+          skillOverrides: collectSpecs(options.skill),
+          packageOverrides: collectSpecs(options.package),
+          dropSkills: asArray(options.dropSkill),
+          dropPackages: asArray(options.dropPackage),
+        });
+        context.stdout(`Copied ${sourceSpec} -> ${targetSpec}`);
+      },
+    );
+
+  packageCommand
+    .command('tag')
+    .description('Tag a package version')
+    .argument('<package@version>', 'Package name and exact version')
+    .argument('<tag>', 'Tag name')
+    .action(async (spec: string, tag: string) => {
+      const paths = await ensureHome(context.home);
+      const parsed = parseSpec(spec);
+      await setPackageTag(paths, parsed.name, parsed.version, tag);
+      context.stdout(`Tagged ${parsed.name}@${parsed.version} as ${tag}`);
+    });
+
+  packageCommand
+    .command('remove')
+    .description('Remove an unreferenced package version')
+    .argument('<package@version>', 'Package name and exact version')
+    .action(async (spec: string) => {
+      const paths = await ensureHome(context.home);
+      const parsed = parseSpec(spec);
+      await removePackageVersion(paths, parsed.name, parsed.version);
+      context.stdout(`Removed ${parsed.name}@${parsed.version}`);
+    });
+
+  const target = program
+    .command('target')
+    .description('Manage target directories');
 
   target
     .command('add')
-    .description('Add a target directory')
-    .argument('<path>', 'Directory containing package folders')
+    .description('Add a target directory that should contain skill folders')
+    .argument('<path>', 'Target directory')
     .option('--id <id>', 'Stable target id')
     .option('--label <label>', 'Display label')
     .option('--mode <mode>', 'link or copy', 'link')
@@ -199,7 +464,7 @@ export async function runCli(
         targetPath: string,
         options: { id?: string; label?: string; mode: string },
       ) => {
-        const paths = getSkillinkPaths(context.home);
+        const paths = await ensureHome(context.home);
         const created = await addTarget({
           paths,
           id: options.id,
@@ -214,7 +479,7 @@ export async function runCli(
   addCommonOptions(
     target.command('list').description('List target directories'),
   ).action(async (options: { json?: boolean }) => {
-    const paths = getSkillinkPaths(context.home);
+    const paths = await ensureHome(context.home);
     const route = await readRouteFile(paths);
 
     if (options.json) {
@@ -241,7 +506,7 @@ export async function runCli(
     .description('Remove a target from route.json')
     .argument('<id>', 'Target id')
     .action(async (id: string) => {
-      const paths = getSkillinkPaths(context.home);
+      const paths = await ensureHome(context.home);
       const removed = await removeTarget({ paths, id });
       context.stdout(`Removed target ${removed.id}`);
     });
@@ -252,15 +517,15 @@ export async function runCli(
     .command('add')
     .description('Assign a package version to a target')
     .argument('<target-id>', 'Target id')
-    .argument('<package@version>', 'Package name and version/range')
+    .argument('<package@version>', 'Package name and version/range/tag')
     .action(async (targetId: string, spec: string) => {
-      const paths = getSkillinkPaths(context.home);
-      const parsed = parsePackageSpec(spec);
+      const paths = await ensureHome(context.home);
+      const parsed = parseSpec(spec);
       const lock = await addRouteEntry({
         paths,
         targetId,
         name: parsed.name,
-        requested: parsed.requested,
+        requested: parsed.version,
       });
       context.stdout(
         `Routed ${parsed.name}@${lock.resolved} (${lock.requested}) -> ${targetId}`,
@@ -270,7 +535,7 @@ export async function runCli(
   addCommonOptions(
     route.command('list').description('List route assignments'),
   ).action(async (options: { json?: boolean }) => {
-    const paths = getSkillinkPaths(context.home);
+    const paths = await ensureHome(context.home);
     const file = await readRouteFile(paths);
 
     if (options.json) {
@@ -279,7 +544,7 @@ export async function runCli(
     }
 
     const assignments = file.targets.flatMap((targetEntry) =>
-      Object.entries(targetEntry.skills).map(([name, lock]) => ({
+      Object.entries(targetEntry.packages).map(([name, lock]) => ({
         targetId: targetEntry.id,
         name,
         ...lock,
@@ -293,7 +558,8 @@ export async function runCli(
 
     for (const assignment of assignments) {
       context.stdout(
-        `${assignment.targetId}  ${assignment.name}@${assignment.resolved}  ${assignment.source}`,
+        `${assignment.targetId}  ${assignment.name}@${assignment.resolved}` +
+          (assignment.requested ? `  (${assignment.requested})` : ''),
       );
     }
   });
@@ -304,22 +570,30 @@ export async function runCli(
     .argument('<target-id>', 'Target id')
     .argument('<package>', 'Package name')
     .action(async (targetId: string, name: string) => {
-      const paths = getSkillinkPaths(context.home);
+      const paths = await ensureHome(context.home);
       const removed = await removeRouteEntry({ paths, targetId, name });
-      context.stdout(removed ? `Removed route ${targetId}/${name}` : 'No route found.');
+      context.stdout(
+        removed ? `Removed route ${targetId}/${name}` : 'No route found.',
+      );
     });
 
   program
     .command('gc')
-    .description('Remove unreferenced library versions (dry-run by default)')
+    .description('Remove unreferenced skill versions (dry-run by default)')
     .option('--apply', 'Move candidates to trash')
-    .option('--max-age-days <days>', 'Only collect versions older than this many days')
+    .option('--max-age-days <days>', 'Only collect versions older than this')
     .option('--json', 'Print machine-readable JSON')
     .action(
-      async (options: { apply?: boolean; maxAgeDays?: string; json?: boolean }) => {
-        const paths = getSkillinkPaths(context.home);
+      async (options: {
+        apply?: boolean;
+        maxAgeDays?: string;
+        json?: boolean;
+      }) => {
+        const paths = await ensureHome(context.home);
         const maxAgeDays =
-          options.maxAgeDays === undefined ? undefined : Number(options.maxAgeDays);
+          options.maxAgeDays === undefined
+            ? undefined
+            : Number(options.maxAgeDays);
 
         if (
           maxAgeDays !== undefined &&
@@ -352,14 +626,20 @@ export async function runCli(
             `${report.dryRun ? '[dry-run] ' : 'removed  '}${candidate.name}@${candidate.version}  ${candidate.path}`,
           );
         }
-        context.stdout(`${report.freedBytes} bytes ${report.dryRun ? 'reclaimable' : 'reclaimed'}`);
+        context.stdout(
+          `${report.freedBytes} bytes ${
+            report.dryRun ? 'reclaimable' : 'reclaimed'
+          }`,
+        );
       },
     );
 
   addCommonOptions(
-    program.command('history').description('List route/library history snapshots'),
+    program
+      .command('history')
+      .description('List route/package/skill history snapshots'),
   ).action(async (options: { json?: boolean }) => {
-    const paths = getSkillinkPaths(context.home);
+    const paths = await ensureHome(context.home);
     const entries = await listHistory(paths);
 
     if (options.json) {
@@ -379,33 +659,38 @@ export async function runCli(
 
   program
     .command('rollback')
-    .description('Restore route.json and skills.json from a history snapshot')
+    .description('Restore route.json, package.json, and skill.json from history')
     .argument('<snapshot-id>', 'History snapshot id')
     .option('--apply', 'Apply routes after restoring the snapshot')
     .option('--json', 'Print machine-readable JSON')
-    .action(async (snapshotId: string, options: { apply?: boolean; json?: boolean }) => {
-      const paths = getSkillinkPaths(context.home);
-      await restoreHistorySnapshot(paths, snapshotId);
-      const report = options.apply ? await apply({ paths }) : undefined;
+    .action(
+      async (
+        snapshotId: string,
+        options: { apply?: boolean; json?: boolean },
+      ) => {
+        const paths = await ensureHome(context.home);
+        await restoreHistorySnapshot(paths, snapshotId);
+        const report = options.apply ? await apply({ paths }) : undefined;
 
-      if (options.json) {
-        printJson(context, { snapshotId, report });
-      } else {
-        context.stdout(`Restored history snapshot ${snapshotId}`);
-        for (const operation of report?.operations ?? []) {
-          context.stdout(
-            `${operation.kind}  ${operation.name ?? operation.targetId}  ${operation.path}`,
-          );
+        if (options.json) {
+          printJson(context, { snapshotId, report });
+        } else {
+          context.stdout(`Restored history snapshot ${snapshotId}`);
+          for (const operation of report?.operations ?? []) {
+            context.stdout(
+              `${operation.kind}  ${operation.name ?? operation.targetId}  ${operation.path}`,
+            );
+          }
+          for (const conflict of report?.conflicts ?? []) {
+            context.stderr(`conflict  ${conflict.name}  ${conflict.reason}`);
+          }
         }
-        for (const conflict of report?.conflicts ?? []) {
-          context.stderr(`conflict  ${conflict.name}  ${conflict.reason}`);
-        }
-      }
 
-      if (report && report.conflicts.length > 0) {
-        exitCode = 3;
-      }
-    });
+        if (report && report.conflicts.length > 0) {
+          exitCode = 3;
+        }
+      },
+    );
 
   program
     .command('apply')
@@ -421,7 +706,7 @@ export async function runCli(
         prune?: boolean;
         json?: boolean;
       }) => {
-        const paths = getSkillinkPaths(context.home);
+        const paths = await ensureHome(context.home);
         const report = await apply({
           paths,
           targetId: options.target,
@@ -459,7 +744,7 @@ export async function runCli(
       .description('Show target/link status')
       .option('--target <id>', 'Only inspect one target'),
   ).action(async (options: { target?: string; json?: boolean }) => {
-    const paths = getSkillinkPaths(context.home);
+    const paths = await ensureHome(context.home);
     const report = await status({ paths, targetId: options.target });
 
     if (options.json) {
@@ -482,9 +767,11 @@ export async function runCli(
   });
 
   addCommonOptions(
-    program.command('doctor').description('Check library, route, and target health'),
+    program
+      .command('doctor')
+      .description('Check skills, packages, routes, and targets'),
   ).action(async (options: { json?: boolean }) => {
-    const paths = getSkillinkPaths(context.home);
+    const paths = await ensureHome(context.home);
     const report = await doctor({ paths });
 
     if (options.json) {
@@ -524,6 +811,10 @@ export async function runCli(
     context.stderr(error instanceof Error ? error.message : String(error));
     return 1;
   }
+}
+
+function addCommonOptions(command: Command): Command {
+  return command.option('--json', 'Print machine-readable JSON');
 }
 
 const currentFile = fileURLToPath(import.meta.url);
