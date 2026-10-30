@@ -79,6 +79,27 @@ describe('targets', () => {
     );
   });
 
+  it('expands environment variables in a target path', async () => {
+    const { root, paths } = await setup();
+    const previous = process.env.SKILLINK_TARGET_TEST;
+    process.env.SKILLINK_TARGET_TEST = root;
+    try {
+      const target = await addTarget({
+        paths,
+        id: 'env-target',
+        path: '%SKILLINK_TARGET_TEST%/env-target',
+      });
+
+      expect(target.path).toBe(path.join(root, 'env-target'));
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SKILLINK_TARGET_TEST;
+      } else {
+        process.env.SKILLINK_TARGET_TEST = previous;
+      }
+    }
+  });
+
   it('generates a target id when omitted', async () => {
     const { paths, targetPath } = await setup();
 

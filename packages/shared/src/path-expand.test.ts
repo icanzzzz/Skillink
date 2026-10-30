@@ -37,6 +37,22 @@ describe('expandPath', () => {
     expect(expandPath('${HOME}/skills', { env })).toBe('/home/test/skills');
   });
 
+  it('uses process.env by default', () => {
+    const previous = process.env.SKILLINK_PATH_TEST;
+    process.env.SKILLINK_PATH_TEST = '/tmp/skillink-path-test';
+    try {
+      expect(expandPath('%SKILLINK_PATH_TEST%/skills')).toBe(
+        '/tmp/skillink-path-test/skills',
+      );
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SKILLINK_PATH_TEST;
+      } else {
+        process.env.SKILLINK_PATH_TEST = previous;
+      }
+    }
+  });
+
   it('rejects unresolved environment variables', () => {
     expect(() => expandPath('%MISSING%\\skills', { env: {} })).toThrow(
       /MISSING/,

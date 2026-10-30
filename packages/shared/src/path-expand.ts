@@ -42,6 +42,7 @@ export function expandPath(
     expanded = path.join(home, expanded.slice(2));
   }
 
+  const env = options.env ?? process.env;
   const caseInsensitiveEnv =
     options.caseInsensitiveEnv ?? process.platform === 'win32';
   const unresolved: string[] = [];
@@ -54,7 +55,7 @@ export function expandPath(
         return match;
       }
 
-      const value = lookupEnv(options.env, name, caseInsensitiveEnv);
+      const value = lookupEnv(env, name, caseInsensitiveEnv);
       if (value === undefined) {
         unresolved.push(name);
         return match;

@@ -217,6 +217,31 @@ metadata:
     );
   });
 
+  it('expands environment variables in the source path', async () => {
+    const source = await makeSource();
+    const home = await tempDir('skillink-skill-home-');
+    const previous = process.env.SKILLINK_IMPORT_TEST;
+    process.env.SKILLINK_IMPORT_TEST = source;
+    try {
+      const result = await importSkill({
+        sourceDir: '%SKILLINK_IMPORT_TEST%',
+        name: 'demo',
+        version: '1.0.0',
+        home,
+      });
+
+      expect(result.path).toBe(
+        getSkillDir(getSkillinkPaths(home), 'demo', '1.0.0'),
+      );
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SKILLINK_IMPORT_TEST;
+      } else {
+        process.env.SKILLINK_IMPORT_TEST = previous;
+      }
+    }
+  });
+
   it('reuses the same version when content is unchanged', async () => {
     const source = await makeSource();
     const home = await tempDir('skillink-skill-home-');
