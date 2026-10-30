@@ -16,7 +16,7 @@
       "@skillink/shared": ["./packages/shared/src/index.ts"],
       "@skillink/core": ["./packages/core/src/index.ts"],
       "@skillink/cli/run": ["./apps/cli/src/run.ts"],
-      "@skillink/cli": ["./apps/cli/src/index.ts"]
+      "@skillink/cli": ["./apps/cli/src/run.ts"]
     }
   },
   "include": [
