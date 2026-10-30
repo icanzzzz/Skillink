@@ -1,4 +1,5 @@
 import {
+  chmod,
   lstat,
   mkdir,
   mkdtemp,
@@ -13,6 +14,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { getSkillDir, getSkillinkPaths } from '@skillink/shared';
 import { importSkill } from './import-skill.js';
+import { verifySkillIntegrity } from './skill-integrity.js';
 import { readSkillFile, writeSkillFile } from './skill-store.js';
 
 const tempDirs: string[] = [];
@@ -215,6 +217,37 @@ metadata:
     expect((await readSkillFile(paths)).skills.demo?.description).toBe(
       'Demo skill',
     );
+  });
+
+  it('preserves directory modes so imported content matches its integrity', async () => {
+    const source = await makeSource();
+    const nested = path.join(source, 'nested');
+    await chmod(nested, 0o555);
+    const home = await tempDir('skillink-skill-home-');
+    const paths = getSkillinkPaths(home);
+
+    try {
+      await importSkill({
+        sourceDir: source,
+        name: 'demo',
+        version: '1.0.0',
+        home,
+      });
+
+      const expected = (await readSkillFile(paths)).skills.demo?.versions[
+        '1.0.0'
+      ];
+      expect(expected).toBeDefined();
+      const result = await verifySkillIntegrity(
+        paths,
+        'demo',
+        '1.0.0',
+        expected!,
+      );
+      expect(result.ok).toBe(true);
+    } finally {
+      await chmod(nested, 0o755).catch(() => undefined);
+    }
   });
 
   it('expands environment variables in the source path', async () => {

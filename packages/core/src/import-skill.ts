@@ -175,6 +175,33 @@ export async function importSkill(
       await chmod(destination, file.mode).catch(() => undefined);
     }
 
+    const directories = [...scan.directories].sort((left, right) => {
+      const depth = right.relativePath.split('/').length -
+        left.relativePath.split('/').length;
+      return depth !== 0
+        ? depth
+        : right.relativePath.localeCompare(left.relativePath);
+    });
+    for (const directory of directories) {
+      await chmod(
+        path.join(stagingDir, directory.relativePath),
+        directory.mode,
+      );
+    }
+
+    const stagedScan = await scanFolder(stagingDir);
+    if (stagedScan.integrity !== scan.integrity) {
+      throw new SkillinkError(
+        'SKILL_INTEGRITY_MISMATCH',
+        `Imported content does not match the scanned source: ${sourceDir}`,
+        {
+          sourceDir,
+          expected: scan.integrity,
+          actual: stagedScan.integrity,
+        },
+      );
+    }
+
     await mkdir(path.dirname(skillDir), { recursive: true });
     await withFsRetry(() => rename(stagingDir, skillDir));
   } catch (error) {
