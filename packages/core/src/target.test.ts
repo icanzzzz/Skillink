@@ -1,0 +1,109 @@
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { getSkillinkPaths } from '@skillink/shared';
+import { addTarget, removeTarget } from './target.js';
+import { readRouteFile } from './route.js';
+
+const tempDirs: string[] = [];
+
+async function tempDir(prefix: string): Promise<string> {
+  const dir = await mkdtemp(path.join(os.tmpdir(), prefix));
+  tempDirs.push(dir);
+  return dir;
+}
+
+async function setup() {
+  const root = await tempDir('skillink-target-');
+  const paths = getSkillinkPaths(path.join(root, 'home'));
+  const targetPath = path.join(root, 'project', 'packages');
+  await mkdir(targetPath, { recursive: true });
+  return { root, paths, targetPath };
+}
+
+afterEach(async () => {
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
+
+describe('targets', () => {
+  it('adds a target with a user-provided path', async () => {
+    const { paths, targetPath } = await setup();
+
+    const target = await addTarget({
+      paths,
+      id: 'project-a',
+      label: 'Project A',
+      path: targetPath,
+      mode: 'link',
+    });
+
+    expect(target).toMatchObject({
+      id: 'project-a',
+      path: targetPath,
+      mode: 'link',
+      skills: {},
+    });
+    const route = await readRouteFile(paths);
+    expect(route.targets).toHaveLength(1);
+  });
+
+  it('generates a target id when omitted', async () => {
+    const { paths, targetPath } = await setup();
+
+    const target = await addTarget({
+      paths,
+      label: 'My Project',
+      path: targetPath,
+    });
+
+    expect(target.id).toMatch(/^my-project/);
+  });
+
+  it('rejects duplicate target ids', async () => {
+    const { paths, targetPath } = await setup();
+    await addTarget({ paths, id: 'project-a', path: targetPath });
+
+    await expect(
+      addTarget({
+        paths,
+        id: 'project-a',
+        path: path.join(path.dirname(targetPath), 'other'),
+      }),
+    ).rejects.toThrow(/target/i);
+  });
+
+  it('rejects duplicate target paths', async () => {
+    const { paths, targetPath } = await setup();
+    await addTarget({ paths, id: 'project-a', path: targetPath });
+
+    await expect(
+      addTarget({ paths, id: 'project-b', path: targetPath }),
+    ).rejects.toThrow(/target/i);
+  });
+
+  it('rejects a target inside the control plane', async () => {
+    const { paths } = await setup();
+
+    await expect(
+      addTarget({
+        paths,
+        id: 'bad',
+        path: path.join(paths.home, 'target'),
+      }),
+    ).rejects.toThrow(/control plane/i);
+  });
+
+  it('removes a target without deleting the target directory', async () => {
+    const { paths, targetPath } = await setup();
+    await writeFile(path.join(targetPath, 'keep.txt'), 'keep', 'utf8');
+    await addTarget({ paths, id: 'project-a', path: targetPath });
+
+    await expect(removeTarget({ paths, id: 'project-a' })).resolves.toMatchObject({
+      id: 'project-a',
+    });
+    await expect(readFile(path.join(targetPath, 'keep.txt'), 'utf8')).resolves.toBe('keep');
+    const route = await readRouteFile(paths);
+    expect(route.targets).toHaveLength(0);
+  });
+});
