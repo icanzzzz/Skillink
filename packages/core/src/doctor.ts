@@ -19,7 +19,7 @@ import {
   validateAllPackages,
 } from './package-graph.js';
 import {
-  assertSafeTargetPath,
+  assertSafeRealTargetPath,
   isPathInside,
   isSamePath,
 } from './path-policy.js';
@@ -243,7 +243,7 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
 
     let resolvedTargetPath: string;
     try {
-      resolvedTargetPath = assertSafeTargetPath(target.path, paths);
+      resolvedTargetPath = await assertSafeRealTargetPath(target.path, paths);
     } catch (error) {
       issues.push({
         code:

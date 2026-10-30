@@ -1,4 +1,4 @@
-import { lstat, mkdir, readdir, rmdir, stat } from 'node:fs/promises';
+import { lstat, mkdir, readdir, realpath, rmdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
   SkillinkError,
@@ -16,7 +16,7 @@ import {
   removeLink,
 } from './links.js';
 import {
-  assertSafeTargetPath,
+  assertSafeRealTargetPath,
   isPathInside,
   isSamePath,
 } from './path-policy.js';
@@ -143,7 +143,7 @@ async function planTarget(
     return undefined;
   }
 
-  const targetPath = assertSafeTargetPath(target.path, paths);
+  const targetPath = await assertSafeRealTargetPath(target.path, paths);
   const targetExisted = await inspectTargetDirectory(targetPath);
   const operations: PlannedOperation[] = [];
   const conflicts: ApplyConflict[] = [];
@@ -186,14 +186,23 @@ async function planTarget(
     await assertSkillIntegrity(paths, skill.name, skill.version, skill.entry);
     const destination = path.join(targetPath, skill.name);
 
+    const realSourceDir = await realpath(sourceDir).catch(() => sourceDir);
+    const realLibraryDir = await realpath(paths.libraryDir).catch(
+      () => paths.libraryDir,
+    );
     if (
-      !isSamePath(sourceDir, paths.libraryDir) &&
-      !isPathInside(sourceDir, paths.libraryDir)
+      !isSamePath(realSourceDir, realLibraryDir) &&
+      !isPathInside(realSourceDir, realLibraryDir)
     ) {
       throw new SkillinkError(
         'UNSAFE_PATH',
         `Skill source escapes the control plane: ${sourceDir}`,
-        { skill: skill.name, version: skill.version, sourceDir },
+        {
+          skill: skill.name,
+          version: skill.version,
+          sourceDir,
+          realSourceDir,
+        },
       );
     }
     if (!isPathInside(destination, targetPath)) {

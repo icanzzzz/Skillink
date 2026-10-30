@@ -10,7 +10,11 @@ import {
   assertNoCaseInsensitiveCollision,
   assertSafePackageName,
 } from './package-name.js';
-import { assertSafeTargetPath, isPathInside, isSamePath } from './path-policy.js';
+import {
+  assertSafeRealTargetPath,
+  isPathInside,
+  isSamePath,
+} from './path-policy.js';
 import { readRouteFile, writeRouteFile } from './route.js';
 import { withHistory } from './history.js';
 
@@ -33,7 +37,7 @@ export interface AddTargetInput {
 
 export async function addTarget(input: AddTargetInput): Promise<TargetRoute> {
   const route = await readRouteFile(input.paths);
-  const targetPath = assertSafeTargetPath(
+  const targetPath = await assertSafeRealTargetPath(
     expandPath(input.path),
     input.paths,
   );

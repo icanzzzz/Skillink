@@ -1,10 +1,11 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { getSkillinkPaths } from '@skillink/shared';
 import {
   assertSafeImportSource,
+  assertSafeRealTargetPath,
   assertSafeTargetPath,
   isPathInside,
 } from './path-policy.js';
@@ -36,6 +37,25 @@ describe('import source policy', () => {
     await expect(
       assertSafeImportSource(dir, { systemDirectories: [] }),
     ).resolves.toBe(path.resolve(dir));
+  });
+
+  it('rejects a source whose ancestor resolves into a system directory', async () => {
+    const root = await tempDir();
+    const systemDir = path.join(root, 'system');
+    const source = path.join(systemDir, 'child');
+    const link = path.join(root, 'link');
+    await mkdir(source, { recursive: true });
+    await symlink(
+      systemDir,
+      link,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+
+    await expect(
+      assertSafeImportSource(path.join(link, 'child'), {
+        systemDirectories: [systemDir],
+      }),
+    ).rejects.toMatchObject({ code: 'UNSAFE_PATH' });
   });
 });
 
@@ -77,6 +97,22 @@ describe('target path policy', () => {
     const paths = getSkillinkPaths(path.join(dir, 'home'));
 
     expect(() => assertSafeTargetPath(os.homedir(), paths)).toThrow(/home/i);
+  });
+
+  it('rejects a target whose ancestor resolves into the control plane', async () => {
+    const root = await tempDir();
+    const home = path.join(root, 'home');
+    const link = path.join(root, 'link');
+    await mkdir(home, { recursive: true });
+    await symlink(
+      home,
+      link,
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
+
+    await expect(
+      assertSafeRealTargetPath(path.join(link, 'target'), getSkillinkPaths(home)),
+    ).rejects.toThrow(/control plane/i);
   });
 
   it('detects nested paths case-insensitively on Windows', async () => {
