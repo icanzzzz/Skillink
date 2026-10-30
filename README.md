@@ -12,16 +12,29 @@ Skillink 是一个纯本地、pnpm 风格的文件系统包管理器，用于管
 
 ## 当前状态
 
-MVP 基础建设中。首个可用切片：
+MVP 基础切片已可用：
+
+- 任意本地文件夹导入公用库；
+- `skills.json` + `route.json`；
+- target 由用户填写；
+- Windows junction / POSIX symlink 投影；
+- `apply` / `status` / `doctor`；
+- CLI 与 Electron GUI 基础壳。
 
 ```text
 skillink library list
 skillink add <folder> --name <name> --version <version>
 skillink target add <path> --label <label>
 skillink route add <target-id> <package>@<version>
-skillink apply [--target <id>] [--dry-run]
-skillink status
-skillink doctor
+skillink apply [--target <id>] [--dry-run] [--prune]
+skillink status [--json]
+skillink doctor [--json]
+```
+
+GUI：
+
+```bash
+pnpm dev:desktop
 ```
 
 ## 开发
@@ -37,7 +50,7 @@ pnpm build
 
 ```text
 apps/cli          CLI
-apps/desktop      Electron GUI（后续）
+apps/desktop      Electron GUI 基础壳
 packages/core     领域逻辑、公用库、路由、apply
 packages/shared   类型、zod schema、错误码
 docs/             计划与文档
