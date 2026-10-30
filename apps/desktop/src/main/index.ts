@@ -31,7 +31,7 @@ function createWindow(): void {
           .executeJavaScript('document.body.innerText')
           .then((text: string) => {
             console.log(
-              `SKILLINK_SMOKE_TEXT:${text.replaceAll(/\s+/g, ' ').slice(0, 400)}`,
+              `SKILLINK_SMOKE_TEXT:${text.replaceAll(/\s+/g, ' ').slice(0, 1200)}`,
             );
             app.quit();
           });
