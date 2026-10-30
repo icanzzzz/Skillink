@@ -1,0 +1,14 @@
+{
+  "name": "@skillink/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "skillink": "./dist/index.js"
+  },
+  "dependencies": {
+    "@skillink/core": "workspace:*",
+    "@skillink/shared": "workspace:*",
+    "commander": "^15.0.0"
+  }
+}
