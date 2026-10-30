@@ -27,8 +27,10 @@ import {
   removeSkillVersion,
   removeTarget,
   restoreHistorySnapshot,
+  setPackageEnabled,
   setPackageTag,
   setSkillTag,
+  setTargetEnabled,
   status,
   writePackageFile,
   writeRouteFile,
@@ -511,6 +513,26 @@ export async function runCli(
       context.stdout(`Removed target ${removed.id}`);
     });
 
+  target
+    .command('enable')
+    .description('Enable a target')
+    .argument('<id>', 'Target id')
+    .action(async (id: string) => {
+      const paths = await ensureHome(context.home);
+      await setTargetEnabled(paths, id, true);
+      context.stdout(`Enabled target ${id}`);
+    });
+
+  target
+    .command('disable')
+    .description('Disable a target')
+    .argument('<id>', 'Target id')
+    .action(async (id: string) => {
+      const paths = await ensureHome(context.home);
+      await setTargetEnabled(paths, id, false);
+      context.stdout(`Disabled target ${id}`);
+    });
+
   const route = program.command('route').description('Manage target routes');
 
   route
@@ -563,6 +585,28 @@ export async function runCli(
       );
     }
   });
+
+  route
+    .command('enable')
+    .description('Enable a package assignment on a target')
+    .argument('<target-id>', 'Target id')
+    .argument('<package>', 'Package name')
+    .action(async (targetId: string, name: string) => {
+      const paths = await ensureHome(context.home);
+      await setPackageEnabled(paths, targetId, name, true);
+      context.stdout(`Enabled route ${targetId}/${name}`);
+    });
+
+  route
+    .command('disable')
+    .description('Disable a package assignment on a target')
+    .argument('<target-id>', 'Target id')
+    .argument('<package>', 'Package name')
+    .action(async (targetId: string, name: string) => {
+      const paths = await ensureHome(context.home);
+      await setPackageEnabled(paths, targetId, name, false);
+      context.stdout(`Disabled route ${targetId}/${name}`);
+    });
 
   route
     .command('remove')

@@ -103,6 +103,44 @@ export async function addRouteEntry(
   return lock;
 }
 
+export async function setPackageEnabled(
+  paths: SkillinkPaths,
+  targetId: string,
+  packageName: string,
+  enabled: boolean,
+): Promise<PackageLock> {
+  const route = await readRouteFile(paths);
+  const target = findTarget(route, targetId);
+
+  if (!target) {
+    throw new SkillinkError(
+      'TARGET_NOT_FOUND',
+      `Target "${targetId}" does not exist.`,
+      { targetId },
+    );
+  }
+
+  const lock = target.packages[packageName];
+  if (!lock) {
+    throw new SkillinkError(
+      'PACKAGE_NOT_FOUND',
+      `Package "${packageName}" is not assigned to target "${targetId}".`,
+      { targetId, name: packageName },
+    );
+  }
+
+  lock.enabled = enabled;
+  await withHistory(
+    paths,
+    enabled ? 'enable-route-package' : 'disable-route-package',
+    async () => {
+      await writeRouteFile(paths, route);
+    },
+  );
+
+  return lock;
+}
+
 export interface RemoveRouteEntryInput {
   paths: SkillinkPaths;
   targetId: string;

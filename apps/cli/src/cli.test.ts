@@ -304,6 +304,53 @@ describe('CLI', () => {
     expect(routeFile.targets[0].packages.new).toBeUndefined();
   });
 
+  it('enables and disables targets and route packages', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    await runCli(
+      ['skill', 'add', source, '--name', 'pdf', '--version', '1.0.0'],
+      ctx,
+    );
+    await runCli(
+      ['package', 'create', 'pdf-pack@1.0.0', '--skill', 'pdf@1.0.0'],
+      ctx,
+    );
+    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
+    await runCli(['route', 'add', 'project-a', 'pdf-pack@1.0.0'], ctx);
+
+    expect(await runCli(['target', 'disable', 'project-a'], ctx)).toBe(0);
+    expect((await readJson(path.join(home, 'route.json'))).targets[0].enabled).toBe(
+      false,
+    );
+    expect(await runCli(['target', 'enable', 'project-a'], ctx)).toBe(0);
+    expect((await readJson(path.join(home, 'route.json'))).targets[0].enabled).toBe(
+      true,
+    );
+
+    expect(
+      await runCli(['route', 'disable', 'project-a', 'pdf-pack'], ctx),
+    ).toBe(0);
+    expect(
+      (await readJson(path.join(home, 'route.json'))).targets[0].packages[
+        'pdf-pack'
+      ].enabled,
+    ).toBe(false);
+    expect(
+      await runCli(['route', 'enable', 'project-a', 'pdf-pack'], ctx),
+    ).toBe(0);
+    expect(
+      (await readJson(path.join(home, 'route.json'))).targets[0].packages[
+        'pdf-pack'
+      ].enabled,
+    ).toBe(true);
+  });
+
   it('rejects route remove when the remaining graph is invalid unless --force is used', async () => {
     const root = await tempDir('skillink-cli-');
     const home = path.join(root, 'home');

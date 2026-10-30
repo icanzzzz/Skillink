@@ -16,7 +16,12 @@ import {
   setPackageTag,
   writePackageFile,
 } from './package-store.js';
-import { addRouteEntry, readRouteFile, removeRouteEntry } from './route.js';
+import {
+  addRouteEntry,
+  readRouteFile,
+  removeRouteEntry,
+  setPackageEnabled,
+} from './route.js';
 import { writeSkillFile } from './skill-store.js';
 import { addTarget } from './target.js';
 
@@ -335,6 +340,39 @@ describe('route entries', () => {
     expect(
       (await readRouteFile(paths)).targets[0]?.packages.docs,
     ).toBeUndefined();
+  });
+
+  it('enables and disables a package lock with history', async () => {
+    const { paths } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'frontend',
+      requested: '1.0.0',
+    });
+
+    const disabled = await setPackageEnabled(
+      paths,
+      'project-a',
+      'frontend',
+      false,
+    );
+    expect(disabled.enabled).toBe(false);
+    expect(
+      (await readRouteFile(paths)).targets[0]?.packages.frontend?.enabled,
+    ).toBe(false);
+
+    const enabled = await setPackageEnabled(
+      paths,
+      'project-a',
+      'frontend',
+      true,
+    );
+    expect(enabled.enabled).toBe(true);
+
+    await expect(
+      setPackageEnabled(paths, 'project-a', 'missing', false),
+    ).rejects.toMatchObject({ code: 'PACKAGE_NOT_FOUND' });
   });
 
   it('removes a route entry without touching the target directory', async () => {

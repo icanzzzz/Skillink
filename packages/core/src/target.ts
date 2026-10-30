@@ -85,6 +85,30 @@ export async function addTarget(input: AddTargetInput): Promise<TargetRoute> {
   return target;
 }
 
+export async function setTargetEnabled(
+  paths: SkillinkPaths,
+  targetId: string,
+  enabled: boolean,
+): Promise<TargetRoute> {
+  const route = await readRouteFile(paths);
+  const target = route.targets.find((entry) => entry.id === targetId);
+
+  if (!target) {
+    throw new SkillinkError(
+      'TARGET_NOT_FOUND',
+      `Target "${targetId}" does not exist.`,
+      { targetId },
+    );
+  }
+
+  target.enabled = enabled;
+  await withHistory(paths, enabled ? 'enable-target' : 'disable-target', async () => {
+    await writeRouteFile(paths, route);
+  });
+
+  return target;
+}
+
 export interface RemoveTargetInput {
   paths: SkillinkPaths;
   id: string;

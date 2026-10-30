@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { getSkillinkPaths } from '@skillink/shared';
-import { addTarget, removeTarget } from './target.js';
+import { addTarget, removeTarget, setTargetEnabled } from './target.js';
 import { readRouteFile } from './route.js';
 
 const tempDirs: string[] = [];
@@ -141,6 +141,23 @@ describe('targets', () => {
         path: path.join(paths.home, 'target'),
       }),
     ).rejects.toThrow(/control plane/i);
+  });
+
+  it('enables and disables a target with history', async () => {
+    const { paths, targetPath } = await setup();
+    await addTarget({ paths, id: 'project-a', path: targetPath });
+
+    const disabled = await setTargetEnabled(paths, 'project-a', false);
+
+    expect(disabled.enabled).toBe(false);
+    expect((await readRouteFile(paths)).targets[0]?.enabled).toBe(false);
+
+    const enabled = await setTargetEnabled(paths, 'project-a', true);
+    expect(enabled.enabled).toBe(true);
+
+    await expect(
+      setTargetEnabled(paths, 'missing', false),
+    ).rejects.toMatchObject({ code: 'TARGET_NOT_FOUND' });
   });
 
   it('removes a target without deleting the target directory', async () => {
