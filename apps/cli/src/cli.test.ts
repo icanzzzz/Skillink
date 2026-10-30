@@ -658,4 +658,113 @@ describe('CLI', () => {
       expect(await pathExists(path.join(home, name))).toBe(false);
     }
   });
+
+  it('prints import, target, and route mutation results as JSON', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+
+    ctx.out.length = 0;
+    expect(
+      await runCli(
+        [
+          'skill',
+          'add',
+          source,
+          '--name',
+          'pdf',
+          '--version',
+          '1.0.0',
+          '--json',
+        ],
+        ctx,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({
+      name: 'pdf',
+      version: '1.0.0',
+      created: true,
+    });
+
+    ctx.out.length = 0;
+    expect(
+      await runCli(
+        ['package', 'create', 'demo@1.0.0', '--skill', 'pdf@1.0.0', '--json'],
+        ctx,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({
+      skills: { pdf: '1.0.0' },
+    });
+
+    ctx.out.length = 0;
+    expect(
+      await runCli(
+        ['target', 'add', targetPath, '--id', 'project-a', '--json'],
+        ctx,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({
+      id: 'project-a',
+      enabled: true,
+    });
+
+    ctx.out.length = 0;
+    expect(
+      await runCli(['route', 'add', 'project-a', 'demo@1.0.0', '--json'], ctx),
+    ).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({
+      resolved: '1.0.0',
+      enabled: true,
+    });
+  });
+
+  it('prints one structured JSON error when a JSON command fails', async () => {
+    const home = await tempDir('skillink-cli-');
+    const source = await makeSkillSource(false);
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    ctx.err.length = 0;
+    expect(
+      await runCli(
+        ['skill', 'add', source, '--name', 'broken', '--json'],
+        ctx,
+      ),
+    ).toBe(1);
+
+    const error = JSON.parse(ctx.err.join('\n')) as {
+      ok: boolean;
+      error: { code: string; message: string };
+    };
+    expect(error.ok).toBe(false);
+    expect(error.error.code).toBe('SKILL_MD_REQUIRED');
+    expect(error.error.message).toContain('SKILL.md');
+  });
+
+  it('rejects copy mode with a structured JSON error', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    ctx.err.length = 0;
+    expect(
+      await runCli(
+        ['target', 'add', targetPath, '--mode', 'copy', '--json'],
+        ctx,
+      ),
+    ).toBe(1);
+    expect(JSON.parse(ctx.err.join('\n'))).toMatchObject({
+      ok: false,
+      error: { code: 'COPY_MODE_UNSUPPORTED' },
+    });
+  });
 });

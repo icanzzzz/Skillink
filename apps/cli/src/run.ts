@@ -4,6 +4,7 @@ import {
   SkillinkError,
   getSkillinkPaths,
   isSkillinkError,
+  type TargetMode,
 } from '@skillink/shared';
 import {
   addRouteEntry,
@@ -44,6 +45,24 @@ export interface CliContext {
 
 function printJson(context: CliContext, value: unknown): void {
   context.stdout(JSON.stringify(value, null, 2));
+}
+
+function printJsonError(
+  context: CliContext,
+  code: string,
+  message: string,
+  details?: unknown,
+): void {
+  context.stderr(
+    JSON.stringify({
+      ok: false,
+      error: {
+        code,
+        message,
+        ...(details === undefined ? {} : { details }),
+      },
+    }),
+  );
 }
 
 function parseSpec(spec: string): { name: string; version: string } {
@@ -138,7 +157,7 @@ async function ensureHome(home?: string) {
 
 async function runSkillAdd(
   folder: string,
-  options: { name?: string; version?: string },
+  options: { name?: string; version?: string; json?: boolean },
   context: CliContext,
 ): Promise<void> {
   const result = await importSkill({
@@ -147,6 +166,11 @@ async function runSkillAdd(
     version: options.version,
     home: context.home,
   });
+
+  if (options.json) {
+    printJson(context, result);
+    return;
+  }
 
   context.stdout(
     `${result.created ? 'Imported' : 'Already present'} ${result.name}@${result.version} ` +
@@ -162,6 +186,7 @@ export async function runCli(
   },
 ): Promise<number> {
   let exitCode = 0;
+  const jsonMode = context.json ?? argv.includes('--json');
   const program = new Command();
 
   program
@@ -171,7 +196,11 @@ export async function runCli(
     .exitOverride()
     .configureOutput({
       writeOut: (value) => context.stdout(value.replace(/\n$/, '')),
-      writeErr: (value) => context.stderr(value.replace(/\n$/, '')),
+      writeErr: (value) => {
+        if (!jsonMode) {
+          context.stderr(value.replace(/\n$/, ''));
+        }
+      },
     });
 
   program
@@ -302,55 +331,74 @@ export async function runCli(
     }
   });
 
-  const skillAdd = skill
-    .command('add')
-    .description('Import a local skill folder; it must contain SKILL.md')
-    .argument('<folder>', 'Skill folder')
-    .option('--name <name>', 'Skill name (default: folder name)')
-    .option('--version <version>', 'Skill version (default: 0.0.0+hash)');
+  const skillAdd = addCommonOptions(
+    skill
+      .command('add')
+      .description('Import a local skill folder; it must contain SKILL.md')
+      .argument('<folder>', 'Skill folder')
+      .option('--name <name>', 'Skill name (default: folder name)')
+      .option('--version <version>', 'Skill version (default: 0.0.0+hash)'),
+  );
 
   skillAdd.action(
-    async (folder: string, options: { name?: string; version?: string }) => {
+    async (
+      folder: string,
+      options: { name?: string; version?: string; json?: boolean },
+    ) => {
       await ensureHome(context.home);
       await runSkillAdd(folder, options, context);
     },
   );
 
-  program
-    .command('add')
-    .description('Alias for "skill add"')
-    .argument('<folder>', 'Skill folder')
-    .option('--name <name>', 'Skill name (default: folder name)')
-    .option('--version <version>', 'Skill version (default: 0.0.0+hash)')
-    .action(
-      async (folder: string, options: { name?: string; version?: string }) => {
-        await ensureHome(context.home);
-        await runSkillAdd(folder, options, context);
-      },
-    );
+  addCommonOptions(
+    program
+      .command('add')
+      .description('Alias for "skill add"')
+      .argument('<folder>', 'Skill folder')
+      .option('--name <name>', 'Skill name (default: folder name)')
+      .option('--version <version>', 'Skill version (default: 0.0.0+hash)'),
+  ).action(
+    async (
+      folder: string,
+      options: { name?: string; version?: string; json?: boolean },
+    ) => {
+      await ensureHome(context.home);
+      await runSkillAdd(folder, options, context);
+    },
+  );
 
-  skill
-    .command('tag')
-    .description('Tag a skill version, for example latest or stable')
-    .argument('<skill@version>', 'Skill name and exact version')
-    .argument('<tag>', 'Tag name')
-    .action(async (spec: string, tag: string) => {
-      const paths = await ensureHome(context.home);
-      const parsed = parseSpec(spec);
-      await setSkillTag(paths, parsed.name, parsed.version, tag);
-      context.stdout(`Tagged ${parsed.name}@${parsed.version} as ${tag}`);
-    });
+  addCommonOptions(
+    skill
+      .command('tag')
+      .description('Tag a skill version, for example latest or stable')
+      .argument('<skill@version>', 'Skill name and exact version')
+      .argument('<tag>', 'Tag name'),
+  ).action(async (spec: string, tag: string, options: { json?: boolean }) => {
+    const paths = await ensureHome(context.home);
+    const parsed = parseSpec(spec);
+    await setSkillTag(paths, parsed.name, parsed.version, tag);
+    if (options.json) {
+      printJson(context, { ok: true });
+      return;
+    }
+    context.stdout(`Tagged ${parsed.name}@${parsed.version} as ${tag}`);
+  });
 
-  skill
-    .command('remove')
-    .description('Move an unreferenced skill version to trash')
-    .argument('<skill@version>', 'Skill name and exact version')
-    .action(async (spec: string) => {
-      const paths = await ensureHome(context.home);
-      const parsed = parseSpec(spec);
-      await removeSkillVersion(paths, parsed.name, parsed.version);
-      context.stdout(`Removed ${parsed.name}@${parsed.version}`);
-    });
+  addCommonOptions(
+    skill
+      .command('remove')
+      .description('Move an unreferenced skill version to trash')
+      .argument('<skill@version>', 'Skill name and exact version'),
+  ).action(async (spec: string, options: { json?: boolean }) => {
+    const paths = await ensureHome(context.home);
+    const parsed = parseSpec(spec);
+    await removeSkillVersion(paths, parsed.name, parsed.version);
+    if (options.json) {
+      printJson(context, { ok: true });
+      return;
+    }
+    context.stdout(`Removed ${parsed.name}@${parsed.version}`);
+  });
 
   const packageCommand = program
     .command('package')
@@ -412,6 +460,7 @@ export async function runCli(
     .option('--skill <spec...>', 'Skill dependency as skill@version')
     .option('--package <spec...>', 'Package dependency as package@version')
     .option('--description <text>', 'Display description')
+    .option('--json', 'Print machine-readable JSON')
     .action(
       async (
         spec: string,
@@ -419,11 +468,12 @@ export async function runCli(
           skill?: string[] | string;
           package?: string[] | string;
           description?: string;
+          json?: boolean;
         },
       ) => {
         const paths = await ensureHome(context.home);
         const parsed = parseSpec(spec);
-        await createPackageVersion({
+        const created = await createPackageVersion({
           paths,
           name: parsed.name,
           version: parsed.version,
@@ -431,6 +481,10 @@ export async function runCli(
           skills: collectSpecs(options.skill),
           packages: collectSpecs(options.package),
         });
+        if (options.json) {
+          printJson(context, created);
+          return;
+        }
         context.stdout(`Created ${parsed.name}@${parsed.version}`);
       },
     );
@@ -445,6 +499,7 @@ export async function runCli(
     .option('--drop-skill <name...>', 'Drop a direct skill dependency')
     .option('--drop-package <name...>', 'Drop a direct package dependency')
     .option('--description <text>', 'Display description')
+    .option('--json', 'Print machine-readable JSON')
     .action(
       async (
         sourceSpec: string,
@@ -455,12 +510,13 @@ export async function runCli(
           dropSkill?: string[] | string;
           dropPackage?: string[] | string;
           description?: string;
+          json?: boolean;
         },
       ) => {
         const paths = await ensureHome(context.home);
         const source = parseSpec(sourceSpec);
         const target = parseSpec(targetSpec);
-        await copyPackageVersion({
+        const created = await copyPackageVersion({
           paths,
           sourceName: source.name,
           sourceVersion: source.version,
@@ -472,6 +528,10 @@ export async function runCli(
           dropSkills: asArray(options.dropSkill),
           dropPackages: asArray(options.dropPackage),
         });
+        if (options.json) {
+          printJson(context, created);
+          return;
+        }
         context.stdout(`Copied ${sourceSpec} -> ${targetSpec}`);
       },
     );
@@ -481,10 +541,15 @@ export async function runCli(
     .description('Tag a package version')
     .argument('<package@version>', 'Package name and exact version')
     .argument('<tag>', 'Tag name')
-    .action(async (spec: string, tag: string) => {
+    .option('--json', 'Print machine-readable JSON')
+    .action(async (spec: string, tag: string, options: { json?: boolean }) => {
       const paths = await ensureHome(context.home);
       const parsed = parseSpec(spec);
       await setPackageTag(paths, parsed.name, parsed.version, tag);
+      if (options.json) {
+        printJson(context, { ok: true });
+        return;
+      }
       context.stdout(`Tagged ${parsed.name}@${parsed.version} as ${tag}`);
     });
 
@@ -492,10 +557,15 @@ export async function runCli(
     .command('remove')
     .description('Remove an unreferenced package version')
     .argument('<package@version>', 'Package name and exact version')
-    .action(async (spec: string) => {
+    .option('--json', 'Print machine-readable JSON')
+    .action(async (spec: string, options: { json?: boolean }) => {
       const paths = await ensureHome(context.home);
       const parsed = parseSpec(spec);
       await removePackageVersion(paths, parsed.name, parsed.version);
+      if (options.json) {
+        printJson(context, { ok: true });
+        return;
+      }
       context.stdout(`Removed ${parsed.name}@${parsed.version}`);
     });
 
@@ -509,10 +579,17 @@ export async function runCli(
     .argument('<path>', 'Target directory')
     .option('--id <id>', 'Stable target id')
     .option('--label <label>', 'Display label')
+    .option('--mode <mode>', 'Projection mode: link or copy')
+    .option('--json', 'Print machine-readable JSON')
     .action(
       async (
         targetPath: string,
-        options: { id?: string; label?: string },
+        options: {
+          id?: string;
+          label?: string;
+          mode?: TargetMode;
+          json?: boolean;
+        },
       ) => {
         const paths = await ensureHome(context.home);
         const created = await addTarget({
@@ -520,8 +597,12 @@ export async function runCli(
           id: options.id,
           label: options.label,
           path: targetPath,
-          mode: 'link',
+          mode: options.mode ?? 'link',
         });
+        if (options.json) {
+          printJson(context, created);
+          return;
+        }
         context.stdout(`Added target ${created.id} -> ${created.path}`);
       },
     );
@@ -555,9 +636,14 @@ export async function runCli(
     .command('remove')
     .description('Remove a target from route.json')
     .argument('<id>', 'Target id')
-    .action(async (id: string) => {
+    .option('--json', 'Print machine-readable JSON')
+    .action(async (id: string, options: { json?: boolean }) => {
       const paths = await ensureHome(context.home);
       const removed = await removeTarget({ paths, id });
+      if (options.json) {
+        printJson(context, removed);
+        return;
+      }
       context.stdout(`Removed target ${removed.id}`);
     });
 
@@ -565,9 +651,14 @@ export async function runCli(
     .command('enable')
     .description('Enable a target')
     .argument('<id>', 'Target id')
-    .action(async (id: string) => {
+    .option('--json', 'Print machine-readable JSON')
+    .action(async (id: string, options: { json?: boolean }) => {
       const paths = await ensureHome(context.home);
-      await setTargetEnabled(paths, id, true);
+      const updated = await setTargetEnabled(paths, id, true);
+      if (options.json) {
+        printJson(context, updated);
+        return;
+      }
       context.stdout(`Enabled target ${id}`);
     });
 
@@ -575,9 +666,14 @@ export async function runCli(
     .command('disable')
     .description('Disable a target')
     .argument('<id>', 'Target id')
-    .action(async (id: string) => {
+    .option('--json', 'Print machine-readable JSON')
+    .action(async (id: string, options: { json?: boolean }) => {
       const paths = await ensureHome(context.home);
-      await setTargetEnabled(paths, id, false);
+      const updated = await setTargetEnabled(paths, id, false);
+      if (options.json) {
+        printJson(context, updated);
+        return;
+      }
       context.stdout(`Disabled target ${id}`);
     });
 
@@ -588,19 +684,26 @@ export async function runCli(
     .description('Assign a package version to a target')
     .argument('<target-id>', 'Target id')
     .argument('<package@version>', 'Package name and version/range/tag')
-    .action(async (targetId: string, spec: string) => {
-      const paths = await ensureHome(context.home);
-      const parsed = parseSpec(spec);
-      const lock = await addRouteEntry({
-        paths,
-        targetId,
-        name: parsed.name,
-        requested: parsed.version,
-      });
-      context.stdout(
-        `Routed ${parsed.name}@${lock.resolved} (${lock.requested}) -> ${targetId}`,
-      );
-    });
+    .option('--json', 'Print machine-readable JSON')
+    .action(
+      async (targetId: string, spec: string, options: { json?: boolean }) => {
+        const paths = await ensureHome(context.home);
+        const parsed = parseSpec(spec);
+        const lock = await addRouteEntry({
+          paths,
+          targetId,
+          name: parsed.name,
+          requested: parsed.version,
+        });
+        if (options.json) {
+          printJson(context, lock);
+          return;
+        }
+        context.stdout(
+          `Routed ${parsed.name}@${lock.resolved} (${lock.requested}) -> ${targetId}`,
+        );
+      },
+    );
 
   addCommonOptions(
     route.command('list').description('List route assignments'),
@@ -639,22 +742,36 @@ export async function runCli(
     .description('Enable a package assignment on a target')
     .argument('<target-id>', 'Target id')
     .argument('<package>', 'Package name')
-    .action(async (targetId: string, name: string) => {
-      const paths = await ensureHome(context.home);
-      await setPackageEnabled(paths, targetId, name, true);
-      context.stdout(`Enabled route ${targetId}/${name}`);
-    });
+    .option('--json', 'Print machine-readable JSON')
+    .action(
+      async (targetId: string, name: string, options: { json?: boolean }) => {
+        const paths = await ensureHome(context.home);
+        const updated = await setPackageEnabled(paths, targetId, name, true);
+        if (options.json) {
+          printJson(context, updated);
+          return;
+        }
+        context.stdout(`Enabled route ${targetId}/${name}`);
+      },
+    );
 
   route
     .command('disable')
     .description('Disable a package assignment on a target')
     .argument('<target-id>', 'Target id')
     .argument('<package>', 'Package name')
-    .action(async (targetId: string, name: string) => {
-      const paths = await ensureHome(context.home);
-      await setPackageEnabled(paths, targetId, name, false);
-      context.stdout(`Disabled route ${targetId}/${name}`);
-    });
+    .option('--json', 'Print machine-readable JSON')
+    .action(
+      async (targetId: string, name: string, options: { json?: boolean }) => {
+        const paths = await ensureHome(context.home);
+        const updated = await setPackageEnabled(paths, targetId, name, false);
+        if (options.json) {
+          printJson(context, updated);
+          return;
+        }
+        context.stdout(`Disabled route ${targetId}/${name}`);
+      },
+    );
 
   route
     .command('remove')
@@ -662,8 +779,13 @@ export async function runCli(
     .argument('<target-id>', 'Target id')
     .argument('<package>', 'Package name')
     .option('--force', 'Remove even if the remaining graph is invalid')
+    .option('--json', 'Print machine-readable JSON')
     .action(
-      async (targetId: string, name: string, options: { force?: boolean }) => {
+      async (
+        targetId: string,
+        name: string,
+        options: { force?: boolean; json?: boolean },
+      ) => {
         const paths = await ensureHome(context.home);
         const removed = await removeRouteEntry({
           paths,
@@ -671,6 +793,10 @@ export async function runCli(
           name,
           force: options.force,
         });
+        if (options.json) {
+          printJson(context, removed);
+          return;
+        }
         context.stdout(
           removed ? `Removed route ${targetId}/${name}` : 'No route found.',
         );
@@ -682,11 +808,13 @@ export async function runCli(
     .description('Remove unreferenced skill versions (dry-run by default)')
     .option('--apply', 'Move candidates to trash')
     .option('--max-age-days <days>', 'Only collect versions older than this')
+    .option('--no-keep-tagged', 'Allow tagged versions to be collected')
     .option('--json', 'Print machine-readable JSON')
     .action(
       async (options: {
         apply?: boolean;
         maxAgeDays?: string;
+        keepTagged?: boolean;
         json?: boolean;
       }) => {
         const paths = await ensureHome(context.home);
@@ -709,6 +837,7 @@ export async function runCli(
         const report = await gc(paths, {
           dryRun: !options.apply,
           maxAgeDays,
+          keepTagged: options.keepTagged,
         });
 
         if (options.json) {
@@ -900,15 +1029,30 @@ export async function runCli(
       ) {
         return 0;
       }
+      if (jsonMode) {
+        printJsonError(context, 'CLI_USAGE', error.message);
+      }
       return error.exitCode || 1;
     }
 
     if (isSkillinkError(error)) {
-      context.stderr(`error [${error.code}]: ${error.message}`);
+      if (jsonMode) {
+        printJsonError(context, error.code, error.message, error.details);
+      } else {
+        context.stderr(`error [${error.code}]: ${error.message}`);
+      }
       return error.code === 'UNMANAGED_CONFLICT' ? 3 : 1;
     }
 
-    context.stderr(error instanceof Error ? error.message : String(error));
+    if (jsonMode) {
+      printJsonError(
+        context,
+        'CLI_ERROR',
+        error instanceof Error ? error.message : String(error),
+      );
+    } else {
+      context.stderr(error instanceof Error ? error.message : String(error));
+    }
     return 1;
   }
 }
