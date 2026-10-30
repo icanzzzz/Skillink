@@ -15,6 +15,7 @@ extraResources:
     to: cli/skillink-path.ps1
 asar: true
 win:
+  icon: build/icon.ico
   target:
     - nsis
     - portable

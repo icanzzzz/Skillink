@@ -40,6 +40,8 @@ const NAV_ITEMS: Array<{ id: ViewId; label: string }> = [
   { id: 'doctor', label: 'Doctor' },
 ];
 
+const BRAND_ICON = new URL('./assets/icon.png', import.meta.url).href;
+
 const VIEW_TITLES: Record<ViewId, string> = {
   overview: 'Overview',
   targets: 'Targets',
@@ -219,7 +221,7 @@ export function App({ api }: AppProps) {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-mark">S</span>
+          <img className="brand-mark" src={BRAND_ICON} alt="" />
           <div>
             <strong>Skillink</strong>
             <span>skill and package manager</span>

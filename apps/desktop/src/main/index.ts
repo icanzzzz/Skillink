@@ -11,6 +11,9 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     title: 'Skillink',
+    ...(app.isPackaged
+      ? {}
+      : { icon: path.join(app.getAppPath(), 'build', 'icon.png') }),
     backgroundColor: '#0f1115',
     webPreferences: {
       preload: path.join(app.getAppPath(), 'out', 'preload', 'index.cjs'),
