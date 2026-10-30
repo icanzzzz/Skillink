@@ -10,9 +10,12 @@ import {
   PackageTagRequestSchema,
   RollbackRequestSchema,
   RouteAddRequestSchema,
+  RouteEnableRequestSchema,
   RouteRemoveRequestSchema,
   SkillRemoveRequestSchema,
   SkillTagRequestSchema,
+  TargetEnableRequestSchema,
+  TargetRemoveRequestSchema,
 } from './ipc-schemas.js';
 
 describe('IPC request schemas', () => {
@@ -123,6 +126,39 @@ describe('IPC request schemas', () => {
     expect(
       RouteRemoveRequestSchema.safeParse({ targetId: 'project-a', name: '' })
         .success,
+    ).toBe(false);
+  });
+
+  it('validates target and route lifecycle requests', () => {
+    expect(TargetRemoveRequestSchema.parse({ id: 'project-a' })).toEqual({
+      id: 'project-a',
+    });
+    expect(TargetRemoveRequestSchema.safeParse({ id: '' }).success).toBe(false);
+
+    expect(
+      TargetEnableRequestSchema.parse({ id: 'project-a', enabled: false }),
+    ).toEqual({ id: 'project-a', enabled: false });
+    expect(
+      TargetEnableRequestSchema.safeParse({ id: 'project-a' }).success,
+    ).toBe(false);
+
+    expect(
+      RouteEnableRequestSchema.parse({
+        targetId: 'project-a',
+        name: 'frontend',
+        enabled: true,
+      }),
+    ).toEqual({
+      targetId: 'project-a',
+      name: 'frontend',
+      enabled: true,
+    });
+    expect(
+      RouteEnableRequestSchema.safeParse({
+        targetId: 'project-a',
+        name: '',
+        enabled: true,
+      }).success,
     ).toBe(false);
   });
 

@@ -17,9 +17,12 @@ import {
   removePackageVersion,
   removeRouteEntry,
   removeSkillVersion,
+  removeTarget,
   restoreHistorySnapshot,
+  setPackageEnabled,
   setPackageTag,
   setSkillTag,
+  setTargetEnabled,
   status,
   summarizeTargetSkills,
 } from '@skillink/core';
@@ -35,9 +38,12 @@ import {
   PackageTagRequestSchema,
   RollbackRequestSchema,
   RouteAddRequestSchema,
+  RouteEnableRequestSchema,
   RouteRemoveRequestSchema,
   SkillRemoveRequestSchema,
   SkillTagRequestSchema,
+  TargetEnableRequestSchema,
+  TargetRemoveRequestSchema,
 } from '../ipc-schemas.js';
 import type { DesktopSnapshot } from '../shared.js';
 import { assertTrustedSender, type SenderPolicy } from './sender-policy.js';
@@ -221,6 +227,33 @@ export function registerIpcHandlers(): void {
       targetId: request.targetId,
       name: request.name,
     });
+  });
+
+  handle('skillink:route-enable', async (_event, input: unknown) => {
+    const request = RouteEnableRequestSchema.parse(input);
+    return setPackageEnabled(
+      getSkillinkPaths(),
+      request.targetId,
+      request.name,
+      request.enabled,
+    );
+  });
+
+  handle('skillink:remove-target', async (_event, input: unknown) => {
+    const request = TargetRemoveRequestSchema.parse(input);
+    return removeTarget({
+      paths: getSkillinkPaths(),
+      id: request.id,
+    });
+  });
+
+  handle('skillink:target-enable', async (_event, input: unknown) => {
+    const request = TargetEnableRequestSchema.parse(input);
+    return setTargetEnabled(
+      getSkillinkPaths(),
+      request.id,
+      request.enabled,
+    );
   });
 
   handle('skillink:gc', async (_event, input: unknown) => {

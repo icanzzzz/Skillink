@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { GcReport, HistoryEntry } from '@skillink/core';
+import type { ApplyReport, GcReport, HistoryEntry } from '@skillink/core';
 import type {
   AddTargetRequest,
   CopyPackageRequest,
@@ -8,8 +8,12 @@ import type {
   PackageRemoveRequest,
   PackageTagRequest,
   RouteAddRequest,
+  RouteEnableRequest,
+  RouteRemoveRequest,
   SkillRemoveRequest,
   SkillTagRequest,
+  TargetEnableRequest,
+  TargetRemoveRequest,
 } from '../../ipc-schemas.js';
 import type { DesktopApi, DesktopSnapshot } from '../../shared.js';
 import { DoctorView } from './DoctorView.js';
@@ -56,6 +60,7 @@ export function App({ api }: AppProps) {
   const [snapshot, setSnapshot] = useState<DesktopSnapshot | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [gcReport, setGcReport] = useState<GcReport | null>(null);
+  const [applyReport, setApplyReport] = useState<ApplyReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -104,9 +109,33 @@ export function App({ api }: AppProps) {
     });
   }
 
+  function removeTarget(input: TargetRemoveRequest): void {
+    void runAction(async () => {
+      await client!.removeTarget(input);
+    });
+  }
+
+  function targetEnable(input: TargetEnableRequest): void {
+    void runAction(async () => {
+      await client!.targetEnable(input);
+    });
+  }
+
   function routeAdd(input: RouteAddRequest): void {
     void runAction(async () => {
       await client!.routeAdd(input);
+    });
+  }
+
+  function removeRoute(input: RouteRemoveRequest): void {
+    void runAction(async () => {
+      await client!.routeRemove(input);
+    });
+  }
+
+  function routeEnable(input: RouteEnableRequest): void {
+    void runAction(async () => {
+      await client!.routeEnable(input);
     });
   }
 
@@ -168,9 +197,20 @@ export function App({ api }: AppProps) {
     });
   }
 
-  function applyRoutes(): void {
+  function applyRoutes(options: { prune?: boolean } = {}): void {
     void runAction(async () => {
-      await client!.apply({});
+      const report = await client!.apply({ prune: options.prune });
+      setApplyReport(report);
+    });
+  }
+
+  function previewRoutes(options: { prune?: boolean } = {}): void {
+    void runAction(async () => {
+      const report = await client!.apply({
+        prune: options.prune,
+        dryRun: true,
+      });
+      setApplyReport(report);
     });
   }
 
@@ -212,7 +252,11 @@ export function App({ api }: AppProps) {
           </div>
           <div className="topbar-actions">
             {busy ? <span className="busy">Working…</span> : null}
-            <button className="primary" onClick={applyRoutes} disabled={busy}>
+            <button
+              className="primary"
+              onClick={() => applyRoutes()}
+              disabled={busy}
+            >
               Apply routes
             </button>
           </div>
@@ -227,11 +271,17 @@ export function App({ api }: AppProps) {
               targets={snapshot.route.targets}
               statusEntries={snapshot.status.entries}
               targetSkills={snapshot.targetSkills}
+              applyReport={applyReport}
               busy={busy}
               onBrowse={() => client?.chooseFolder() ?? null}
               onAddTarget={addTarget}
+              onRemoveTarget={removeTarget}
+              onTargetEnable={targetEnable}
               onRouteAdd={routeAdd}
+              onRemoveRoute={removeRoute}
+              onRouteEnable={routeEnable}
               onApply={applyRoutes}
+              onPreview={previewRoutes}
             />
           ) : view === 'skills' ? (
             <SkillsView

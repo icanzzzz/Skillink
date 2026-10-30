@@ -1,5 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import type { StatusEntry, TargetSkillSummary } from '@skillink/core';
+import type {
+  ApplyReport,
+  StatusEntry,
+  TargetSkillSummary,
+} from '@skillink/core';
 import type { TargetMode, TargetRoute } from '@skillink/shared';
 
 export interface AddTargetFormInput {
@@ -15,15 +19,45 @@ export interface RouteAddFormInput {
   requested: string;
 }
 
+export interface TargetRemoveFormInput {
+  id: string;
+}
+
+export interface TargetEnableFormInput {
+  id: string;
+  enabled: boolean;
+}
+
+export interface RouteRemoveFormInput {
+  targetId: string;
+  name: string;
+}
+
+export interface RouteEnableFormInput {
+  targetId: string;
+  name: string;
+  enabled: boolean;
+}
+
+export interface ApplyOptionsInput {
+  prune?: boolean;
+}
+
 export interface TargetsViewProps {
   targets: TargetRoute[];
   statusEntries?: StatusEntry[];
   targetSkills?: TargetSkillSummary[];
+  applyReport?: ApplyReport | null;
   busy?: boolean;
   onBrowse?: () => Promise<string | null> | string | null;
   onAddTarget?: (input: AddTargetFormInput) => void;
+  onRemoveTarget?: (input: TargetRemoveFormInput) => void;
+  onTargetEnable?: (input: TargetEnableFormInput) => void;
   onRouteAdd?: (input: RouteAddFormInput) => void;
-  onApply?: () => void;
+  onRemoveRoute?: (input: RouteRemoveFormInput) => void;
+  onRouteEnable?: (input: RouteEnableFormInput) => void;
+  onApply?: (options?: ApplyOptionsInput) => void;
+  onPreview?: (options?: ApplyOptionsInput) => void;
 }
 
 function packageCountLabel(count: number): string {
@@ -38,11 +72,17 @@ export function TargetsView({
   targets,
   statusEntries = [],
   targetSkills = [],
+  applyReport = null,
   busy = false,
   onBrowse,
   onAddTarget,
+  onRemoveTarget,
+  onTargetEnable,
   onRouteAdd,
+  onRemoveRoute,
+  onRouteEnable,
   onApply,
+  onPreview,
 }: TargetsViewProps) {
   const [targetPath, setTargetPath] = useState('');
   const [targetId, setTargetId] = useState('');
@@ -51,6 +91,7 @@ export function TargetsView({
   const [routeTarget, setRouteTarget] = useState(targets[0]?.id ?? '');
   const [routeName, setRouteName] = useState('');
   const [routeVersion, setRouteVersion] = useState('');
+  const [prune, setPrune] = useState(false);
 
   async function browse(): Promise<void> {
     const selected = await onBrowse?.();
@@ -106,6 +147,13 @@ export function TargetsView({
   const skillsByTarget = new Map(
     targetSkills.map((summary) => [summary.targetId, summary]),
   );
+  const assignments = targets.flatMap((target) =>
+    Object.entries(target.packages).map(([name, lock]) => ({
+      target,
+      name,
+      lock,
+    })),
+  );
 
   function targetStatus(targetIdValue: string): string {
     const entries = statusByTarget.get(targetIdValue);
@@ -126,13 +174,33 @@ export function TargetsView({
             <p className="eyebrow">ROUTES</p>
             <h2>Target directories</h2>
           </div>
-          <button
-            className="primary"
-            onClick={onApply}
-            disabled={busy || !onApply}
-          >
-            Apply routes
-          </button>
+          <div className="row-actions">
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={prune}
+                onChange={(event) => setPrune(event.target.checked)}
+                disabled={busy}
+              />
+              Prune
+            </label>
+            <button
+              className="secondary"
+              type="button"
+              onClick={() => onPreview?.({ prune })}
+              disabled={busy || !onPreview}
+            >
+              Preview apply
+            </button>
+            <button
+              className="primary"
+              type="button"
+              onClick={() => onApply?.({ prune })}
+              disabled={busy || !onApply}
+            >
+              Apply routes
+            </button>
+          </div>
         </div>
 
         {targets.length === 0 ? (
@@ -148,6 +216,7 @@ export function TargetsView({
               <span>Mode</span>
               <span>Packages</span>
               <span>Status</span>
+              <span>Actions</span>
             </div>
             {targets.map((target) => {
               const count = Object.keys(target.packages).length;
@@ -168,12 +237,131 @@ export function TargetsView({
                     {resolved?.error ? ' · unresolved' : ''}
                   </span>
                   <span>{targetStatus(target.id)}</span>
+                  <span className="row-actions">
+                    <button
+                      className="secondary"
+                      type="button"
+                      disabled={busy || !onTargetEnable}
+                      onClick={() =>
+                        onTargetEnable?.({
+                          id: target.id,
+                          enabled: !target.enabled,
+                        })
+                      }
+                    >
+                      {target.enabled ? 'Disable target' : 'Enable target'}
+                    </button>
+                    <button
+                      className="danger"
+                      type="button"
+                      disabled={busy || !onRemoveTarget}
+                      onClick={() => onRemoveTarget?.({ id: target.id })}
+                    >
+                      Remove target
+                    </button>
+                  </span>
                 </div>
               );
             })}
           </div>
         )}
       </section>
+
+      <section className="panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">PACKAGES</p>
+            <h2>Package assignments</h2>
+          </div>
+          <span className="count">{assignments.length}</span>
+        </div>
+
+        {assignments.length === 0 ? (
+          <p className="empty">No package assignments.</p>
+        ) : (
+          <div className="table">
+            <div className="table-row table-head">
+              <span>Target</span>
+              <span>Package</span>
+              <span>Version</span>
+              <span>Status</span>
+              <span>Actions</span>
+            </div>
+            {assignments.map(({ target, name, lock }) => (
+              <div className="table-row" key={`${target.id}/${name}`}>
+                <span>{target.label ?? target.id}</span>
+                <span>
+                  <code>{name}</code>
+                </span>
+                <span>{lock.resolved}</span>
+                <span>{lock.enabled === false ? 'disabled' : 'enabled'}</span>
+                <span className="row-actions">
+                  <button
+                    className="secondary"
+                    type="button"
+                    disabled={busy || !onRouteEnable}
+                    onClick={() =>
+                      onRouteEnable?.({
+                        targetId: target.id,
+                        name,
+                        enabled: lock.enabled === false,
+                      })
+                    }
+                  >
+                    {lock.enabled === false ? 'Enable route' : 'Disable route'}
+                  </button>
+                  <button
+                    className="danger"
+                    type="button"
+                    disabled={busy || !onRemoveRoute}
+                    onClick={() =>
+                      onRemoveRoute?.({ targetId: target.id, name })
+                    }
+                  >
+                    Remove route
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {applyReport ? (
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">APPLY</p>
+              <h2>{applyReport.dryRun ? 'Apply preview' : 'Apply result'}</h2>
+            </div>
+            <span className="count">
+              {applyReport.operations.length} operations ·{' '}
+              {applyReport.conflicts.length} conflicts
+            </span>
+          </div>
+          <p className="empty">
+            {applyReport.dryRun ? 'dry-run' : 'applied'}
+            {applyReport.ok ? ' · ok' : ' · needs attention'}
+          </p>
+          {applyReport.operations.map((operation, index) => (
+            <div
+              className="issue-row"
+              key={`${operation.kind}-${operation.name ?? operation.targetId}-${index}`}
+            >
+              <code>{operation.kind}</code>
+              <span>{operation.name ?? operation.targetId}</span>
+              <span className="path-value">{operation.path}</span>
+            </div>
+          ))}
+          {applyReport.conflicts.map((conflict, index) => (
+            <div className="issue-row" key={`conflict-${index}`}>
+              <code>conflict</code>
+              <span>{conflict.name}</span>
+              <span>{conflict.reason}</span>
+            </div>
+          ))}
+        </section>
+      ) : null}
 
       <div className="split">
         <section className="panel">
