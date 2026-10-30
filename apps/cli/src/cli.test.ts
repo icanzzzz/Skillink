@@ -179,4 +179,87 @@ describe('CLI', () => {
     expect(await runCli(['rollback', 'missing-snapshot'], ctx)).toBe(1);
     expect(ctx.err.join('\n')).toMatch(/history|snapshot|not found/i);
   });
+
+  it('tags and removes unreferenced library versions', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = path.join(root, 'source');
+    await mkdir(source, { recursive: true });
+    await writeFile(path.join(source, 'file.txt'), 'hello', 'utf8');
+    const ctx = context(home);
+
+    await runCli(['add', source, '--name', 'demo', '--version', '1.0.0'], ctx);
+    await runCli(['add', source, '--name', 'demo', '--version', '1.1.0'], ctx);
+
+    expect(await runCli(['library', 'tag', 'demo@1.0.0', 'stable'], ctx)).toBe(0);
+    const tagged = JSON.parse(
+      await readFile(path.join(home, 'skills.json'), 'utf8'),
+    ) as { packages: { demo: { tags: Record<string, string> } } };
+    expect(tagged.packages.demo.tags.stable).toBe('1.0.0');
+
+    expect(await runCli(['library', 'remove', 'demo@1.0.0'], ctx)).toBe(0);
+    const remaining = JSON.parse(
+      await readFile(path.join(home, 'skills.json'), 'utf8'),
+    ) as { packages: { demo: { versions: Record<string, unknown>; tags?: Record<string, string> } } };
+    expect(remaining.packages.demo.versions['1.0.0']).toBeUndefined();
+    expect(remaining.packages.demo.tags?.stable).toBeUndefined();
+    await expect(lstat(path.join(home, 'skills', 'demo', '1.0.0'))).rejects.toThrow();
+  });
+
+  it('refuses to remove a library version referenced by a route', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = path.join(root, 'source');
+    const targetPath = path.join(root, 'project', 'packages');
+    await mkdir(source, { recursive: true });
+    await writeFile(path.join(source, 'file.txt'), 'hello', 'utf8');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['add', source, '--name', 'demo', '--version', '1.0.0'], ctx);
+    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
+    await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
+
+    expect(await runCli(['library', 'remove', 'demo@1.0.0'], ctx)).toBe(1);
+    expect(ctx.err.join('\n')).toMatch(/VERSION_IN_USE|still used/i);
+  });
+
+  it('runs gc as a dry run by default and applies with --apply', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = path.join(root, 'source');
+    await mkdir(source, { recursive: true });
+    await writeFile(path.join(source, 'file.txt'), 'hello', 'utf8');
+    const ctx = context(home);
+
+    await runCli(['add', source, '--name', 'demo', '--version', '1.0.0'], ctx);
+
+    ctx.out.length = 0;
+    expect(await runCli(['gc', '--max-age-days', '0', '--json'], ctx)).toBe(0);
+    const dryRun = JSON.parse(ctx.out.join('\n')) as {
+      dryRun: boolean;
+      candidates: Array<{ name: string; version: string }>;
+      removed: unknown[];
+    };
+    expect(dryRun.dryRun).toBe(true);
+    expect(dryRun.candidates).toEqual([
+      expect.objectContaining({ name: 'demo', version: '1.0.0' }),
+    ]);
+    expect(dryRun.removed).toEqual([]);
+    await expect(lstat(path.join(home, 'skills', 'demo', '1.0.0'))).resolves.toBeDefined();
+
+    ctx.out.length = 0;
+    expect(
+      await runCli(['gc', '--apply', '--max-age-days', '0', '--json'], ctx),
+    ).toBe(0);
+    const applied = JSON.parse(ctx.out.join('\n')) as {
+      dryRun: boolean;
+      removed: Array<{ name: string; version: string }>;
+    };
+    expect(applied.dryRun).toBe(false);
+    expect(applied.removed).toEqual([
+      expect.objectContaining({ name: 'demo', version: '1.0.0' }),
+    ]);
+    await expect(lstat(path.join(home, 'skills', 'demo', '1.0.0'))).rejects.toThrow();
+  });
 });

@@ -9,6 +9,7 @@ export type SkillinkErrorCode =
   | 'TARGET_EXISTS'
   | 'TARGET_NOT_FOUND'
   | 'HISTORY_NOT_FOUND'
+  | 'VERSION_IN_USE'
   | 'UNMANAGED_CONFLICT'
   | 'LINK_FAILED'
   | 'IO_ERROR';

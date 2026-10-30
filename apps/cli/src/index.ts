@@ -13,13 +13,16 @@ import {
   addTarget,
   apply,
   doctor,
+  gc,
   importFolder,
   listHistory,
   readRouteFile,
   readSkillsFile,
+  removeLibraryVersion,
   removeRouteEntry,
   removeTarget,
   restoreHistorySnapshot,
+  setLibraryTag,
   status,
   writeRouteFile,
   writeSkillsFile,
@@ -135,6 +138,29 @@ export async function runCli(
       }
     }
   });
+
+  library
+    .command('tag')
+    .description('Tag a library version, for example latest or stable')
+    .argument('<package@version>', 'Package name and exact version')
+    .argument('<tag>', 'Tag name')
+    .action(async (spec: string, tag: string) => {
+      const paths = getSkillinkPaths(context.home);
+      const parsed = parsePackageSpec(spec);
+      await setLibraryTag(paths, parsed.name, parsed.requested, tag);
+      context.stdout(`Tagged ${parsed.name}@${parsed.requested} as ${tag}`);
+    });
+
+  library
+    .command('remove')
+    .description('Move an unreferenced library version to trash')
+    .argument('<package@version>', 'Package name and exact version')
+    .action(async (spec: string) => {
+      const paths = getSkillinkPaths(context.home);
+      const parsed = parsePackageSpec(spec);
+      await removeLibraryVersion(paths, parsed.name, parsed.requested);
+      context.stdout(`Removed ${parsed.name}@${parsed.requested}`);
+    });
 
   const addCommand = program
     .command('add')
@@ -282,6 +308,53 @@ export async function runCli(
       const removed = await removeRouteEntry({ paths, targetId, name });
       context.stdout(removed ? `Removed route ${targetId}/${name}` : 'No route found.');
     });
+
+  program
+    .command('gc')
+    .description('Remove unreferenced library versions (dry-run by default)')
+    .option('--apply', 'Move candidates to trash')
+    .option('--max-age-days <days>', 'Only collect versions older than this many days')
+    .option('--json', 'Print machine-readable JSON')
+    .action(
+      async (options: { apply?: boolean; maxAgeDays?: string; json?: boolean }) => {
+        const paths = getSkillinkPaths(context.home);
+        const maxAgeDays =
+          options.maxAgeDays === undefined ? undefined : Number(options.maxAgeDays);
+
+        if (
+          maxAgeDays !== undefined &&
+          (!Number.isFinite(maxAgeDays) || maxAgeDays < 0)
+        ) {
+          throw new SkillinkError(
+            'ROUTE_INVALID',
+            'max-age-days must be a non-negative number.',
+            { maxAgeDays: options.maxAgeDays },
+          );
+        }
+
+        const report = await gc(paths, {
+          dryRun: !options.apply,
+          maxAgeDays,
+        });
+
+        if (options.json) {
+          printJson(context, report);
+          return;
+        }
+
+        if (report.candidates.length === 0) {
+          context.stdout('No candidates.');
+          return;
+        }
+
+        for (const candidate of report.candidates) {
+          context.stdout(
+            `${report.dryRun ? '[dry-run] ' : 'removed  '}${candidate.name}@${candidate.version}  ${candidate.path}`,
+          );
+        }
+        context.stdout(`${report.freedBytes} bytes ${report.dryRun ? 'reclaimable' : 'reclaimed'}`);
+      },
+    );
 
   addCommonOptions(
     program.command('history').description('List route/library history snapshots'),
