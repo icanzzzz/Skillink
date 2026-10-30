@@ -133,6 +133,55 @@ describe('importSkill', () => {
     expect(second.integrity).toBe(first.integrity);
   });
 
+  it('rejects reuse when the existing content is missing', async () => {
+    const source = await makeSource();
+    const home = await tempDir('skillink-skill-home-');
+    const paths = getSkillinkPaths(home);
+
+    await importSkill({
+      sourceDir: source,
+      name: 'demo',
+      version: '1.0.0',
+      home,
+    });
+    await rm(getSkillDir(paths, 'demo', '1.0.0'), {
+      recursive: true,
+      force: true,
+    });
+
+    await expect(
+      importSkill({
+        sourceDir: source,
+        name: 'demo',
+        version: '1.0.0',
+        home,
+      }),
+    ).rejects.toMatchObject({ code: 'VERSION_NOT_FOUND' });
+  });
+
+  it('rejects reuse when the existing content has no SKILL.md', async () => {
+    const source = await makeSource();
+    const home = await tempDir('skillink-skill-home-');
+    const paths = getSkillinkPaths(home);
+
+    await importSkill({
+      sourceDir: source,
+      name: 'demo',
+      version: '1.0.0',
+      home,
+    });
+    await rm(path.join(getSkillDir(paths, 'demo', '1.0.0'), 'SKILL.md'));
+
+    await expect(
+      importSkill({
+        sourceDir: source,
+        name: 'demo',
+        version: '1.0.0',
+        home,
+      }),
+    ).rejects.toMatchObject({ code: 'SKILL_MD_MISSING' });
+  });
+
   it('rejects a different content snapshot under the same version', async () => {
     const source = await makeSource();
     const home = await tempDir('skillink-skill-home-');

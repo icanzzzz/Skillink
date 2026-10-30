@@ -1,5 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
+import { assertSafeSegment, assertSafeVersion } from './safe-path.js';
 
 export interface SkillinkPaths {
   home: string;
@@ -52,14 +53,7 @@ export function getSkillDir(
   name: string,
   version: string,
 ): string {
+  assertSafeSegment(name, 'skill name');
+  assertSafeVersion(version, 'skill version');
   return path.join(paths.libraryDir, name, version);
-}
-
-/** @deprecated use getSkillDir */
-export function getPackageDir(
-  paths: SkillinkPaths,
-  name: string,
-  version: string,
-): string {
-  return getSkillDir(paths, name, version);
 }

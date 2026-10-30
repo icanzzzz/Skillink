@@ -203,6 +203,18 @@ describe('removeSkillVersion', () => {
     expect((await readSkillFile(paths)).skills.demo).toBeUndefined();
   });
 
+  it('removes the empty skill parent directory when the last version is removed', async () => {
+    const { paths } = await setup();
+    await upsertDemo(paths);
+    const versionDir = getSkillDir(paths, 'demo', '1.0.0');
+    await mkdir(versionDir, { recursive: true });
+    await writeFile(path.join(versionDir, 'SKILL.md'), '# demo', 'utf8');
+
+    await removeSkillVersion(paths, 'demo', '1.0.0');
+
+    expect(await pathExists(path.join(paths.libraryDir, 'demo'))).toBe(false);
+  });
+
   it('refuses to remove a version referenced by a route package closure', async () => {
     const { paths } = await setup();
     await upsertDemo(paths);

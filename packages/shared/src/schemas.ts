@@ -1,4 +1,13 @@
 import { z } from 'zod';
+import { isSafeSegment, isSafeVersion } from './safe-path.js';
+
+export const SafeNameSchema = z
+  .string()
+  .refine(isSafeSegment, { message: 'Unsafe name or path segment.' });
+
+export const SafeVersionSchema = z
+  .string()
+  .refine(isSafeVersion, { message: 'Unsafe version or path segment.' });
 
 export const SkillVersionSchema = z.object({
   integrity: z.string().min(1),
@@ -10,20 +19,24 @@ export const SkillVersionSchema = z.object({
 
 export const SkillEntrySchema = z.object({
   description: z.string().optional(),
-  tags: z.record(z.string(), z.string()).optional(),
-  versions: z.record(z.string(), SkillVersionSchema),
+  tags: z.record(z.string().min(1), SafeVersionSchema).optional(),
+  versions: z.record(SafeVersionSchema, SkillVersionSchema),
 });
 
 export const SkillFileSchema = z.object({
   schemaVersion: z.literal(2),
-  skills: z.record(z.string(), SkillEntrySchema),
+  skills: z.record(SafeNameSchema, SkillEntrySchema),
 });
 
 export const PackageVersionSchema = z
   .object({
-    packages: z.record(z.string(), z.string()).optional().default({}),
-    skills: z.record(z.string(), z.string()).optional().default({}),
+    packages: z
+      .record(SafeNameSchema, SafeVersionSchema)
+      .optional()
+      .default({}),
+    skills: z.record(SafeNameSchema, SafeVersionSchema).optional().default({}),
   })
+  .strict()
   .refine(
     (value) =>
       Object.keys(value.packages).length + Object.keys(value.skills).length > 0,
@@ -33,8 +46,8 @@ export const PackageVersionSchema = z
 export const PackageEntrySchema = z
   .object({
     description: z.string().optional(),
-    tags: z.record(z.string(), z.string()).optional(),
-    versions: z.record(z.string(), PackageVersionSchema),
+    tags: z.record(z.string().min(1), SafeVersionSchema).optional(),
+    versions: z.record(SafeVersionSchema, PackageVersionSchema),
   })
   .refine((value) => Object.keys(value.versions).length > 0, {
     message: 'Package must contain at least one version.',
@@ -42,31 +55,37 @@ export const PackageEntrySchema = z
 
 export const PackageFileSchema = z.object({
   schemaVersion: z.literal(2),
-  packages: z.record(z.string(), PackageEntrySchema),
+  packages: z.record(SafeNameSchema, PackageEntrySchema),
 });
 
 export const TargetModeSchema = z.enum(['link', 'copy']);
 
-export const PackageLockSchema = z.object({
-  requested: z.string().optional(),
-  resolved: z.string().min(1),
-  integrity: z.string().min(1),
-  enabled: z.boolean().optional().default(true),
-});
+export const PackageLockSchema = z
+  .object({
+    requested: z.string().min(1).optional(),
+    resolved: SafeVersionSchema,
+    integrity: z.string().min(1),
+    enabled: z.boolean().optional().default(true),
+  })
+  .strict();
 
-export const TargetRouteSchema = z.object({
-  id: z.string().min(1),
-  label: z.string().optional(),
-  path: z.string().min(1),
-  mode: TargetModeSchema,
-  enabled: z.boolean().optional().default(true),
-  packages: z.record(z.string(), PackageLockSchema),
-});
+export const TargetRouteSchema = z
+  .object({
+    id: SafeNameSchema,
+    label: z.string().optional(),
+    path: z.string().min(1),
+    mode: TargetModeSchema,
+    enabled: z.boolean().optional().default(true),
+    packages: z.record(SafeNameSchema, PackageLockSchema),
+  })
+  .strict();
 
-export const RouteFileSchema = z.object({
-  schemaVersion: z.literal(2),
-  targets: z.array(TargetRouteSchema),
-});
+export const RouteFileSchema = z
+  .object({
+    schemaVersion: z.literal(2),
+    targets: z.array(TargetRouteSchema),
+  })
+  .strict();
 
 export type SkillVersion = z.infer<typeof SkillVersionSchema>;
 export type SkillEntry = z.infer<typeof SkillEntrySchema>;

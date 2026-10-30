@@ -2,7 +2,8 @@ import { lstat, mkdir, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
   SkillinkError,
-  getSkillDir,
+  assertSafeSegment,
+  assertSafeVersion,
   getSkillinkPaths,
   type PackageFile,
   type SkillinkPaths,
@@ -14,10 +15,14 @@ import {
   isManagedLink,
   removeLink,
 } from './links.js';
-import { assertSafeTargetPath, isSamePath } from './path-policy.js';
+import {
+  assertSafeTargetPath,
+  isPathInside,
+  isSamePath,
+} from './path-policy.js';
 import { readRouteFile } from './route.js';
 import { readPackageFile } from './package-store.js';
-import { readSkillFile } from './skill-store.js';
+import { assertSkillContent, readSkillFile } from './skill-store.js';
 import {
   computePackageIntegrity,
   resolvePackageGraph,
@@ -177,29 +182,33 @@ export async function apply(input: ApplyInput = {}): Promise<ApplyReport> {
     }
 
     for (const skill of desired.values()) {
-      const sourceDir = getSkillDir(paths, skill.name, skill.version);
-      const sourceStat = await stat(sourceDir).catch((error: unknown) => {
-        throw new SkillinkError(
-          'VERSION_NOT_FOUND',
-          `Skill content is missing: ${skill.name}@${skill.version}`,
-          {
-            name: skill.name,
-            version: skill.version,
-            sourceDir,
-          },
-          { cause: error },
-        );
-      });
+      assertSafeSegment(skill.name, 'skill name');
+      assertSafeVersion(skill.version, 'skill version');
+      const sourceDir = await assertSkillContent(
+        paths,
+        skill.name,
+        skill.version,
+      );
+      const destination = path.join(targetPath, skill.name);
 
-      if (!sourceStat.isDirectory()) {
+      if (
+        !isSamePath(sourceDir, paths.libraryDir) &&
+        !isPathInside(sourceDir, paths.libraryDir)
+      ) {
         throw new SkillinkError(
-          'VERSION_NOT_FOUND',
-          `Skill content is not a directory: ${skill.name}@${skill.version}`,
-          { name: skill.name, version: skill.version, sourceDir },
+          'UNSAFE_PATH',
+          `Skill source escapes the control plane: ${sourceDir}`,
+          { skill: skill.name, version: skill.version, sourceDir },
+        );
+      }
+      if (!isPathInside(destination, targetPath)) {
+        throw new SkillinkError(
+          'UNSAFE_PATH',
+          `Skill destination escapes the target: ${destination}`,
+          { skill: skill.name, targetPath, destination },
         );
       }
 
-      const destination = path.join(targetPath, skill.name);
       const inspection = await inspectPath(destination);
 
       if (inspection.kind === 'missing') {

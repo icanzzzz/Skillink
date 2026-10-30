@@ -17,6 +17,11 @@ import {
   resolvePackageGraph,
   validateAllPackages,
 } from './package-graph.js';
+import {
+  assertSafeTargetPath,
+  isPathInside,
+  isSamePath,
+} from './path-policy.js';
 import { status } from './status.js';
 
 export type DoctorIssueCode =
@@ -31,6 +36,7 @@ export type DoctorIssueCode =
   | 'PACKAGE_MISSING_VERSION'
   | 'UNUSED_PACKAGE_VERSION'
   | 'LINK_ISSUE'
+  | 'UNSAFE_PATH'
   | 'INVALID_CONFIG';
 
 export interface DoctorIssue {
@@ -179,6 +185,60 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
     };
   }
 
+  const targetIds = new Set<string>();
+  const resolvedTargetPaths: string[] = [];
+  for (const target of route.targets) {
+    if (targetIds.has(target.id)) {
+      issues.push({
+        code: 'INVALID_CONFIG',
+        message: `Duplicate target id: ${target.id}`,
+        targetId: target.id,
+      });
+    }
+    targetIds.add(target.id);
+
+    let resolvedTargetPath: string;
+    try {
+      resolvedTargetPath = assertSafeTargetPath(target.path, paths);
+    } catch (error) {
+      issues.push({
+        code:
+          error instanceof SkillinkError && error.code === 'UNSAFE_PATH'
+            ? 'UNSAFE_PATH'
+            : 'INVALID_CONFIG',
+        message: error instanceof Error ? error.message : String(error),
+        targetId: target.id,
+        path: target.path,
+      });
+      continue;
+    }
+
+    if (resolvedTargetPaths.some((other) => isSamePath(other, resolvedTargetPath))) {
+      issues.push({
+        code: 'INVALID_CONFIG',
+        message: `Duplicate target path: ${resolvedTargetPath}`,
+        targetId: target.id,
+        path: resolvedTargetPath,
+      });
+    }
+
+    for (const other of resolvedTargetPaths) {
+      if (
+        isPathInside(resolvedTargetPath, other) ||
+        isPathInside(other, resolvedTargetPath)
+      ) {
+        issues.push({
+          code: 'INVALID_CONFIG',
+          message: `Target paths are nested or overlapping: ${resolvedTargetPath}`,
+          targetId: target.id,
+          path: resolvedTargetPath,
+        });
+      }
+    }
+
+    resolvedTargetPaths.push(resolvedTargetPath);
+  }
+
   try {
     validateAllPackages(packageFile, skillFile);
   } catch (error) {
@@ -263,7 +323,16 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
     }
 
     const skillEntry = skillFile.skills[skillDirectory.name];
+    const versionDirectories = (
+      await readdir(path.join(paths.libraryDir, skillDirectory.name), {
+        withFileTypes: true,
+      }).catch(() => [])
+    ).filter((entry) => entry.isDirectory());
+
     if (!skillEntry) {
+      if (versionDirectories.length === 0) {
+        continue;
+      }
       issues.push({
         code: 'ORPHAN_CONTENT',
         message: `Library directory is not in skill.json: ${skillDirectory.name}`,
@@ -273,16 +342,7 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
       continue;
     }
 
-    const versionDirectories = await readdir(
-      path.join(paths.libraryDir, skillDirectory.name),
-      { withFileTypes: true },
-    ).catch(() => []);
-
     for (const versionDirectory of versionDirectories) {
-      if (!versionDirectory.isDirectory()) {
-        continue;
-      }
-
       if (!skillEntry.versions[versionDirectory.name]) {
         issues.push({
           code: 'ORPHAN_CONTENT',
@@ -338,7 +398,27 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
     }
 
     try {
-      resolvePackageGraph(
+      const allRoots = Object.entries(target.packages).map(([name, lock]) => ({
+        name,
+        version: lock.resolved,
+      }));
+      if (allRoots.length > 0) {
+        const allResolution = resolvePackageGraph(
+          packageFile,
+          skillFile,
+          allRoots,
+        );
+        for (const id of allResolution.packages.keys()) {
+          referencedPackages.add(id);
+        }
+      }
+    } catch {
+      // Broken or conflicting disabled locks are reported by the route checks
+      // above; they must not hide package usage accounting for valid roots.
+    }
+
+    try {
+      const resolution = resolvePackageGraph(
         packageFile,
         skillFile,
         Object.entries(target.packages)
@@ -348,6 +428,9 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
             version: lock.resolved,
           })),
       );
+      for (const id of resolution.packages.keys()) {
+        referencedPackages.add(id);
+      }
     } catch (error) {
       issues.push(issueFromGraphError(error, target.id));
     }

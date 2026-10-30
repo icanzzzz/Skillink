@@ -373,4 +373,71 @@ describe('apply', () => {
       code: 'VERSION_NOT_FOUND',
     });
   });
+
+  it('rejects a route whose skill content has no SKILL.md', async () => {
+    const { paths } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'pdf-pack',
+      requested: '1.0.0',
+    });
+    await rm(path.join(getSkillDir(paths, 'pdf', '1.0.0'), 'SKILL.md'));
+
+    await expect(apply({ paths })).rejects.toMatchObject({
+      code: 'SKILL_MD_MISSING',
+    });
+  });
+
+  it('rejects unsafe skill references before writing outside the target', async () => {
+    const { paths, targetPath } = await setup();
+    await writeFile(
+      paths.skillFile,
+      JSON.stringify({
+        schemaVersion: 2,
+        skills: {
+          '../victim': {
+            versions: {
+              '1.0.0': {
+                integrity: 'sha512-x',
+                fileCount: 1,
+                size: 1,
+              },
+            },
+          },
+        },
+      }),
+      'utf8',
+    );
+    await writeFile(
+      paths.packageFile,
+      JSON.stringify({
+        schemaVersion: 2,
+        packages: {
+          frontend: {
+            versions: {
+              '1.0.0': {
+                packages: {},
+                skills: { '../victim': '1.0.0' },
+              },
+            },
+          },
+        },
+      }),
+      'utf8',
+    );
+    const route = await readRouteFile(paths);
+    route.targets[0]!.packages.frontend = {
+      requested: '1.0.0',
+      resolved: '1.0.0',
+      integrity: 'sha256-x',
+      enabled: true,
+    };
+    await writeRouteFile(paths, route);
+
+    await expect(apply({ paths })).rejects.toThrow();
+    await expect(
+      lstat(path.join(targetPath, '..', 'victim')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
 });

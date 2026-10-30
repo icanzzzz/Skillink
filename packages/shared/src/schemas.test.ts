@@ -52,6 +52,30 @@ describe('skill file schema', () => {
 
     expect(result.success).toBe(false);
   });
+
+  it('rejects unsafe skill names and versions', () => {
+    expect(
+      SkillFileSchema.safeParse({
+        schemaVersion: 2,
+        skills: {
+          '../victim': {
+            versions: { '1.0.0': skillVersion },
+          },
+        },
+      }).success,
+    ).toBe(false);
+
+    expect(
+      SkillFileSchema.safeParse({
+        schemaVersion: 2,
+        skills: {
+          pdf: {
+            versions: { '..': skillVersion },
+          },
+        },
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe('package file schema', () => {
@@ -123,6 +147,19 @@ describe('package file schema', () => {
       expect(result.error.issues[0]?.message).toContain('at least one version');
     }
   });
+
+  it('rejects unsafe package dependency names and versions', () => {
+    expect(
+      PackageFileSchema.safeParse(
+        packageFile({ packages: {}, skills: { '../victim': '1.0.0' } }),
+      ).success,
+    ).toBe(false);
+    expect(
+      PackageFileSchema.safeParse(
+        packageFile({ packages: { base: '..' }, skills: {} }),
+      ).success,
+    ).toBe(false);
+  });
 });
 
 describe('route file schema', () => {
@@ -162,6 +199,23 @@ describe('route file schema', () => {
           id: 'project-a',
           path: 'C:/Projects/ProjectA/skills',
           mode: 'link',
+          skills: {},
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a route that carries both packages and a legacy skills key', () => {
+    const result = RouteFileSchema.safeParse({
+      schemaVersion: 2,
+      targets: [
+        {
+          id: 'project-a',
+          path: 'C:/Projects/ProjectA/skills',
+          mode: 'link',
+          packages: {},
           skills: {},
         },
       ],

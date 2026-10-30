@@ -205,6 +205,69 @@ describe('CLI', () => {
     ).toBe('1.1.0');
   });
 
+  it('parses repeated skill/package options and drop options', async () => {
+    const home = await tempDir('skillink-cli-');
+    const source = await makeSkillSource();
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    for (const name of ['pdf', 'review']) {
+      await runCli(
+        ['skill', 'add', source, '--name', name, '--version', '1.0.0'],
+        ctx,
+      );
+    }
+    await runCli(
+      ['package', 'create', 'base@1.0.0', '--skill', 'review@1.0.0'],
+      ctx,
+    );
+
+    expect(
+      await runCli(
+        [
+          'package',
+          'create',
+          'frontend@1.0.0',
+          '--skill',
+          'pdf@1.0.0',
+          '--skill',
+          'review@1.0.0',
+          '--package',
+          'base@1.0.0',
+        ],
+        ctx,
+      ),
+    ).toBe(0);
+
+    const packageFile = await readJson(path.join(home, 'package.json'));
+    expect(packageFile.packages.frontend.versions['1.0.0']).toEqual({
+      packages: { base: '1.0.0' },
+      skills: { pdf: '1.0.0', review: '1.0.0' },
+    });
+
+    expect(
+      await runCli(
+        [
+          'package',
+          'copy',
+          'frontend@1.0.0',
+          'frontend@1.1.0',
+          '--drop-skill',
+          'review',
+          '--drop-package',
+          'base',
+        ],
+        ctx,
+      ),
+    ).toBe(0);
+
+    const copied = await readJson(path.join(home, 'package.json'));
+    expect(copied.packages.frontend.versions['1.1.0']).toEqual({
+      packages: {},
+      skills: { pdf: '1.0.0' },
+    });
+  });
+
   it('rejects a skill version conflict at route add', async () => {
     const root = await tempDir('skillink-cli-');
     const home = path.join(root, 'home');

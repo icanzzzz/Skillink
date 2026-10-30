@@ -822,7 +822,7 @@ git commit -m "feat: snapshot and restore all three config files"
   - `skill.json.skills.demo.versions['1.0.0']` 存在，无 `source`。
   - `package.json.packages.demo.versions['1.0.0'].skills.demo === '1.0.0'`。
   - 新 route `targets[0].packages.demo.resolved === '1.0.0'`，integrity 为 `sha256-`。
-  - 旧 `skills.json` 移入 `trash/migrate-*`。
+  - 旧 `skills.json` 移入 `trash/<timestamp>/`。
 - 旧 package 有多个版本 -> 新 package 多版本。
 - 旧 target 有多个 skill -> 每个生成同名 package。
 - 旧 package 的 `description` 和 `tags` 同时出现在新 skill 条目和新 package 条目。
@@ -846,7 +846,7 @@ git commit -m "feat: snapshot and restore all three config files"
   - package 版本 `skills` 为 `{ <name>: <version> }`；
   - route `requested` 原样保留，`resolved` 取旧 lock，`integrity` 用 `computePackageIntegrity`。
 - 校验新 package 图（`validateAllPackages`）。
-- 先把旧 `skills.json` 复制到 `trash/migrate-<timestamp>/skills.json`，再写三个新文件。
+- 先把旧 `skills.json` 复制到 `trash/<timestamp>/skills.json`，再写三个新文件。
 - 任一写入失败：删除已写的新文件，保留旧 `skills.json` 和旧 route。
 - 成功后旧 `skills.json` 从控制面移除（已在 trash 中保留）。
 

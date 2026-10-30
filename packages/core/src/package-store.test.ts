@@ -1,8 +1,9 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  getSkillDir,
   getSkillinkPaths,
   type PackageFile,
   type SkillFile,
@@ -48,6 +49,13 @@ async function seedSkills(
         size: 1,
         built: false,
       };
+      const directory = getSkillDir(paths, name, version);
+      await mkdir(directory, { recursive: true });
+      await writeFile(
+        path.join(directory, 'SKILL.md'),
+        `# ${name} ${version}`,
+        'utf8',
+      );
     }
   }
 
@@ -250,6 +258,39 @@ describe('createPackageVersion', () => {
     ).rejects.toMatchObject({ code: 'PACKAGE_NOT_FOUND' });
   });
 
+  it('rejects a skill dependency whose content is missing', async () => {
+    const paths = await setup();
+    await seedSkills(paths, { pdf: ['1.0.0'] });
+    await rm(getSkillDir(paths, 'pdf', '1.0.0'), {
+      recursive: true,
+      force: true,
+    });
+
+    await expect(
+      createPackageVersion({
+        paths,
+        name: 'bad',
+        version: '1.0.0',
+        skills: { pdf: '1.0.0' },
+      }),
+    ).rejects.toMatchObject({ code: 'VERSION_NOT_FOUND' });
+  });
+
+  it('rejects a skill dependency without SKILL.md', async () => {
+    const paths = await setup();
+    await seedSkills(paths, { pdf: ['1.0.0'] });
+    await rm(path.join(getSkillDir(paths, 'pdf', '1.0.0'), 'SKILL.md'));
+
+    await expect(
+      createPackageVersion({
+        paths,
+        name: 'bad',
+        version: '1.0.0',
+        skills: { pdf: '1.0.0' },
+      }),
+    ).rejects.toMatchObject({ code: 'SKILL_MD_MISSING' });
+  });
+
   it('rejects self-cycles and transitive skill conflicts', async () => {
     const paths = await setup();
     await seedSkills(paths, { pdf: ['1.0.0', '2.0.0'] });
@@ -304,6 +345,24 @@ describe('createPackageVersion', () => {
         skills: { pdf: '1.0.0' },
       }),
     ).rejects.toMatchObject({ code: 'PACKAGE_EXISTS' });
+  });
+
+  it('does not create package.json when create rejects a cycle', async () => {
+    const paths = await setup();
+    await seedSkills(paths, { pdf: ['1.0.0'] });
+
+    await expect(
+      createPackageVersion({
+        paths,
+        name: 'self',
+        version: '1.0.0',
+        packages: { self: '1.0.0' },
+      }),
+    ).rejects.toMatchObject({ code: 'PACKAGE_CYCLE' });
+
+    await expect(readFile(paths.packageFile, 'utf8')).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
   });
 
   it('creates a history snapshot before writing', async () => {
@@ -386,6 +445,44 @@ describe('copyPackageVersion', () => {
       packages: { base: '2.0.0' },
       skills: { pdf: '1.3.0', review: '1.0.0' },
     });
+  });
+
+  it('rejects a copy that introduces a cycle or skill conflict without changing package.json', async () => {
+    const paths = await setup();
+    await seedFrontend(paths);
+    const beforeCycle = await readFile(paths.packageFile, 'utf8');
+
+    await expect(
+      copyPackageVersion({
+        paths,
+        sourceName: 'frontend',
+        sourceVersion: '1.0.0',
+        targetName: 'frontend',
+        targetVersion: '2.0.0',
+        packageOverrides: { frontend: '2.0.0' },
+      }),
+    ).rejects.toMatchObject({ code: 'PACKAGE_CYCLE' });
+    expect(await readFile(paths.packageFile, 'utf8')).toBe(beforeCycle);
+
+    await createPackageVersion({
+      paths,
+      name: 'pdf-base',
+      version: '1.0.0',
+      skills: { pdf: '1.3.0' },
+    });
+    const beforeConflict = await readFile(paths.packageFile, 'utf8');
+
+    await expect(
+      copyPackageVersion({
+        paths,
+        sourceName: 'frontend',
+        sourceVersion: '1.0.0',
+        targetName: 'frontend',
+        targetVersion: '1.1.0',
+        packageOverrides: { 'pdf-base': '1.0.0' },
+      }),
+    ).rejects.toMatchObject({ code: 'SKILL_VERSION_CONFLICT' });
+    expect(await readFile(paths.packageFile, 'utf8')).toBe(beforeConflict);
   });
 
   it('drops direct skills and packages', async () => {

@@ -27,6 +27,7 @@ import {
   readRouteFile,
   writeRouteFile,
 } from './route.js';
+import { removeSkillVersion } from './skill-store.js';
 import { addTarget } from './target.js';
 
 const tempDirs: string[] = [];
@@ -103,6 +104,55 @@ describe('doctor', () => {
     expect(report.ok).toBe(true);
   });
 
+  it('does not report nested packages as unused', async () => {
+    const { paths } = await setup();
+    await createPackageVersion({
+      paths,
+      name: 'base',
+      version: '1.0.0',
+      skills: { review: '1.0.0' },
+    });
+    await createPackageVersion({
+      paths,
+      name: 'nested',
+      version: '1.0.0',
+      packages: { base: '1.0.0' },
+      skills: { pdf: '1.0.0' },
+    });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'nested',
+      requested: '1.0.0',
+    });
+    await apply({ paths });
+
+    const report = await doctor({ paths });
+
+    expect(
+      report.issues.filter((issue) => issue.code === 'UNUSED_PACKAGE_VERSION'),
+    ).toEqual([]);
+    expect(report.ok).toBe(true);
+  });
+
+  it('reports an unsafe target path', async () => {
+    const { paths } = await setup();
+    const route = await readRouteFile(paths);
+    route.targets[0]!.path = path.parse(paths.home).root;
+    await writeRouteFile(paths, route);
+
+    const report = await doctor({ paths });
+
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'UNSAFE_PATH',
+          targetId: 'project-a',
+        }),
+      ]),
+    );
+  });
+
   it('reports missing skill content', async () => {
     const { paths } = await setup();
     await rm(getSkillDir(paths, 'pdf', '1.0.0'), {
@@ -146,6 +196,20 @@ describe('doctor', () => {
         expect.objectContaining({ code: 'SKILL_MD_MISSING', name: 'pdf' }),
       ]),
     );
+  });
+
+  it('does not report an empty removed skill directory as orphan', async () => {
+    const { paths } = await setup();
+    await importSkillVersion(paths.home, 'temp', '1.0.0');
+    await removeSkillVersion(paths, 'temp', '1.0.0');
+
+    const report = await doctor({ paths });
+
+    expect(
+      report.issues.filter(
+        (issue) => issue.code === 'ORPHAN_CONTENT' && issue.name === 'temp',
+      ),
+    ).toEqual([]);
   });
 
   it('reports a package that references a missing skill', async () => {

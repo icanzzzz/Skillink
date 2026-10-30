@@ -1,14 +1,20 @@
 import { mkdir, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { getSkillDir, type SkillinkPaths } from '@skillink/shared';
+import {
+  SkillinkError,
+  getSkillDir,
+  type SkillinkPaths,
+} from '@skillink/shared';
 import {
   createTrashDirectory,
   readSkillFile,
+  removeEmptySkillParent,
   writeSkillFile,
 } from './skill-store.js';
 import { readPackageFile } from './package-store.js';
 import { readRouteFile } from './route.js';
 import { resolvePackageGraph } from './package-graph.js';
+import { isPathInside } from './path-policy.js';
 import { withHistory } from './history.js';
 
 export interface GcOptions {
@@ -159,12 +165,24 @@ export async function gc(
     const skillFile = await readSkillFile(paths);
     const trashDirectory = await createTrashDirectory(paths);
     const moved: Array<{ source: string; destination: string }> = [];
+    const removedSkillNames = new Set<string>();
 
     try {
       for (const candidate of candidates) {
         const skillEntry = skillFile.skills[candidate.name];
         if (!skillEntry?.versions[candidate.version]) {
           continue;
+        }
+
+        if (
+          !isPathInside(candidate.path, paths.libraryDir) &&
+          candidate.path !== paths.libraryDir
+        ) {
+          throw new SkillinkError(
+            'UNSAFE_PATH',
+            `GC candidate escapes the skill library: ${candidate.path}`,
+            { name: candidate.name, version: candidate.version },
+          );
         }
 
         const destination = path.join(
@@ -187,6 +205,7 @@ export async function gc(
 
         if (Object.keys(remainingVersions).length === 0) {
           delete skillFile.skills[candidate.name];
+          removedSkillNames.add(candidate.name);
         } else {
           const tags = Object.fromEntries(
             Object.entries(skillEntry.tags ?? {}).filter(
@@ -204,6 +223,9 @@ export async function gc(
       }
 
       await writeSkillFile(paths, skillFile);
+      for (const name of removedSkillNames) {
+        await removeEmptySkillParent(paths, name);
+      }
     } catch (error) {
       for (const item of moved.reverse()) {
         await mkdir(path.dirname(item.source), { recursive: true });

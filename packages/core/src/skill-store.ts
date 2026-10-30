@@ -1,4 +1,4 @@
-import { lstat, mkdir, rename, stat } from 'node:fs/promises';
+import { lstat, mkdir, rename, rmdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
   PackageFileSchema,
@@ -34,6 +34,47 @@ export function getSkillVersion(
   version: string,
 ): SkillVersion | undefined {
   return file.skills[name]?.versions[version];
+}
+
+export async function assertSkillContent(
+  paths: SkillinkPaths,
+  name: string,
+  version: string,
+): Promise<string> {
+  const directory = getSkillDir(paths, name, version);
+  const info = await stat(directory).catch((error: unknown) => {
+    if (isNodeError(error) && error.code === 'ENOENT') {
+      return undefined;
+    }
+    throw error;
+  });
+
+  if (!info?.isDirectory()) {
+    throw new SkillinkError(
+      'VERSION_NOT_FOUND',
+      `Skill content is missing: ${name}@${version}`,
+      { name, version, path: directory },
+    );
+  }
+
+  const hasSkillMd = await stat(path.join(directory, 'SKILL.md'))
+    .then((entry) => entry.isFile())
+    .catch((error: unknown) => {
+      if (isNodeError(error) && error.code === 'ENOENT') {
+        return false;
+      }
+      throw error;
+    });
+
+  if (!hasSkillMd) {
+    throw new SkillinkError(
+      'SKILL_MD_MISSING',
+      `Skill content has no SKILL.md: ${name}@${version}`,
+      { name, version, path: directory },
+    );
+  }
+
+  return directory;
 }
 
 export interface UpsertSkillVersionInput {
@@ -123,6 +164,13 @@ export async function createTrashDirectory(
 
 function safeTimestamp(timestamp: number): string {
   return new Date(timestamp).toISOString().replaceAll(':', '-');
+}
+
+export async function removeEmptySkillParent(
+  paths: SkillinkPaths,
+  name: string,
+): Promise<void> {
+  await rmdir(path.join(paths.libraryDir, name)).catch(() => undefined);
 }
 
 async function moveToTrash(
@@ -281,6 +329,9 @@ export async function removeSkillVersion(
 
     try {
       await writeSkillFile(paths, current);
+      if (!current.skills[name]) {
+        await removeEmptySkillParent(paths, name);
+      }
     } catch (error) {
       if (moved) {
         await mkdir(path.dirname(source), { recursive: true });

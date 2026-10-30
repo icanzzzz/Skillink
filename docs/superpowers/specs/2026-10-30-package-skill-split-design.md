@@ -112,7 +112,7 @@ route.json       target -> package@version
 
 - `skill.json` 取代原 `skills.json`。
 - `package.json`、`route.json`、`skill.json` 三者同级，都是全局配置，不是每个包目录里的文件。
-- 旧 `skills.json` 在迁移后移入 `trash/migrate-<timestamp>/skills.json`。
+- 旧 `skills.json` 在迁移后移入 `trash/<timestamp>/skills.json`。
 
 ### 4.2 route.json
 
@@ -400,7 +400,7 @@ skillink route add <target> <package>@<range-or-tag>
    - description 两边都保留，便于 GUI 展示。
 5. 为每个旧 package 生成同名 package，版本一一对应，每个 package 版本的 `skills` 为 `{ <name>: <version> }`。
 6. 旧 route 的 `targets[].skills` 映射为 `targets[].packages`，`requested` 原样保留（包括 tag），并计算 package 传递闭包哈希。
-7. 写入三个新文件；旧 `skills.json` 移入 `trash/migrate-<timestamp>/`。
+7. 写入三个新文件；旧 `skills.json` 移入 `trash/<timestamp>/`。
 8. 迁移失败时保持旧文件不变。
 
 没有旧文件时，`init` 创建三个空文件。

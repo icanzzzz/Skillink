@@ -1,8 +1,9 @@
-import { mkdir, mkdtemp, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  getSkillDir,
   getSkillinkPaths,
   type PackageFile,
   type SkillFile,
@@ -42,6 +43,13 @@ async function seedSkills(
         size: 1,
         built: false,
       };
+      const directory = getSkillDir(paths, name, version);
+      await mkdir(directory, { recursive: true });
+      await writeFile(
+        path.join(directory, 'SKILL.md'),
+        `# ${name} ${version}`,
+        'utf8',
+      );
     }
   }
 

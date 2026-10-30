@@ -9,7 +9,7 @@ target -> package -> skill -> 实体内容
 - **Skill 是唯一安装单位，也是唯一实体**：内容存放在 `%USERPROFILE%\.agents\skillink\skills\<skill>\<version>\`，根目录必须有 `SKILL.md`。
 - **Package 只是配置文件**：`package.json` 描述 package 版本如何组合 skill 和其他 package；它没有内容目录，也不会投影到 target。
 - **Route 只依赖 package**：`route.json` 的 target 声明 package 版本，不直接声明 skill。
-- **Target 最终只包含 skill**：apply 会把 package 图展开为 skill 集合，再链接/复制 skill 文件夹。
+- **Target 最终只包含 skill**：apply 会把 package 图展开为 skill 集合，再链接 skill 文件夹（MVP 只实现 link；copy 模式保留明确错误）。
 - **三个全局配置**：`route.json`、`package.json`、`skill.json` 同级，均位于控制面。
 - **可复现**：route 锁定 package 版本；package 版本锁定精确 skill/package 版本；package 使用传递闭包哈希校验。
 - **不在项目中生成配置**：target 是普通目录，只放投影结果。

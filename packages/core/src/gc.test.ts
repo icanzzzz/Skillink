@@ -220,6 +220,8 @@ describe('garbage collection', () => {
     expect(report.removed).toHaveLength(3);
     expect(report.freedBytes).toBeGreaterThan(0);
     expect(await pathExists(getSkillDir(paths, 'pdf', '1.0.0'))).toBe(false);
+    expect(await pathExists(path.join(paths.libraryDir, 'pdf'))).toBe(false);
+    expect(await pathExists(path.join(paths.libraryDir, 'review'))).toBe(false);
     expect((await readSkillFile(paths)).skills).toEqual({});
     expect((await readdir(paths.trashDir)).length).toBeGreaterThan(0);
     expect((await readPackageFile(paths)).packages.frontend).toBeDefined();

@@ -22,4 +22,13 @@ describe('Skillink paths', () => {
       path.join(paths.libraryDir, 'pdf', '1.0.0'),
     );
   });
+
+  it('rejects unsafe skill name and version segments', () => {
+    const paths = getSkillinkPaths('C:/tmp/skillink-home');
+
+    expect(() => getSkillDir(paths, '../victim', '1.0.0')).toThrowError(
+      /unsafe/i,
+    );
+    expect(() => getSkillDir(paths, 'pdf', '..')).toThrowError(/unsafe/i);
+  });
 });

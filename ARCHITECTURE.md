@@ -495,7 +495,7 @@ ok | missing | wrong-version | broken-link | conflict | unmanaged | extra | disa
 3. 旧 package -> 新 skill + 同名 package；
 4. 旧 description/tags 同时复制到 skill 和 package；
 5. 旧 route `requested` 原样保留，`resolved` 取旧 lock；
-6. 旧 `skills.json` 备份到 `trash/migrate-*`；
+6. 旧 `skills.json` 备份到 `trash/<timestamp>/skills.json`；
 7. 写入三个新文件；失败时删除新文件并恢复旧 route；
 8. 成功后移除旧 `skills.json`。
 

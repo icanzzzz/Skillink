@@ -248,6 +248,20 @@ describe('history snapshots', () => {
     expect(await readSkillFile(paths)).toEqual(skillBefore);
   });
 
+  it('refuses to restore when snapshot content has no SKILL.md and no trash copy', async () => {
+    const { paths } = await setup();
+    await importSkillVersion(paths.home, 'demo', '1.0.0');
+    const snapshot = await createHistorySnapshot(paths, 'with-content');
+    await rm(path.join(getSkillDir(paths, 'demo', '1.0.0'), 'SKILL.md'));
+    const skillBefore = await readSkillFile(paths);
+
+    await expect(
+      restoreHistorySnapshot(paths, snapshot.id),
+    ).rejects.toMatchObject({ code: 'VERSION_NOT_FOUND' });
+
+    expect(await readSkillFile(paths)).toEqual(skillBefore);
+  });
+
   it('ignores and cannot restore old v1 snapshots', async () => {
     const { paths } = await setup();
     const oldSnapshot = path.join(paths.historyDir, 'old-v1');

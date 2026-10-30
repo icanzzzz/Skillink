@@ -84,6 +84,26 @@ describe('targets', () => {
     ).rejects.toThrow(/target/i);
   });
 
+  it('rejects nested target paths', async () => {
+    const { paths, targetPath } = await setup();
+    await addTarget({ paths, id: 'project-a', path: targetPath });
+
+    await expect(
+      addTarget({
+        paths,
+        id: 'project-b',
+        path: path.join(targetPath, 'nested'),
+      }),
+    ).rejects.toMatchObject({ code: 'TARGET_EXISTS' });
+    await expect(
+      addTarget({
+        paths,
+        id: 'project-c',
+        path: path.dirname(targetPath),
+      }),
+    ).rejects.toMatchObject({ code: 'TARGET_EXISTS' });
+  });
+
   it('rejects a target inside the control plane', async () => {
     const { paths } = await setup();
 

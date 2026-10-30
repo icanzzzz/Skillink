@@ -25,7 +25,7 @@ export function HistoryView({
         <div className="panel-heading">
           <div>
             <p className="eyebrow">HISTORY</p>
-            <h2>Route and library snapshots</h2>
+            <h2>Route, package, and skill snapshots</h2>
           </div>
           <label className="checkbox">
             <input
@@ -39,7 +39,8 @@ export function HistoryView({
 
         {entries.length === 0 ? (
           <p className="empty">
-            No history yet. Route and library changes create snapshots automatically.
+            No history yet. Route, package, and skill changes create snapshots
+            automatically.
           </p>
         ) : (
           <div className="history-list">

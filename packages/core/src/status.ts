@@ -119,6 +119,19 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
       }
     }
 
+    if (!target.enabled) {
+      entries.push({
+        targetId: target.id,
+        targetPath,
+        name: '<target>',
+        version: '',
+        state: 'disabled',
+        path: targetPath,
+        detail: 'Target is disabled.',
+      });
+      continue;
+    }
+
     const enabledLocks = Object.entries(target.packages).filter(
       ([, lock]) => lock.enabled !== false,
     );

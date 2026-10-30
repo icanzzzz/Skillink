@@ -307,4 +307,30 @@ describe('status', () => {
       ]),
     );
   });
+
+  it('marks a disabled target as disabled and keeps the report healthy', async () => {
+    const { paths } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'combo',
+      requested: '1.0.0',
+    });
+    const route = await readRouteFile(paths);
+    route.targets[0]!.enabled = false;
+    await writeRouteFile(paths, route);
+
+    const report = await status({ paths });
+
+    expect(report.healthy).toBe(true);
+    expect(report.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: '<target>',
+          state: 'disabled',
+          targetId: 'project-a',
+        }),
+      ]),
+    );
+  });
 });

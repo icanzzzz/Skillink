@@ -216,6 +216,24 @@ async function directoryIsDirectory(directory: string): Promise<boolean> {
     });
 }
 
+async function isFile(filePath: string): Promise<boolean> {
+  return stat(filePath)
+    .then((info) => info.isFile())
+    .catch((error: unknown) => {
+      if (isNodeError(error) && error.code === 'ENOENT') {
+        return false;
+      }
+      throw error;
+    });
+}
+
+async function isSkillContent(directory: string): Promise<boolean> {
+  return (
+    (await directoryIsDirectory(directory)) &&
+    (await isFile(path.join(directory, 'SKILL.md')))
+  );
+}
+
 async function findTrashCopy(
   paths: SkillinkPaths,
   name: string,
@@ -241,7 +259,7 @@ async function findTrashCopy(
       name,
       version,
     );
-    if (await directoryIsDirectory(candidate)) {
+    if (await isSkillContent(candidate)) {
       return candidate;
     }
   }
@@ -260,7 +278,7 @@ async function planContentRestores(
     for (const version of Object.keys(skillEntry.versions)) {
       const destination = getSkillDir(paths, name, version);
 
-      if (await directoryIsDirectory(destination)) {
+      if (await isSkillContent(destination)) {
         continue;
       }
 
@@ -365,6 +383,7 @@ export async function restoreHistorySnapshot(
 
   for (const restore of restores) {
     await mkdir(path.dirname(restore.destination), { recursive: true });
+    await rm(restore.destination, { recursive: true, force: true });
     try {
       await rename(restore.source, restore.destination);
     } catch (error) {

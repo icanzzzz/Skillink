@@ -15,7 +15,11 @@ import {
   getSkillinkPaths,
 } from '@skillink/shared';
 import { scanFolder } from './folder-scan.js';
-import { readSkillFile, upsertSkillVersion } from './skill-store.js';
+import {
+  assertSkillContent,
+  readSkillFile,
+  upsertSkillVersion,
+} from './skill-store.js';
 import {
   assertSafePackageName,
   createAutoVersion,
@@ -79,6 +83,7 @@ export async function importSkill(
 
   if (existing) {
     if (existing.integrity === scan.integrity) {
+      await assertSkillContent(paths, name, version);
       return {
         name,
         version,

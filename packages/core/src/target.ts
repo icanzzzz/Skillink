@@ -6,7 +6,7 @@ import {
   type TargetRoute,
 } from '@skillink/shared';
 import { assertSafePackageName } from './package-name.js';
-import { assertSafeTargetPath, isSamePath } from './path-policy.js';
+import { assertSafeTargetPath, isPathInside, isSamePath } from './path-policy.js';
 import { readRouteFile, writeRouteFile } from './route.js';
 import { withHistory } from './history.js';
 
@@ -40,10 +40,17 @@ export async function addTarget(input: AddTargetInput): Promise<TargetRoute> {
     });
   }
 
-  if (route.targets.some((target) => isSamePath(target.path, targetPath))) {
+  if (
+    route.targets.some(
+      (target) =>
+        isSamePath(target.path, targetPath) ||
+        isPathInside(targetPath, target.path) ||
+        isPathInside(target.path, targetPath),
+    )
+  ) {
     throw new SkillinkError(
       'TARGET_EXISTS',
-      `A target already uses path "${targetPath}".`,
+      `A target already uses or overlaps path "${targetPath}".`,
       { path: targetPath },
     );
   }

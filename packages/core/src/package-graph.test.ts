@@ -247,6 +247,28 @@ describe('resolvePackageGraph', () => {
     ).toThrowError(/a@1\.0\.0 -> b@1\.0\.0 -> c@1\.0\.0 -> a@1\.0\.0/);
   });
 
+  it('rejects a cycle through different versions of the same package', () => {
+    const file = packages({
+      a: {
+        '1.0.0': packageVersion({ packages: { a: '2.0.0' } }),
+        '2.0.0': packageVersion({ packages: { a: '1.0.0' } }),
+      },
+    });
+
+    expect(
+      errorCode(() =>
+        resolvePackageGraph(file, skills({}), [
+          { name: 'a', version: '1.0.0' },
+        ]),
+      ),
+    ).toBe('PACKAGE_CYCLE');
+    expect(() =>
+      resolvePackageGraph(file, skills({}), [
+        { name: 'a', version: '1.0.0' },
+      ]),
+    ).toThrowError(/a@1\.0\.0 -> a@2\.0\.0 -> a@1\.0\.0/);
+  });
+
   it('allows the same package name at different versions without a cycle', () => {
     const file = packages({
       frontend: {

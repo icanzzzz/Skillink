@@ -12,8 +12,11 @@ import {
 } from '@skillink/shared';
 import { readJsonFile, writeJsonAtomic } from './json-store.js';
 import { withHistory } from './history.js';
-import { readSkillFile } from './skill-store.js';
-import { validateAllPackages } from './package-graph.js';
+import { assertSkillContent, readSkillFile } from './skill-store.js';
+import {
+  resolvePackageGraph,
+  validateAllPackages,
+} from './package-graph.js';
 import { assertSafePackageName, normalizeVersion } from './package-name.js';
 
 export async function readPackageFile(
@@ -168,6 +171,12 @@ export async function createPackageVersion(
   };
 
   validateAllPackages(candidate, skillFile);
+  const resolution = resolvePackageGraph(candidate, skillFile, [
+    { name, version },
+  ]);
+  for (const skill of resolution.skills.values()) {
+    await assertSkillContent(input.paths, skill.name, skill.version);
+  }
 
   await withHistory(input.paths, 'create-package-version', async () => {
     await writePackageFile(input.paths, candidate);
@@ -268,6 +277,12 @@ export async function copyPackageVersion(
   };
 
   validateAllPackages(candidate, skillFile);
+  const resolution = resolvePackageGraph(candidate, skillFile, [
+    { name: targetName, version: targetVersion },
+  ]);
+  for (const skill of resolution.skills.values()) {
+    await assertSkillContent(input.paths, skill.name, skill.version);
+  }
 
   await withHistory(input.paths, 'copy-package-version', async () => {
     await writePackageFile(input.paths, candidate);
