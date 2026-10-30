@@ -392,7 +392,9 @@ skillink package create <name>@<version> \
 
 - 校验 package 名/版本；
 - 校验每个 skill/package 依赖存在；
+- 校验每个 skill 版本的内容目录存在且根目录有 `SKILL.md`；
 - DFS 校验环、缺失引用、skill 冲突；
+- 失败时不写 `package.json`；
 - 写入 `package.json`；
 - package 版本不可变。
 
@@ -419,6 +421,8 @@ skillink route add <target-id> <package@range-or-tag>
 ```
 
 - target 只创建 skill 链接/副本，不创建 package 目录；
+- 每个 skill 源目录必须存在，且根目录有 `SKILL.md`；
+- skill 名/版本必须是安全路径段，源/目标路径必须保持在库和 target 内；
 - `--prune` 只删除受管且不再需要的 skill 链接；
 - 未托管同名内容永不覆盖；
 - MVP `mode: copy` 在需要投影时返回明确错误；
@@ -434,6 +438,7 @@ ok | missing | wrong-version | broken-link | conflict | unmanaged | extra | disa
 
 - package 解析失败时输出 package 级错误；
 - `extra` 只报告受管但不在期望集合中的链接；
+- disabled target 输出 `<target>` disabled，不参与链接健康判断；
 - `healthy` 要求所有条目为 `ok` 或 `disabled`。
 
 ### 6.6 Doctor
@@ -441,6 +446,7 @@ ok | missing | wrong-version | broken-link | conflict | unmanaged | extra | disa
 检查：
 
 - 三个文件 schema；
+- target id 唯一、path 安全且不重复/不嵌套；
 - package 版本非空；
 - package 引用的 skill/package 存在；
 - package 图无环、无 skill 冲突；
@@ -448,10 +454,10 @@ ok | missing | wrong-version | broken-link | conflict | unmanaged | extra | disa
 - route lock 的传递闭包哈希一致；
 - skill 内容目录存在，根目录有 `SKILL.md`；
 - skill.json 与 `skills/` 目录一一对应；
-- 孤儿目录、缺失条目；
+- 孤儿目录、缺失条目；删除后留下的空 skill 父目录不报 orphan；
 - 同一 target 内 skill 版本冲突；
 - 链接健康状态；
-- 未被 route 引用的 package 版本（`UNUSED_PACKAGE_VERSION`）。
+- 未被 route 引用的 package 版本（`UNUSED_PACKAGE_VERSION`）；嵌套 package 通过传递闭包算作已引用。
 
 `doctor` 不自动删除任何内容。
 
@@ -477,7 +483,7 @@ ok | missing | wrong-version | broken-link | conflict | unmanaged | extra | disa
 - 快照目录：`history/<timestamp>/{route.json,package.json,skill.json,meta.json}`；
 - `meta.json` 包含 `format: 2`；
 - 回滚前校验 package 图和 route lock；
-- skill 内容缺失时优先从 `trash/` 恢复，找不到则拒绝回滚；
+- skill 内容目录必须存在且含 `SKILL.md`；缺失时优先从 `trash/` 恢复，找不到则拒绝回滚；
 - 写入顺序：`skill.json` -> `package.json` -> `route.json`；
 - 旧 v1 快照不列出、不可回滚。
 
@@ -517,12 +523,56 @@ skillink apply|status|doctor|gc|history|rollback
 
 `add` 是 `skill add` 的顶层别名。
 
+**JSON 输出**
+
+以下命令支持 `--json`：
+
+```text
+skill list
+package list
+target list
+route list
+apply
+status
+doctor
+gc
+history
+rollback
+```
+
+写命令（`skill add`、`package create`、`package copy`、`target add`、`route add`、`skill/package tag/remove` 等）默认输出人类可读文本；AI 通过退出码判断成功，再用对应的 `list` / `status` / `doctor --json` 查询状态。
+
+**AI 调用闭环**
+
+```text
+init / migrate
+  -> skill list --json / package list --json
+  -> skill add
+  -> package create / package copy
+  -> target list --json（需要时 target add）
+  -> route add
+  -> apply --dry-run --json
+  -> apply
+  -> status --json / doctor --json
+```
+
+失败分支：
+
+```text
+SKILL_VERSION_CONFLICT -> package copy -> route add -> apply
+drift / missing       -> apply
+需要回退               -> history --json -> rollback <id> --apply
+清理                   -> package remove / skill remove / gc --json -> gc --apply
+```
+
+隔离环境使用 `SKILLINK_HOME` 指定控制面。
+
 退出码：
 
 - `0` 成功；
-- `1` 一般错误；
+- `1` 一般错误 / unhealthy / 参数解析错误；
 - `3` apply 冲突；
-- 其他非零由参数解析错误产生。
+- `route add` 的 `SKILL_VERSION_CONFLICT` 当前返回 `1`，stderr 包含 `error [SKILL_VERSION_CONFLICT]`。
 
 ### 7.2 GUI
 
@@ -542,9 +592,12 @@ skillink apply|status|doctor|gc|history|rollback
 | 威胁 | 对策 |
 |---|---|
 | 导入路径异常 | 规范化路径；拒绝系统目录；限制文件数/大小 |
+| 配置中的恶意 name/version | `SafeNameSchema` / `SafeVersionSchema`；`getSkillDir` 断言安全路径段；apply/GC 做库/target 包含检查 |
+| target 路径不安全/重复/嵌套 | `assertSafeTargetPath`；doctor 检查重复、重叠；`addTarget` 拒绝嵌套 |
 | 源目录符号链接 | MVP 直接拒绝 |
 | 恶意 package 图 | DFS 环检测、生命周期校验 |
-| route 手工篡改 | 传递闭包哈希、apply/doctor 校验 |
+| route 手工篡改 | 严格 schema、传递闭包哈希、apply/doctor 校验 |
+| package/skill 内容缺失 | `assertSkillContent`：目录存在且根目录有 `SKILL.md` |
 | 删除未托管内容 | 只删除受管链接/副本；默认不 prune |
 | 版本库被篡改 | 只读约定、integrity 校验、doctor 检查 |
 | 配置损坏 | schema 校验、原子写、历史快照、交叉校验 |
@@ -576,6 +629,8 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 
 ## 10. 测试策略
 
+当前验证：28 个测试文件、212 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
+
 | 层级 | 内容 |
 |---|---|
 | 单元测试 | schema、package 图、环检测、skill 冲突、路径策略、链接计划、历史、GC、迁移 |
@@ -589,14 +644,28 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 
 1. 没有 `SKILL.md` 的文件夹导入失败；
 2. package 版本为空失败；
-3. 自环、两节点环、三节点环被捕获；
+3. 自环、两节点环、三节点环、同名跨版本环被捕获；
 4. 同一 skill 同版本去重；
 5. 同一 skill 不同版本在 route add 和 apply 都失败；
-6. package copy 通过 override 解决冲突；
+6. package copy 通过 override 解决冲突，且引入环/冲突时 `package.json` 不变；
 7. target 只出现 skill 目录；
 8. 删除未托管内容被拒绝；
 9. 三文件历史回滚；
-10. v1 迁移遇到无 `SKILL.md` 条目整体失败，旧文件不变。
+10. v1 迁移遇到无 `SKILL.md` 条目整体失败，旧文件不变；
+11. 配置中的 `../` name/version 被拒绝，apply/GC 不写到 target/库之外；
+12. 嵌套 package 不被 doctor 误报 unused；
+13. 删除最后一个 skill 版本和 GC 后不留下空 orphan 目录；
+14. 重复/不安全/嵌套 target 被 doctor/addTarget 拒绝；
+15. CLI 重复 `--skill`/`--package` 和 drop 选项可用；
+16. 迁移和 skill 删除在写入失败时回滚内容/旧文件。
+
+### 10.1 已知限制
+
+- `mode: copy` 投影尚未实现，会在 apply 时返回明确错误；
+- apply 在校验失败前可能先创建空 target 目录；
+- 暂不解析 `SKILL.md` frontmatter 为 description/metadata；
+- history restore 三文件写入不是完全事务性的；
+- TargetsView 只显示 package 数，未显示解析出的 skill 数。
 
 ---
 
@@ -613,7 +682,21 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 9. `gc` 只回收未被 route/tag 引用的 skill 版本；
 10. `history` 快照包含三个文件，回滚同时恢复；
 11. `migrate` 能从 v1 迁移，失败时旧文件不变；
-12. `pnpm test`、`pnpm typecheck`、`pnpm build` 通过。
+12. `pnpm test`、`pnpm typecheck`、`pnpm build` 通过；
+13. 配置中的不安全 name/version 被拒绝，apply/GC 不越出库或 target；
+14. doctor 能报告不安全/重复/嵌套 target，嵌套 package 不被误报 unused；
+15. 删除最后一个 skill 版本和 GC 后不留下空 orphan 目录；
+16. package create/copy、apply、import 复用、history restore 都要求 `SKILL.md`；
+17. CLI 能完成 init -> skill add -> package create -> target add -> route add -> apply -> status/doctor -> package copy/rollback/gc 的调用闭环。
+
+---
+
+### 11.1 当前实现验证
+
+- `pnpm test`：28 个测试文件、212 个测试通过；
+- `pnpm typecheck`：通过；
+- `pnpm build`：CLI 与 Electron 桌面端构建成功；
+- 真实 CLI E2E：skill 安装、package 创建/复制、target/route、apply、status/doctor、冲突修复、history/rollback、gc dry-run 均跑通。
 
 ---
 
@@ -630,3 +713,5 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 | 无 package copy | `package copy` 解决 skill 版本冲突 |
 | 历史快照两文件 | 历史快照三文件 |
 | 旧 `skills.json` | `skillink migrate` 全有或全无迁移 |
+| 配置 name/version 未做路径校验 | `SafeNameSchema`/`SafeVersionSchema` + apply/GC 包含检查 |
+| package/skill 内容存在性校验较弱 | `assertSkillContent` 强制目录 + `SKILL.md` |
