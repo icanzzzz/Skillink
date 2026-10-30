@@ -17,17 +17,19 @@ async function tempDir(prefix: string): Promise<string> {
 async function setup() {
   const root = await tempDir('skillink-target-');
   const paths = getSkillinkPaths(path.join(root, 'home'));
-  const targetPath = path.join(root, 'project', 'packages');
+  const targetPath = path.join(root, 'project', 'skills');
   await mkdir(targetPath, { recursive: true });
   return { root, paths, targetPath };
 }
 
 afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  await Promise.all(
+    tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+  );
 });
 
 describe('targets', () => {
-  it('adds a target with a user-provided path', async () => {
+  it('adds a target with an empty package route', async () => {
     const { paths, targetPath } = await setup();
 
     const target = await addTarget({
@@ -42,7 +44,7 @@ describe('targets', () => {
       id: 'project-a',
       path: targetPath,
       mode: 'link',
-      skills: {},
+      packages: {},
     });
     const route = await readRouteFile(paths);
     expect(route.targets).toHaveLength(1);
@@ -99,10 +101,12 @@ describe('targets', () => {
     await writeFile(path.join(targetPath, 'keep.txt'), 'keep', 'utf8');
     await addTarget({ paths, id: 'project-a', path: targetPath });
 
-    await expect(removeTarget({ paths, id: 'project-a' })).resolves.toMatchObject({
-      id: 'project-a',
-    });
-    await expect(readFile(path.join(targetPath, 'keep.txt'), 'utf8')).resolves.toBe('keep');
+    await expect(
+      removeTarget({ paths, id: 'project-a' }),
+    ).resolves.toMatchObject({ id: 'project-a' });
+    await expect(
+      readFile(path.join(targetPath, 'keep.txt'), 'utf8'),
+    ).resolves.toBe('keep');
     const route = await readRouteFile(paths);
     expect(route.targets).toHaveLength(0);
   });

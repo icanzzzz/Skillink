@@ -1,17 +1,19 @@
-import semver from 'semver';
 import {
   RouteFileSchema,
   SkillinkError,
   createEmptyRouteFile,
-  type LibraryVersion,
+  type PackageLock,
   type RouteFile,
-  type SkillLock,
   type SkillinkPaths,
-  type SkillsFile,
   type TargetRoute,
 } from '@skillink/shared';
 import { readJsonFile, writeJsonAtomic } from './json-store.js';
-import { readSkillsFile } from './library.js';
+import { readPackageFile, resolvePackageVersion } from './package-store.js';
+import { readSkillFile } from './skill-store.js';
+import {
+  computePackageIntegrity,
+  resolvePackageGraph,
+} from './package-graph.js';
 import { withHistory } from './history.js';
 
 export async function readRouteFile(paths: SkillinkPaths): Promise<RouteFile> {
@@ -32,56 +34,6 @@ export function findTarget(
   return route.targets.find((target) => target.id === targetId);
 }
 
-export interface ResolvedLibraryVersion {
-  version: string;
-  entry: LibraryVersion;
-}
-
-export function resolveLibraryVersion(
-  library: SkillsFile,
-  name: string,
-  requested: string,
-): ResolvedLibraryVersion {
-  const packageEntry = library.packages[name];
-
-  if (!packageEntry) {
-    throw new SkillinkError(
-      'PACKAGE_NOT_FOUND',
-      `Package "${name}" is not in the public library.`,
-      { name },
-    );
-  }
-
-  const versions = Object.keys(packageEntry.versions);
-  const taggedVersion = packageEntry.tags?.[requested];
-  const directVersion = packageEntry.versions[requested] ? requested : undefined;
-  const rangeVersion =
-    taggedVersion || directVersion
-      ? undefined
-      : semver.maxSatisfying(versions, requested);
-
-  const resolved = taggedVersion ?? directVersion ?? rangeVersion;
-
-  if (!resolved) {
-    throw new SkillinkError(
-      'VERSION_NOT_FOUND',
-      `Version "${requested}" of package "${name}" is not available.`,
-      { name, requested, available: versions },
-    );
-  }
-
-  const entry = packageEntry.versions[resolved];
-  if (!entry) {
-    throw new SkillinkError(
-      'VERSION_NOT_FOUND',
-      `Version "${resolved}" of package "${name}" is missing from skills.json.`,
-      { name, resolved },
-    );
-  }
-
-  return { version: resolved, entry };
-}
-
 export interface AddRouteEntryInput {
   paths: SkillinkPaths;
   targetId: string;
@@ -91,11 +43,13 @@ export interface AddRouteEntryInput {
 
 export async function addRouteEntry(
   input: AddRouteEntryInput,
-): Promise<SkillLock> {
+): Promise<PackageLock> {
   const route = await readRouteFile(input.paths);
-  const target = findTarget(route, input.targetId);
+  const targetIndex = route.targets.findIndex(
+    (target) => target.id === input.targetId,
+  );
 
-  if (!target) {
+  if (targetIndex === -1) {
     throw new SkillinkError(
       'TARGET_NOT_FOUND',
       `Target "${input.targetId}" does not exist.`,
@@ -103,18 +57,45 @@ export async function addRouteEntry(
     );
   }
 
-  const library = await readSkillsFile(input.paths);
-  const resolved = resolveLibraryVersion(library, input.name, input.requested);
+  const target = route.targets[targetIndex]!;
+  const packageFile = await readPackageFile(input.paths);
+  const skillFile = await readSkillFile(input.paths);
+  const resolved = resolvePackageVersion(
+    packageFile,
+    input.name,
+    input.requested,
+  );
 
-  const lock: SkillLock = {
+  const lock: PackageLock = {
     requested: input.requested,
     resolved: resolved.version,
-    integrity: resolved.entry.integrity,
-    source: resolved.entry.source,
+    integrity: computePackageIntegrity(packageFile, [
+      { name: input.name, version: resolved.version },
+    ]),
     enabled: true,
   };
 
-  target.skills[input.name] = lock;
+  const candidate: TargetRoute = {
+    ...target,
+    packages: {
+      ...target.packages,
+      [input.name]: lock,
+    },
+  };
+
+  resolvePackageGraph(
+    packageFile,
+    skillFile,
+    Object.entries(candidate.packages)
+      .filter(([, packageLock]) => packageLock.enabled !== false)
+      .map(([name, packageLock]) => ({
+        name,
+        version: packageLock.resolved,
+      })),
+  );
+
+  route.targets[targetIndex] = candidate;
+
   await withHistory(input.paths, 'add-route-entry', async () => {
     await writeRouteFile(input.paths, route);
   });
@@ -142,11 +123,11 @@ export async function removeRouteEntry(
     );
   }
 
-  if (!(input.name in target.skills)) {
+  if (!(input.name in target.packages)) {
     return false;
   }
 
-  delete target.skills[input.name];
+  delete target.packages[input.name];
   await withHistory(input.paths, 'remove-route-entry', async () => {
     await writeRouteFile(input.paths, route);
   });

@@ -54,7 +54,7 @@ export async function addTarget(input: AddTargetInput): Promise<TargetRoute> {
     path: targetPath,
     mode: input.mode ?? 'link',
     enabled: true,
-    skills: {},
+    packages: {},
   };
 
   await withHistory(input.paths, 'add-target', async () => {
