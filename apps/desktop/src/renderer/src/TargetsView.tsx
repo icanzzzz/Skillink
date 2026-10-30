@@ -2,9 +2,10 @@ import { useState, type FormEvent } from 'react';
 import type {
   ApplyReport,
   StatusEntry,
+  TargetMode,
+  TargetRoute,
   TargetSkillSummary,
 } from '@skillink/shared';
-import type { TargetMode, TargetRoute } from '@skillink/shared';
 
 export interface AddTargetFormInput {
   path: string;

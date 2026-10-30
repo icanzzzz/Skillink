@@ -140,7 +140,9 @@ describe('CLI adapter', () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'skillink-adapter-'));
     const home = path.join(root, 'home');
     const source = path.join(root, 'source');
+    const targetPath = path.join(root, 'target');
     await mkdir(source, { recursive: true });
+    await mkdir(targetPath, { recursive: true });
     await writeFile(path.join(source, 'SKILL.md'), '# pdf', 'utf8');
     await writeFile(path.join(source, 'file.txt'), 'hello', 'utf8');
 
@@ -148,19 +150,50 @@ describe('CLI adapter', () => {
     try {
       const adapter = createCliAdapter();
 
+      for (const name of ['pdf', 'review']) {
+        await adapter.invoke([
+          'skill',
+          'add',
+          source,
+          '--name',
+          name,
+          '--version',
+          '1.0.0',
+        ]);
+      }
       await adapter.invoke([
-        'skill',
-        'add',
-        source,
-        '--name',
-        'pdf',
-        '--version',
-        '1.0.0',
+        'package',
+        'create',
+        'demo@1.0.0',
+        '--skill',
+        'pdf@1.0.0',
+        'review@1.0.0',
       ]);
+      await adapter.invoke([
+        'target',
+        'add',
+        targetPath,
+        '--id',
+        'project-a',
+      ]);
+      await adapter.invoke(['route', 'add', 'project-a', 'demo@1.0.0']);
+      await adapter.invoke(['apply']);
+
       const snapshot = await adapter.snapshot();
 
       expect(snapshot.home).toBe(path.resolve(home));
       expect(snapshot.skills.skills.pdf).toBeDefined();
+      expect(snapshot.targetSkills).toEqual([
+        {
+          targetId: 'project-a',
+          skills: [
+            { name: 'pdf', version: '1.0.0' },
+            { name: 'review', version: '1.0.0' },
+          ],
+        },
+      ]);
+      expect(snapshot.status.healthy).toBe(true);
+      expect(snapshot.doctor.ok).toBe(true);
     } finally {
       vi.unstubAllEnvs();
       await rm(root, { recursive: true, force: true });

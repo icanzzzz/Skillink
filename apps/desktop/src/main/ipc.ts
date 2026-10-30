@@ -7,7 +7,6 @@ import type {
   ImportSkillResult,
   PackageLock,
   PackageVersion,
-  SnapshotReport,
   TargetRoute,
 } from '@skillink/shared';
 import {
@@ -91,9 +90,7 @@ export function registerIpcHandlers(
     });
   };
 
-  handle('skillink:snapshot', () =>
-    cli.snapshot() satisfies Promise<SnapshotReport>,
-  );
+  handle('skillink:snapshot', () => cli.snapshot());
   handle('skillink:choose-folder', (event) => chooseFolder(event));
 
   handle('skillink:apply', async (_event, input: unknown) => {

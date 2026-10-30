@@ -767,4 +767,40 @@ describe('CLI', () => {
       error: { code: 'COPY_MODE_UNSUPPORTED' },
     });
   });
+
+  it('keeps status JSON on stdout when the report is unhealthy', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    await runCli(
+      ['skill', 'add', source, '--name', 'pdf', '--version', '1.0.0'],
+      ctx,
+    );
+    await runCli(
+      ['package', 'create', 'demo@1.0.0', '--skill', 'pdf@1.0.0'],
+      ctx,
+    );
+    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
+    await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
+
+    ctx.out.length = 0;
+    ctx.err.length = 0;
+    expect(await runCli(['status', '--json'], ctx)).toBe(1);
+    const report = JSON.parse(ctx.out.join('\n')) as {
+      healthy: boolean;
+      entries: Array<{ name: string; state: string }>;
+    };
+    expect(report.healthy).toBe(false);
+    expect(report.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'pdf', state: 'missing' }),
+      ]),
+    );
+    expect(ctx.err.join('\n')).toBe('');
+  });
 });
