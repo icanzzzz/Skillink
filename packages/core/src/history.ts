@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import {
@@ -9,9 +9,18 @@ import {
   createEmptyPackageFile,
   createEmptyRouteFile,
   createEmptySkillFile,
+  getSkillDir,
+  type PackageFile,
+  type RouteFile,
+  type SkillFile,
   type SkillinkPaths,
 } from '@skillink/shared';
 import { readJsonFile, writeJsonAtomic } from './json-store.js';
+import {
+  computePackageIntegrity,
+  resolvePackageGraph,
+  validateAllPackages,
+} from './package-graph.js';
 
 export interface HistoryEntry {
   id: string;
@@ -186,6 +195,121 @@ export async function listHistory(
   });
 }
 
+interface ContentRestore {
+  source: string;
+  destination: string;
+}
+
+interface MissingContent {
+  name: string;
+  version: string;
+}
+
+async function directoryIsDirectory(directory: string): Promise<boolean> {
+  return stat(directory)
+    .then((info) => info.isDirectory())
+    .catch((error: unknown) => {
+      if (isNodeError(error) && error.code === 'ENOENT') {
+        return false;
+      }
+      throw error;
+    });
+}
+
+async function findTrashCopy(
+  paths: SkillinkPaths,
+  name: string,
+  version: string,
+): Promise<string | undefined> {
+  const directories = await readdir(paths.trashDir, {
+    withFileTypes: true,
+  }).catch((error: unknown) => {
+    if (isNodeError(error) && error.code === 'ENOENT') {
+      return [];
+    }
+    throw error;
+  });
+
+  const newestFirst = directories
+    .filter((directory) => directory.isDirectory())
+    .sort((left, right) => right.name.localeCompare(left.name));
+
+  for (const directory of newestFirst) {
+    const candidate = path.join(
+      paths.trashDir,
+      directory.name,
+      name,
+      version,
+    );
+    if (await directoryIsDirectory(candidate)) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
+async function planContentRestores(
+  paths: SkillinkPaths,
+  skills: SkillFile,
+): Promise<{ restores: ContentRestore[]; missing: MissingContent[] }> {
+  const restores: ContentRestore[] = [];
+  const missing: MissingContent[] = [];
+
+  for (const [name, skillEntry] of Object.entries(skills.skills)) {
+    for (const version of Object.keys(skillEntry.versions)) {
+      const destination = getSkillDir(paths, name, version);
+
+      if (await directoryIsDirectory(destination)) {
+        continue;
+      }
+
+      const source = await findTrashCopy(paths, name, version);
+      if (source) {
+        restores.push({ source, destination });
+      } else {
+        missing.push({ name, version });
+      }
+    }
+  }
+
+  return { restores, missing };
+}
+
+function validateSnapshot(
+  route: RouteFile,
+  packages: PackageFile,
+  skills: SkillFile,
+): void {
+  validateAllPackages(packages, skills);
+
+  for (const target of route.targets) {
+    for (const [name, lock] of Object.entries(target.packages)) {
+      const expected = computePackageIntegrity(packages, [
+        { name, version: lock.resolved },
+      ]);
+      if (expected !== lock.integrity) {
+        throw new SkillinkError(
+          'PACKAGE_INTEGRITY_MISMATCH',
+          `History snapshot route lock does not match package.json: ${name}@${lock.resolved}`,
+          { name, version: lock.resolved, targetId: target.id },
+        );
+      }
+    }
+
+    resolvePackageGraph(
+      packages,
+      skills,
+      Object.entries(target.packages)
+        .filter(([, lock]) => lock.enabled !== false)
+        .map(([name, lock]) => ({
+          name,
+          version: lock.resolved,
+        })),
+    );
+  }
+}
+
 export async function restoreHistorySnapshot(
   paths: SkillinkPaths,
   id: string,
@@ -202,11 +326,66 @@ export async function restoreHistorySnapshot(
     );
   }
 
-  throw new SkillinkError(
-    'HISTORY_NOT_FOUND',
-    `History restore is not implemented yet for snapshot "${id}".`,
-    { id },
-  );
+  let route: RouteFile;
+  let packages: PackageFile;
+  let skills: SkillFile;
+  try {
+    route = RouteFileSchema.parse(
+      JSON.parse(await readFile(path.join(snapshotPath, 'route.json'), 'utf8')),
+    );
+    packages = PackageFileSchema.parse(
+      JSON.parse(
+        await readFile(path.join(snapshotPath, 'package.json'), 'utf8'),
+      ),
+    );
+    skills = SkillFileSchema.parse(
+      JSON.parse(await readFile(path.join(snapshotPath, 'skill.json'), 'utf8')),
+    );
+  } catch (error) {
+    throw new SkillinkError(
+      'HISTORY_NOT_FOUND',
+      `History snapshot "${id}" is incomplete or invalid.`,
+      { id, snapshotPath },
+      { cause: error },
+    );
+  }
+
+  validateSnapshot(route, packages, skills);
+
+  const { restores, missing } = await planContentRestores(paths, skills);
+  if (missing.length > 0) {
+    throw new SkillinkError(
+      'VERSION_NOT_FOUND',
+      `Cannot restore history snapshot "${id}": skill content is missing and was not found in trash.`,
+      { id, missing },
+    );
+  }
+
+  await createHistorySnapshot(paths, `restore:${id}`);
+
+  for (const restore of restores) {
+    await mkdir(path.dirname(restore.destination), { recursive: true });
+    try {
+      await rename(restore.source, restore.destination);
+    } catch (error) {
+      throw new SkillinkError(
+        'IO_ERROR',
+        `Failed to restore skill content: ${restore.destination}`,
+        {
+          snapshotId: id,
+          source: restore.source,
+          destination: restore.destination,
+        },
+        { cause: error },
+      );
+    }
+  }
+
+  // Write in dependency order so the route never points at a config that is
+  // not yet on disk.
+  await writeJsonAtomic(paths.skillFile, skills, SkillFileSchema);
+  await writeJsonAtomic(paths.packageFile, packages, PackageFileSchema);
+  await writeJsonAtomic(paths.routeFile, route, RouteFileSchema);
 }
 
 export async function withHistory<T>(
