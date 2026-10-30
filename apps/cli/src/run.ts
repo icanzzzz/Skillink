@@ -206,18 +206,31 @@ export async function runCli(
   program
     .command('init')
     .description('Initialize the Skillink control plane')
-    .action(async () => {
+    .option('--json', 'Print machine-readable JSON')
+    .action(async (options: { json?: boolean }) => {
       const paths = getSkillinkPaths(context.home);
       await ensureDirectories(paths);
 
       if (await pathExists(paths.skillsFile)) {
         if (await pathExists(paths.skillFile)) {
           await writeInitialFiles(paths);
+          if (options.json) {
+            printJson(context, {
+              ok: true,
+              home: paths.home,
+              migrated: false,
+            });
+            return;
+          }
           context.stdout(`Initialized ${paths.home}`);
           return;
         }
 
         const result = await migrateV1ToV2(paths);
+        if (options.json) {
+          printJson(context, { ok: true, home: paths.home, ...result });
+          return;
+        }
         context.stdout(
           `Migrated ${result.skillCount} skills, ${result.packageCount} packages, ` +
             `${result.targetCount} targets to ${paths.home}`,
@@ -226,16 +239,26 @@ export async function runCli(
       }
 
       await writeInitialFiles(paths);
+      if (options.json) {
+        printJson(context, { ok: true, home: paths.home, migrated: false });
+        return;
+      }
       context.stdout(`Initialized ${paths.home}`);
     });
 
   program
     .command('migrate')
     .description('Migrate v1 skills.json data to skill.json and package.json')
-    .action(async () => {
+    .option('--json', 'Print machine-readable JSON')
+    .action(async (options: { json?: boolean }) => {
       const paths = getSkillinkPaths(context.home);
       await ensureDirectories(paths);
       const result = await migrateV1ToV2(paths);
+
+      if (options.json) {
+        printJson(context, { ok: true, home: paths.home, ...result });
+        return;
+      }
 
       if (!result.migrated) {
         context.stdout('No v1 skills.json found.');

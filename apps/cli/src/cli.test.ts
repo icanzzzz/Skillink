@@ -82,6 +82,29 @@ describe('CLI', () => {
     });
   });
 
+  it('prints init and migrate results as JSON', async () => {
+    const home = await tempDir('skillink-cli-');
+    const ctx = context(home);
+
+    expect(await runCli(['init', '--json'], ctx)).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({
+      ok: true,
+      home: path.resolve(home),
+      migrated: false,
+    });
+
+    ctx.out.length = 0;
+    expect(await runCli(['migrate', '--json'], ctx)).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({
+      ok: true,
+      home: path.resolve(home),
+      migrated: false,
+      skillCount: 0,
+      packageCount: 0,
+      targetCount: 0,
+    });
+  });
+
   it('rejects a skill folder without SKILL.md', async () => {
     const home = await tempDir('skillink-cli-');
     const source = await makeSkillSource(false);
@@ -654,6 +677,7 @@ describe('CLI', () => {
     const ctx = context(home);
 
     expect(await runCli(['snapshot', '--json'], ctx)).toBe(0);
+    expect(await pathExists(home)).toBe(false);
     for (const name of ['route.json', 'package.json', 'skill.json']) {
       expect(await pathExists(path.join(home, name))).toBe(false);
     }
@@ -802,5 +826,45 @@ describe('CLI', () => {
       ]),
     );
     expect(ctx.err.join('\n')).toBe('');
+  });
+
+  it('keeps apply conflict JSON on stdout and exits 3', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
+    await mkdir(path.join(targetPath, 'pdf'), { recursive: true });
+    await writeFile(path.join(targetPath, 'pdf', 'unmanaged.txt'), 'keep', 'utf8');
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    await runCli(
+      ['skill', 'add', source, '--name', 'pdf', '--version', '1.0.0'],
+      ctx,
+    );
+    await runCli(
+      ['package', 'create', 'demo@1.0.0', '--skill', 'pdf@1.0.0'],
+      ctx,
+    );
+    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
+    await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
+
+    ctx.out.length = 0;
+    ctx.err.length = 0;
+    expect(await runCli(['apply', '--json'], ctx)).toBe(3);
+    const report = JSON.parse(ctx.out.join('\n')) as {
+      ok: boolean;
+      conflicts: Array<{ name: string; reason: string }>;
+    };
+    expect(report.ok).toBe(false);
+    expect(report.conflicts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'pdf', reason: expect.any(String) }),
+      ]),
+    );
+    expect(ctx.err.join('\n')).toBe('');
+    expect(
+      await readFile(path.join(targetPath, 'pdf', 'unmanaged.txt'), 'utf8'),
+    ).toBe('keep');
   });
 });
