@@ -30,6 +30,69 @@ export interface HistoryEntry {
   reason: string;
 }
 
+export interface ConfigSet {
+  route: RouteFile;
+  packages: PackageFile;
+  skills: SkillFile;
+}
+
+export interface WriteConfigSetOptions {
+  write?: (
+    filePath: string,
+    value: unknown,
+    schema: { parse: (input: unknown) => unknown },
+  ) => Promise<void>;
+}
+
+export async function writeConfigSet(
+  paths: SkillinkPaths,
+  set: ConfigSet,
+  options: WriteConfigSetOptions = {},
+): Promise<void> {
+  const write = options.write ?? writeJsonAtomic;
+  const [previousRoute, previousPackages, previousSkills] = await Promise.all([
+    readJsonFile(paths.routeFile, RouteFileSchema, createEmptyRouteFile()),
+    readJsonFile(
+      paths.packageFile,
+      PackageFileSchema,
+      createEmptyPackageFile(),
+    ),
+    readJsonFile(paths.skillFile, SkillFileSchema, createEmptySkillFile()),
+  ]);
+
+  try {
+    await write(paths.skillFile, set.skills, SkillFileSchema);
+    await write(paths.packageFile, set.packages, PackageFileSchema);
+    await write(paths.routeFile, set.route, RouteFileSchema);
+  } catch (error) {
+    const restoreFailures: unknown[] = [];
+    try {
+      await write(paths.skillFile, previousSkills, SkillFileSchema);
+      await write(paths.packageFile, previousPackages, PackageFileSchema);
+      await write(paths.routeFile, previousRoute, RouteFileSchema);
+    } catch (restoreError) {
+      restoreFailures.push(restoreError);
+    }
+
+    if (restoreFailures.length > 0) {
+      throw new SkillinkError(
+        'IO_ERROR',
+        `Failed to write configuration and failed to restore the previous files: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        {
+          restoreFailures: restoreFailures.map((failure) =>
+            failure instanceof Error ? failure.message : String(failure),
+          ),
+        },
+        { cause: error },
+      );
+    }
+
+    throw error;
+  }
+}
+
 const HistoryMetaSchema = z.object({
   id: z.string().min(1),
   createdAt: z.string().min(1),
@@ -405,11 +468,7 @@ export async function restoreHistorySnapshot(
     }
   }
 
-  // Write in dependency order so the route never points at a config that is
-  // not yet on disk.
-  await writeJsonAtomic(paths.skillFile, skills, SkillFileSchema);
-  await writeJsonAtomic(paths.packageFile, packages, PackageFileSchema);
-  await writeJsonAtomic(paths.routeFile, route, RouteFileSchema);
+  await writeConfigSet(paths, { skills, packages, route });
 }
 
 export async function withHistory<T>(
