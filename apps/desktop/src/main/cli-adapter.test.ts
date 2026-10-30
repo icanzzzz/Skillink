@@ -1,6 +1,7 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import type { ApplyReport } from '@skillink/shared';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createCliAdapter,
@@ -114,6 +115,29 @@ describe('CLI adapter', () => {
     expect(started).toEqual(['first --json', 'second --json']);
   });
 
+  it('continues after a rejected invocation', async () => {
+    const calls: string[] = [];
+    const runner: CliRunner = async (argv, context) => {
+      calls.push(argv[0]!);
+      if (argv[0] === 'first') {
+        context.stderr(
+          '{"ok":false,"error":{"code":"CLI_ERROR","message":"boom"}}',
+        );
+        return 1;
+      }
+      context.stdout('{"ok":true}');
+      return 0;
+    };
+    const adapter = createCliAdapter(runner);
+
+    await expect(adapter.invoke(['first'])).rejects.toMatchObject({
+      code: 'CLI_ERROR',
+      message: 'boom',
+    });
+    await expect(adapter.invoke(['second'])).resolves.toEqual({ ok: true });
+    expect(calls).toEqual(['first', 'second']);
+  });
+
   it('snapshots through the snapshot command', async () => {
     const { runner, seen } = runnerReturning({
       code: 0,
@@ -194,6 +218,66 @@ describe('CLI adapter', () => {
       ]);
       expect(snapshot.status.healthy).toBe(true);
       expect(snapshot.doctor.ok).toBe(true);
+    } finally {
+      vi.unstubAllEnvs();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('returns apply conflict reports from the real CLI', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'skillink-adapter-'));
+    const home = path.join(root, 'home');
+    const source = path.join(root, 'source');
+    const targetPath = path.join(root, 'target');
+    await mkdir(source, { recursive: true });
+    await mkdir(path.join(targetPath, 'pdf'), { recursive: true });
+    await writeFile(path.join(source, 'SKILL.md'), '# pdf', 'utf8');
+    await writeFile(
+      path.join(targetPath, 'pdf', 'unmanaged.txt'),
+      'keep',
+      'utf8',
+    );
+
+    vi.stubEnv('SKILLINK_HOME', home);
+    try {
+      const adapter = createCliAdapter();
+
+      await adapter.invoke([
+        'skill',
+        'add',
+        source,
+        '--name',
+        'pdf',
+        '--version',
+        '1.0.0',
+      ]);
+      await adapter.invoke([
+        'package',
+        'create',
+        'demo@1.0.0',
+        '--skill',
+        'pdf@1.0.0',
+      ]);
+      await adapter.invoke([
+        'target',
+        'add',
+        targetPath,
+        '--id',
+        'project-a',
+      ]);
+      await adapter.invoke(['route', 'add', 'project-a', 'demo@1.0.0']);
+
+      const report = await adapter.invoke<ApplyReport>(['apply']);
+
+      expect(report.ok).toBe(false);
+      expect(report.conflicts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'pdf', reason: expect.any(String) }),
+        ]),
+      );
+      expect(
+        await readFile(path.join(targetPath, 'pdf', 'unmanaged.txt'), 'utf8'),
+      ).toBe('keep');
     } finally {
       vi.unstubAllEnvs();
       await rm(root, { recursive: true, force: true });
