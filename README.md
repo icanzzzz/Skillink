@@ -45,6 +45,13 @@ GUI：
 pnpm dev:desktop
 ```
 
+GUI 提供 Overview / Targets / Library / History / Doctor 五个页面：
+
+- Targets：添加目标目录、分配包版本、应用路由；
+- Library：导入文件夹、打标签、删除未引用版本、GC dry-run/apply；
+- History：查看历史快照并成对回滚 `route.json` + `skills.json`；
+- Doctor：查看健康问题并重新应用路由。
+
 ## 开发
 
 ```bash
