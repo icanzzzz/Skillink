@@ -3,53 +3,69 @@ import {
   addRouteEntry,
   addTarget,
   apply,
+  copyPackageVersion,
+  createPackageVersion,
   doctor,
   gc,
-  importFolder,
+  importSkill,
   listHistory,
+  readPackageFile,
   readRouteFile,
-  readSkillsFile,
-  removeLibraryVersion,
+  readSkillFile,
+  removePackageVersion,
   removeRouteEntry,
+  removeSkillVersion,
   restoreHistorySnapshot,
-  setLibraryTag,
+  setPackageTag,
+  setSkillTag,
   status,
 } from '@skillink/core';
 import { getSkillinkPaths } from '@skillink/shared';
 import {
   AddTargetRequestSchema,
   ApplyRequestSchema,
+  CopyPackageRequestSchema,
+  CreatePackageRequestSchema,
   GcRequestSchema,
-  ImportFolderRequestSchema,
-  LibraryRemoveRequestSchema,
-  LibraryTagRequestSchema,
+  ImportSkillRequestSchema,
+  PackageRemoveRequestSchema,
+  PackageTagRequestSchema,
   RollbackRequestSchema,
   RouteAddRequestSchema,
   RouteRemoveRequestSchema,
+  SkillRemoveRequestSchema,
+  SkillTagRequestSchema,
 } from '../ipc-schemas.js';
 import type { DesktopSnapshot } from '../shared.js';
 
 async function getSnapshot(): Promise<DesktopSnapshot> {
   const paths = getSkillinkPaths();
-  const [library, route, statusReport, doctorReport] = await Promise.all([
-    readSkillsFile(paths),
-    readRouteFile(paths),
-    status({ paths }),
-    doctor({ paths }),
-  ]);
+  const [skills, packages, route, statusReport, doctorReport] =
+    await Promise.all([
+      readSkillFile(paths),
+      readPackageFile(paths),
+      readRouteFile(paths),
+      status({ paths }),
+      doctor({ paths }),
+    ]);
 
   return {
     home: paths.home,
-    library,
+    skills,
+    packages,
     route,
     status: statusReport,
     doctor: doctorReport,
   };
 }
 
-async function chooseFolder(event: Electron.IpcMainInvokeEvent): Promise<string | null> {
+async function chooseFolder(
+  event: Electron.IpcMainInvokeEvent,
+): Promise<string | null> {
   const window = BrowserWindow.fromWebContents(event.sender);
-  const options: Electron.OpenDialogOptions = { properties: ['openDirectory'] };
+  const options: Electron.OpenDialogOptions = {
+    properties: ['openDirectory'],
+  };
   const result = window
     ? await dialog.showOpenDialog(window, options)
     : await dialog.showOpenDialog(options);
@@ -71,14 +87,80 @@ export function registerIpcHandlers(): void {
     });
   });
 
-  ipcMain.handle('skillink:import-folder', async (_event, input: unknown) => {
-    const request = ImportFolderRequestSchema.parse(input);
-    return importFolder({
+  ipcMain.handle('skillink:import-skill', async (_event, input: unknown) => {
+    const request = ImportSkillRequestSchema.parse(input);
+    return importSkill({
       sourceDir: request.sourceDir,
       name: request.name,
       version: request.version,
       home: getSkillinkPaths().home,
     });
+  });
+
+  ipcMain.handle('skillink:create-package', async (_event, input: unknown) => {
+    const request = CreatePackageRequestSchema.parse(input);
+    return createPackageVersion({
+      paths: getSkillinkPaths(),
+      name: request.name,
+      version: request.version,
+      description: request.description,
+      skills: request.skills,
+      packages: request.packages,
+    });
+  });
+
+  ipcMain.handle('skillink:copy-package', async (_event, input: unknown) => {
+    const request = CopyPackageRequestSchema.parse(input);
+    return copyPackageVersion({
+      paths: getSkillinkPaths(),
+      sourceName: request.sourceName,
+      sourceVersion: request.sourceVersion,
+      targetName: request.targetName,
+      targetVersion: request.targetVersion,
+      description: request.description,
+      skillOverrides: request.skillOverrides,
+      packageOverrides: request.packageOverrides,
+      dropSkills: request.dropSkills,
+      dropPackages: request.dropPackages,
+    });
+  });
+
+  ipcMain.handle('skillink:remove-package', async (_event, input: unknown) => {
+    const request = PackageRemoveRequestSchema.parse(input);
+    await removePackageVersion(
+      getSkillinkPaths(),
+      request.name,
+      request.version,
+    );
+  });
+
+  ipcMain.handle('skillink:package-tag', async (_event, input: unknown) => {
+    const request = PackageTagRequestSchema.parse(input);
+    await setPackageTag(
+      getSkillinkPaths(),
+      request.name,
+      request.version,
+      request.tag,
+    );
+  });
+
+  ipcMain.handle('skillink:skill-tag', async (_event, input: unknown) => {
+    const request = SkillTagRequestSchema.parse(input);
+    await setSkillTag(
+      getSkillinkPaths(),
+      request.name,
+      request.version,
+      request.tag,
+    );
+  });
+
+  ipcMain.handle('skillink:skill-remove', async (_event, input: unknown) => {
+    const request = SkillRemoveRequestSchema.parse(input);
+    await removeSkillVersion(
+      getSkillinkPaths(),
+      request.name,
+      request.version,
+    );
   });
 
   ipcMain.handle('skillink:add-target', async (_event, input: unknown) => {
@@ -109,21 +191,6 @@ export function registerIpcHandlers(): void {
       targetId: request.targetId,
       name: request.name,
     });
-  });
-
-  ipcMain.handle('skillink:library-tag', async (_event, input: unknown) => {
-    const request = LibraryTagRequestSchema.parse(input);
-    await setLibraryTag(
-      getSkillinkPaths(),
-      request.name,
-      request.version,
-      request.tag,
-    );
-  });
-
-  ipcMain.handle('skillink:library-remove', async (_event, input: unknown) => {
-    const request = LibraryRemoveRequestSchema.parse(input);
-    await removeLibraryVersion(getSkillinkPaths(), request.name, request.version);
   });
 
   ipcMain.handle('skillink:gc', async (_event, input: unknown) => {

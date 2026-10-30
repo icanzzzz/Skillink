@@ -3,8 +3,9 @@ import { TargetModeSchema } from '@skillink/shared';
 
 const NonEmptyString = z.string().min(1);
 const OptionalNonEmptyString = NonEmptyString.optional();
+const DependencyMap = z.record(z.string(), NonEmptyString);
 
-export const ImportFolderRequestSchema = z
+export const ImportSkillRequestSchema = z
   .object({
     sourceDir: NonEmptyString,
     name: OptionalNonEmptyString,
@@ -36,7 +37,7 @@ export const RouteRemoveRequestSchema = z
   })
   .strict();
 
-export const LibraryTagRequestSchema = z
+export const SkillTagRequestSchema = z
   .object({
     name: NonEmptyString,
     version: NonEmptyString,
@@ -44,10 +45,54 @@ export const LibraryTagRequestSchema = z
   })
   .strict();
 
-export const LibraryRemoveRequestSchema = z
+export const SkillRemoveRequestSchema = z
   .object({
     name: NonEmptyString,
     version: NonEmptyString,
+  })
+  .strict();
+
+export const PackageTagRequestSchema = z
+  .object({
+    name: NonEmptyString,
+    version: NonEmptyString,
+    tag: NonEmptyString,
+  })
+  .strict();
+
+export const PackageRemoveRequestSchema = z
+  .object({
+    name: NonEmptyString,
+    version: NonEmptyString,
+  })
+  .strict();
+
+export const CreatePackageRequestSchema = z
+  .object({
+    name: NonEmptyString,
+    version: NonEmptyString,
+    description: OptionalNonEmptyString,
+    skills: DependencyMap.optional().default({}),
+    packages: DependencyMap.optional().default({}),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      Object.keys(value.skills).length + Object.keys(value.packages).length > 0,
+    { message: 'Package must contain at least one dependency.' },
+  );
+
+export const CopyPackageRequestSchema = z
+  .object({
+    sourceName: NonEmptyString,
+    sourceVersion: NonEmptyString,
+    targetName: NonEmptyString,
+    targetVersion: NonEmptyString,
+    description: OptionalNonEmptyString,
+    skillOverrides: DependencyMap.optional(),
+    packageOverrides: DependencyMap.optional(),
+    dropSkills: z.array(NonEmptyString).optional(),
+    dropPackages: z.array(NonEmptyString).optional(),
   })
   .strict();
 
@@ -73,12 +118,16 @@ export const ApplyRequestSchema = z
   })
   .strict();
 
-export type ImportFolderRequest = z.infer<typeof ImportFolderRequestSchema>;
+export type ImportSkillRequest = z.infer<typeof ImportSkillRequestSchema>;
 export type AddTargetRequest = z.infer<typeof AddTargetRequestSchema>;
 export type RouteAddRequest = z.infer<typeof RouteAddRequestSchema>;
 export type RouteRemoveRequest = z.infer<typeof RouteRemoveRequestSchema>;
-export type LibraryTagRequest = z.infer<typeof LibraryTagRequestSchema>;
-export type LibraryRemoveRequest = z.infer<typeof LibraryRemoveRequestSchema>;
+export type SkillTagRequest = z.infer<typeof SkillTagRequestSchema>;
+export type SkillRemoveRequest = z.infer<typeof SkillRemoveRequestSchema>;
+export type PackageTagRequest = z.infer<typeof PackageTagRequestSchema>;
+export type PackageRemoveRequest = z.infer<typeof PackageRemoveRequestSchema>;
+export type CreatePackageRequest = z.infer<typeof CreatePackageRequestSchema>;
+export type CopyPackageRequest = z.infer<typeof CopyPackageRequestSchema>;
 export type GcRequest = z.infer<typeof GcRequestSchema>;
 export type RollbackRequest = z.infer<typeof RollbackRequestSchema>;
 export type ApplyRequest = z.infer<typeof ApplyRequestSchema>;
