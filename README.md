@@ -33,6 +33,7 @@ target -> package -> skill -> 实体内容
 - target/import 路径支持 `~`、`%USERPROFILE%`、`$HOME`；
 - Windows 大小写不敏感名称冲突检测、文件占用重试；
 - GUI 的 Targets / Skills / Packages / History / Doctor 页面；
+- GUI 通过 CLI command layer 在进程内执行所有业务操作，CLI 是唯一业务入口；
 - Electron 打包（NSIS + portable）。
 
 > v2.0 仅支持 `mode: link`。copy target 会被拒绝，迁移遗留的 copy target 由 `doctor` 报 `UNSUPPORTED_MODE`。
@@ -116,7 +117,7 @@ skillink package list [--json]
 skillink package tag <package@version> <tag>
 skillink package remove <package@version>
 
-skillink target add <path> [--id <id>] [--label <label>]
+skillink target add <path> [--id <id>] [--label <label>] [--mode <mode>]
 skillink target list [--json]
 skillink target remove <id>
 skillink target enable|disable <id>
@@ -127,12 +128,15 @@ skillink route list [--json]
 skillink route enable|disable <target-id> <package>
 
 skillink apply [--target <id>] [--dry-run] [--prune]
+skillink snapshot [--json]
 skillink status [--json] [--target <id>]
 skillink doctor [--json]
-skillink gc [--apply] [--max-age-days <n>] [--json]
+skillink gc [--apply] [--max-age-days <n>] [--no-keep-tagged] [--json]
 skillink history [--json]
 skillink rollback <snapshot-id> [--apply] [--json]
 ```
+
+所有写命令都支持 `--json`；失败时会向 stderr 输出结构化错误。
 
 `add` 是 `skill add` 的顶层别名。
 
@@ -141,6 +145,8 @@ skillink rollback <snapshot-id> [--apply] [--json]
 ```bash
 pnpm dev:desktop
 ```
+
+GUI 主进程通过 CLI adapter 在进程内执行 CLI 命令，Renderer 不接触 Core；刷新数据来自一次只读 `snapshot --json`。
 
 GUI 页面：
 

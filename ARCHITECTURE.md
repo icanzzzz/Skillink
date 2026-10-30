@@ -528,6 +528,7 @@ skillink skill add|list|tag|remove
 skillink package create|copy|list|tag|remove
 skillink target add|list|remove|enable|disable
 skillink route add|remove|list|enable|disable
+skillink snapshot
 skillink apply|status|doctor|gc|history|rollback
 ```
 
@@ -538,10 +539,11 @@ skillink apply|status|doctor|gc|history|rollback
 以下命令支持 `--json`：
 
 ```text
-skill list
-package list
-target list
-route list
+skill list|add|tag|remove
+package list|create|copy|tag|remove
+target list|add|remove|enable|disable
+route list|add|remove|enable|disable
+snapshot
 apply
 status
 doctor
@@ -550,7 +552,13 @@ history
 rollback
 ```
 
-写命令（`skill add`、`package create`、`package copy`、`target add`、`route add`、`skill/package tag/remove` 等）默认输出人类可读文本；AI 通过退出码判断成功，再用对应的 `list` / `status` / `doctor --json` 查询状态。
+默认仍是人类可读文本。成功时 stdout 输出该命令的结果对象；失败时如果带 `--json`，stderr 输出单个结构化错误：
+
+```json
+{"ok":false,"error":{"code":"SKILL_MD_REQUIRED","message":"...","details":{}}}
+```
+
+退出码保持不变；`status` / `doctor` 在 unhealthy 时仍返回 1，`apply` 冲突仍返回 3，调用方应先尝试解析 stdout 的 JSON 结果。
 
 **AI 调用闭环**
 
@@ -593,9 +601,20 @@ drift / missing       -> apply
 - **History**：三文件快照与回滚；
 - **Doctor**：健康检查。
 
+GUI 的刷新通过一次只读 `skillink snapshot --json` 获取 skills、packages、route、status、doctor、target 解析结果和 history。Renderer 只调用 preload API；Electron 主进程负责 IPC 校验、argv 映射和串行队列，不直接调用 Core。
+
 ### 7.3 双入口与安装包
 
-GUI 和 CLI 是两个入口，但共用同一套 Core 和同一个控制面：
+GUI 和 CLI 是两个入口，但 **CLI 是唯一业务入口**：
+
+```text
+Renderer -> preload -> main/ipc.ts -> main/cli-adapter.ts
+  -> @skillink/cli/run -> @skillink/core
+```
+
+桌面端主进程不 import `@skillink/core`；它把每个 IPC 请求翻译成 CLI argv，并在同一进程内调用 `runCli`。这样没有子进程启动成本，同时避免 GUI 和 CLI 各自维护一套 Core 调用。所有命令通过一个 Promise 队列串行执行，避免写操作和 `snapshot` 交叉。CLI/Core 代码会打入桌面端主进程，因此这不是物理进程隔离；如果以后需要隔离，只需替换 `cli-adapter`。
+
+CLI 和 GUI 仍共享同一个控制面：
 
 ```text
 %USERPROFILE%\.agents\skillink\     # 默认
@@ -714,7 +733,7 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 
 ## 10. 测试策略
 
-当前验证：35 个测试文件、291 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
+当前验证：38 个测试文件、309 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
 
 | 层级 | 内容 |
 |---|---|
@@ -789,7 +808,7 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 
 ### 11.1 当前实现验证
 
-- `pnpm test`：35 个测试文件、291 个测试通过；
+- `pnpm test`：38 个测试文件、309 个测试通过；
 - `pnpm typecheck`：通过；
 - `pnpm build`：CLI 与 Electron 桌面端构建成功；
 - 真实 CLI E2E：skill 安装、package 创建/复制、target/route、apply、status/doctor、冲突修复、history/rollback、gc dry-run 均跑通；
