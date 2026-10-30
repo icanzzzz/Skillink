@@ -1,14 +1,15 @@
 import { mkdir, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { getSkillDir, type SkillinkPaths } from '@skillink/shared';
 import {
-  RouteFileSchema,
-  createEmptyRouteFile,
-  getPackageDir,
-  type SkillinkPaths,
-} from '@skillink/shared';
-import { createTrashDirectory, readSkillsFile, writeSkillsFile } from './library.js';
+  createTrashDirectory,
+  readSkillFile,
+  writeSkillFile,
+} from './skill-store.js';
+import { readPackageFile } from './package-store.js';
+import { readRouteFile } from './route.js';
+import { resolvePackageGraph } from './package-graph.js';
 import { withHistory } from './history.js';
-import { readJsonFile } from './json-store.js';
 
 export interface GcOptions {
   dryRun?: boolean;
@@ -56,38 +57,49 @@ async function collectCandidates(
   paths: SkillinkPaths,
   options: GcOptions,
 ): Promise<GcCandidate[]> {
-  const library = await readSkillsFile(paths);
-  const route = await readJsonFile(
-    paths.routeFile,
-    RouteFileSchema,
-    createEmptyRouteFile(),
-  );
+  const skillFile = await readSkillFile(paths);
+  const route = await readRouteFile(paths);
+  const packageFile = await readPackageFile(paths);
 
-  const referenced = new Set(
-    route.targets.flatMap((target) =>
-      Object.entries(target.skills).map(
-        ([name, lock]) => `${name}@${lock.resolved}`,
-      ),
-    ),
-  );
+  const referenced = new Set<string>();
+
+  for (const target of route.targets) {
+    const roots = Object.entries(target.packages).map(([name, lock]) => ({
+      name,
+      version: lock.resolved,
+    }));
+
+    if (roots.length === 0) {
+      continue;
+    }
+
+    const resolution = resolvePackageGraph(packageFile, skillFile, roots);
+    for (const skill of resolution.skills.values()) {
+      referenced.add(`${skill.name}@${skill.version}`);
+    }
+  }
 
   const keepTagged = options.keepTagged ?? true;
+  if (keepTagged) {
+    for (const [name, skillEntry] of Object.entries(skillFile.skills)) {
+      for (const taggedVersion of Object.values(skillEntry.tags ?? {})) {
+        referenced.add(`${name}@${taggedVersion}`);
+      }
+    }
+  }
+
   const maxAgeDays = options.maxAgeDays ?? 7;
   const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
   const candidates: GcCandidate[] = [];
 
-  for (const [name, packageEntry] of Object.entries(library.packages)) {
-    const tagged = new Set(
-      keepTagged ? Object.values(packageEntry.tags ?? {}) : [],
-    );
-
-    for (const [version, versionEntry] of Object.entries(packageEntry.versions)) {
-      if (referenced.has(`${name}@${version}`) || tagged.has(version)) {
+  for (const [name, skillEntry] of Object.entries(skillFile.skills)) {
+    for (const [version, versionEntry] of Object.entries(skillEntry.versions)) {
+      if (referenced.has(`${name}@${version}`)) {
         continue;
       }
 
-      const packageDir = getPackageDir(paths, name, version);
-      const info = await directoryStat(packageDir);
+      const skillDir = getSkillDir(paths, name, version);
+      const info = await directoryStat(skillDir);
       if (!info || info.mtimeMs > cutoff) {
         continue;
       }
@@ -95,7 +107,7 @@ async function collectCandidates(
       candidates.push({
         name,
         version,
-        path: packageDir,
+        path: skillDir,
         size: versionEntry.size,
         modifiedAt: info.mtime.toISOString(),
       });
@@ -144,18 +156,22 @@ export async function gc(
   const removed: GcCandidate[] = [];
 
   await withHistory(paths, 'gc', async () => {
-    const library = await readSkillsFile(paths);
+    const skillFile = await readSkillFile(paths);
     const trashDirectory = await createTrashDirectory(paths);
     const moved: Array<{ source: string; destination: string }> = [];
 
     try {
       for (const candidate of candidates) {
-        const packageEntry = library.packages[candidate.name];
-        if (!packageEntry?.versions[candidate.version]) {
+        const skillEntry = skillFile.skills[candidate.name];
+        if (!skillEntry?.versions[candidate.version]) {
           continue;
         }
 
-        const destination = path.join(trashDirectory, candidate.name, candidate.version);
+        const destination = path.join(
+          trashDirectory,
+          candidate.name,
+          candidate.version,
+        );
         await mkdir(path.dirname(destination), { recursive: true });
         try {
           await rename(candidate.path, destination);
@@ -166,28 +182,28 @@ export async function gc(
           }
         }
 
-        const remainingVersions = { ...packageEntry.versions };
+        const remainingVersions = { ...skillEntry.versions };
         delete remainingVersions[candidate.version];
 
         if (Object.keys(remainingVersions).length === 0) {
-          delete library.packages[candidate.name];
+          delete skillFile.skills[candidate.name];
         } else {
           const tags = Object.fromEntries(
-            Object.entries(packageEntry.tags ?? {}).filter(
+            Object.entries(skillEntry.tags ?? {}).filter(
               ([, taggedVersion]) => taggedVersion !== candidate.version,
             ),
           );
-          library.packages[candidate.name] = {
-            ...packageEntry,
+          skillFile.skills[candidate.name] = {
+            ...skillEntry,
             versions: remainingVersions,
-            tags,
+            ...(Object.keys(tags).length > 0 ? { tags } : { tags: undefined }),
           };
         }
 
         removed.push(candidate);
       }
 
-      await writeSkillsFile(paths, library);
+      await writeSkillFile(paths, skillFile);
     } catch (error) {
       for (const item of moved.reverse()) {
         await mkdir(path.dirname(item.source), { recursive: true });

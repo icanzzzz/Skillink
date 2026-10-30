@@ -22,8 +22,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 });
 
 import { gc } from './gc.js';
-import { importFolder } from './import-folder.js';
-import { readSkillsFile } from './library.js';
+import { importSkill } from './import-skill.js';
+import { readSkillFile } from './skill-store.js';
 
 const tempDirs: string[] = [];
 
@@ -38,8 +38,9 @@ async function setup(): Promise<SkillinkPaths> {
   const paths = getSkillinkPaths(path.join(root, 'home'));
   const source = path.join(root, 'source');
   await mkdir(source, { recursive: true });
+  await writeFile(path.join(source, 'SKILL.md'), '# demo', 'utf8');
   await writeFile(path.join(source, 'file.txt'), 'content', 'utf8');
-  await importFolder({
+  await importSkill({
     sourceDir: source,
     name: 'demo',
     version: '1.0.0',
@@ -50,24 +51,26 @@ async function setup(): Promise<SkillinkPaths> {
 
 afterEach(async () => {
   state.failWritePath = '';
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  await Promise.all(
+    tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+  );
 });
 
 describe('gc failure handling', () => {
-  it('moves collected versions back when skills.json cannot be written', async () => {
+  it('moves collected skill versions back when skill.json cannot be written', async () => {
     const paths = await setup();
-    const packageDir = path.join(paths.libraryDir, 'demo', '1.0.0');
+    const contentDir = path.join(paths.libraryDir, 'demo', '1.0.0');
 
-    state.failWritePath = paths.skillsFile;
+    state.failWritePath = paths.skillFile;
     await expect(
       gc(paths, { dryRun: false, maxAgeDays: 0 }),
     ).rejects.toThrow(/failed to write/i);
     state.failWritePath = '';
 
-    await expect(readFile(path.join(packageDir, 'file.txt'), 'utf8')).resolves.toBe(
-      'content',
-    );
-    const library = await readSkillsFile(paths);
-    expect(library.packages.demo?.versions['1.0.0']).toBeDefined();
+    await expect(
+      readFile(path.join(contentDir, 'file.txt'), 'utf8'),
+    ).resolves.toBe('content');
+    const skillFile = await readSkillFile(paths);
+    expect(skillFile.skills.demo?.versions['1.0.0']).toBeDefined();
   });
 });

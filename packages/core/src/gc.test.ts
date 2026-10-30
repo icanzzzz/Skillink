@@ -2,11 +2,21 @@ import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { getSkillinkPaths, type SkillinkPaths } from '@skillink/shared';
+import {
+  getSkillDir,
+  getSkillinkPaths,
+  type SkillinkPaths,
+} from '@skillink/shared';
+import { doctor } from './doctor.js';
 import { gc, planGc } from './gc.js';
-import { importFolder } from './import-folder.js';
-import { readSkillsFile, setLibraryTag } from './library.js';
-import { addRouteEntry } from './route.js';
+import { importSkill } from './import-skill.js';
+import { createPackageVersion, readPackageFile } from './package-store.js';
+import {
+  addRouteEntry,
+  readRouteFile,
+  writeRouteFile,
+} from './route.js';
+import { readSkillFile, setSkillTag } from './skill-store.js';
 import { addTarget } from './target.js';
 
 const tempDirs: string[] = [];
@@ -17,109 +27,201 @@ async function tempDir(prefix: string): Promise<string> {
   return dir;
 }
 
-async function setup(versions: string[] = ['1.0.0']): Promise<{
-  root: string;
+async function importSkillVersion(
+  home: string,
+  name: string,
+  version: string,
+): Promise<void> {
+  const source = await tempDir(`skillink-gc-source-${name}-${version}-`);
+  await writeFile(path.join(source, 'SKILL.md'), `# ${name} ${version}`, 'utf8');
+  await writeFile(
+    path.join(source, 'content.txt'),
+    `${name}@${version}`,
+    'utf8',
+  );
+  await importSkill({ sourceDir: source, name, version, home });
+}
+
+async function setup(): Promise<{
   paths: SkillinkPaths;
   targetPath: string;
 }> {
   const root = await tempDir('skillink-gc-');
-  const paths = getSkillinkPaths(path.join(root, 'home'));
-  const source = path.join(root, 'source');
-  const targetPath = path.join(root, 'project', 'packages');
-  await mkdir(source, { recursive: true });
-  await writeFile(path.join(source, 'file.txt'), `content-${versions.join('-')}`, 'utf8');
+  const home = path.join(root, 'home');
+  const targetPath = path.join(root, 'project', 'skills');
   await mkdir(targetPath, { recursive: true });
+  const paths = getSkillinkPaths(home);
 
-  for (const version of versions) {
-    await importFolder({
-      sourceDir: source,
-      name: 'demo',
-      version,
-      home: paths.home,
-    });
-  }
+  await importSkillVersion(home, 'pdf', '1.0.0');
+  await importSkillVersion(home, 'pdf', '1.1.0');
+  await importSkillVersion(home, 'review', '1.0.0');
 
-  return { root, paths, targetPath };
+  await createPackageVersion({
+    paths,
+    name: 'frontend',
+    version: '1.0.0',
+    skills: { pdf: '1.0.0', review: '1.0.0' },
+  });
+  await createPackageVersion({
+    paths,
+    name: 'base',
+    version: '1.0.0',
+    skills: { review: '1.0.0' },
+  });
+  await createPackageVersion({
+    paths,
+    name: 'nested',
+    version: '1.0.0',
+    packages: { base: '1.0.0' },
+  });
+  await addTarget({
+    paths,
+    id: 'project-a',
+    path: targetPath,
+    mode: 'link',
+  });
+
+  return { paths, targetPath };
 }
 
-async function pathExists(targetPath: string): Promise<boolean> {
-  return stat(targetPath)
+function candidateNames(report: { candidates: Array<{ name: string; version: string }> }): string[] {
+  return report.candidates.map(
+    (candidate) => `${candidate.name}@${candidate.version}`,
+  );
+}
+
+async function pathExists(target: string): Promise<boolean> {
+  return stat(target)
     .then(() => true)
     .catch(() => false);
 }
 
 afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  await Promise.all(
+    tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+  );
 });
 
 describe('garbage collection', () => {
-  it('reports candidates in a dry run without changing anything', async () => {
-    const { paths } = await setup(['1.0.0']);
-    const versionDir = path.join(paths.libraryDir, 'demo', '1.0.0');
+  it('reports all unreferenced skill versions in a dry run', async () => {
+    const { paths } = await setup();
 
-    const report = await gc(paths, { maxAgeDays: 0 });
+    const report = await planGc(paths, { maxAgeDays: 0 });
 
     expect(report.dryRun).toBe(true);
-    expect(report.candidates).toEqual([
-      expect.objectContaining({ name: 'demo', version: '1.0.0' }),
+    expect(candidateNames(report)).toEqual([
+      'pdf@1.0.0',
+      'pdf@1.1.0',
+      'review@1.0.0',
     ]);
-    expect(report.removed).toEqual([]);
-    expect(await pathExists(versionDir)).toBe(true);
-    expect((await readSkillsFile(paths)).packages.demo?.versions['1.0.0']).toBeDefined();
+    expect(await pathExists(getSkillDir(paths, 'pdf', '1.0.0'))).toBe(true);
   });
 
-  it('moves unreferenced versions to trash and updates skills.json', async () => {
-    const { paths } = await setup(['1.0.0']);
-    const versionDir = path.join(paths.libraryDir, 'demo', '1.0.0');
-
-    const report = await gc(paths, { dryRun: false, maxAgeDays: 0 });
-
-    expect(report.dryRun).toBe(false);
-    expect(report.removed).toEqual([
-      expect.objectContaining({ name: 'demo', version: '1.0.0' }),
-    ]);
-    expect(report.freedBytes).toBeGreaterThan(0);
-    expect(await pathExists(versionDir)).toBe(false);
-    expect((await readSkillsFile(paths)).packages.demo).toBeUndefined();
-
-    const trashEntries = await readdir(paths.trashDir);
-    expect(trashEntries.length).toBeGreaterThan(0);
-  });
-
-  it('never considers a version referenced by a route', async () => {
-    const { paths, targetPath } = await setup(['1.0.0', '1.1.0']);
-    await addTarget({ paths, id: 'project-a', path: targetPath });
+  it('keeps skills referenced by a route package', async () => {
+    const { paths } = await setup();
     await addRouteEntry({
       paths,
       targetId: 'project-a',
-      name: 'demo',
+      name: 'frontend',
       requested: '1.0.0',
     });
 
     const report = await planGc(paths, { maxAgeDays: 0 });
 
-    expect(report.candidates.map((candidate) => candidate.version)).toEqual(['1.1.0']);
+    expect(candidateNames(report)).toEqual(['pdf@1.1.0']);
   });
 
-  it('keeps tagged versions when keepTagged is true', async () => {
-    const { paths } = await setup(['1.0.0', '1.1.0']);
-    await setLibraryTag(paths, 'demo', '1.0.0', 'latest');
+  it('keeps skills referenced through nested packages', async () => {
+    const { paths } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'nested',
+      requested: '1.0.0',
+    });
+
+    const report = await planGc(paths, { maxAgeDays: 0 });
+
+    expect(candidateNames(report)).toEqual(['pdf@1.0.0', 'pdf@1.1.0']);
+    expect(candidateNames(report)).not.toContain('review@1.0.0');
+  });
+
+  it('counts disabled targets and disabled package locks as references', async () => {
+    const { paths } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'frontend',
+      requested: '1.0.0',
+    });
+
+    const disabledTargetRoute = await readRouteFile(paths);
+    disabledTargetRoute.targets[0]!.enabled = false;
+    await writeRouteFile(paths, disabledTargetRoute);
+
+    const disabledTargetReport = await planGc(paths, { maxAgeDays: 0 });
+    expect(candidateNames(disabledTargetReport)).toEqual(['pdf@1.1.0']);
+
+    const disabledLockRoute = await readRouteFile(paths);
+    disabledLockRoute.targets[0]!.enabled = true;
+    disabledLockRoute.targets[0]!.packages.frontend!.enabled = false;
+    await writeRouteFile(paths, disabledLockRoute);
+
+    const disabledLockReport = await planGc(paths, { maxAgeDays: 0 });
+    expect(candidateNames(disabledLockReport)).toEqual(['pdf@1.1.0']);
+  });
+
+  it('keeps tagged skill versions when keepTagged is true', async () => {
+    const { paths } = await setup();
+    await setSkillTag(paths, 'pdf', '1.0.0', 'latest');
 
     const taggedOnly = await planGc(paths, { maxAgeDays: 0 });
-    expect(taggedOnly.candidates.map((candidate) => candidate.version)).toEqual(['1.1.0']);
+    expect(candidateNames(taggedOnly)).toEqual(['pdf@1.1.0', 'review@1.0.0']);
 
     const all = await planGc(paths, { maxAgeDays: 0, keepTagged: false });
-    expect(all.candidates.map((candidate) => candidate.version)).toEqual([
-      '1.0.0',
-      '1.1.0',
+    expect(candidateNames(all)).toEqual([
+      'pdf@1.0.0',
+      'pdf@1.1.0',
+      'review@1.0.0',
     ]);
   });
 
-  it('respects maxAgeDays for recent versions', async () => {
-    const { paths } = await setup(['1.0.0']);
+  it('collects skills referenced only by unused packages and doctor reports the dangling package', async () => {
+    const { paths } = await setup();
 
-    const report = await planGc(paths, { maxAgeDays: 7 });
+    const plan = await planGc(paths, { maxAgeDays: 0 });
+    expect(candidateNames(plan)).toContain('pdf@1.0.0');
 
-    expect(report.candidates).toEqual([]);
+    await gc(paths, { dryRun: false, maxAgeDays: 0 });
+
+    const report = await doctor({ paths });
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'SKILL_NOT_FOUND',
+          packageName: 'frontend',
+        }),
+      ]),
+    );
+  });
+
+  it('respects maxAgeDays for recent skill versions', async () => {
+    const { paths } = await setup();
+
+    expect(candidateNames(await planGc(paths, { maxAgeDays: 7 }))).toEqual([]);
+  });
+
+  it('moves collected skills to trash and updates skill.json', async () => {
+    const { paths } = await setup();
+
+    const report = await gc(paths, { dryRun: false, maxAgeDays: 0 });
+
+    expect(report.dryRun).toBe(false);
+    expect(report.removed).toHaveLength(3);
+    expect(report.freedBytes).toBeGreaterThan(0);
+    expect(await pathExists(getSkillDir(paths, 'pdf', '1.0.0'))).toBe(false);
+    expect((await readSkillFile(paths)).skills).toEqual({});
+    expect((await readdir(paths.trashDir)).length).toBeGreaterThan(0);
+    expect((await readPackageFile(paths)).packages.frontend).toBeDefined();
   });
 });
