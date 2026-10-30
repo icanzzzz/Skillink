@@ -233,6 +233,24 @@ describe('doctor', () => {
     ).toEqual([]);
   });
 
+  it('reports a copy target that cannot be projected', async () => {
+    const { paths } = await setup();
+    const route = await readRouteFile(paths);
+    route.targets[0]!.mode = 'copy';
+    await writeRouteFile(paths, route);
+
+    const report = await doctor({ paths });
+
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'UNSUPPORTED_MODE',
+          targetId: 'project-a',
+        }),
+      ]),
+    );
+  });
+
   it('reports names that collide case-insensitively', async () => {
     const { paths } = await setup();
     await writePackageFile(paths, {

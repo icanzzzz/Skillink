@@ -23,7 +23,8 @@ export type SkillinkErrorCode =
   | 'UNMANAGED_CONFLICT'
   | 'LINK_FAILED'
   | 'IO_ERROR'
-  | 'IPC_FORBIDDEN';
+  | 'IPC_FORBIDDEN'
+  | 'COPY_MODE_UNSUPPORTED';
 
 export class SkillinkError extends Error {
   readonly code: SkillinkErrorCode;

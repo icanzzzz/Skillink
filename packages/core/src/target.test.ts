@@ -50,6 +50,21 @@ describe('targets', () => {
     expect(route.targets).toHaveLength(1);
   });
 
+  it('rejects copy mode until it is implemented', async () => {
+    const { paths, targetPath } = await setup();
+
+    await expect(
+      addTarget({
+        paths,
+        id: 'copy-target',
+        path: targetPath,
+        mode: 'copy',
+      }),
+    ).rejects.toMatchObject({ code: 'COPY_MODE_UNSUPPORTED' });
+
+    expect((await readRouteFile(paths)).targets).toEqual([]);
+  });
+
   it('expands a tilde in a target path', async () => {
     const { paths } = await setup();
 

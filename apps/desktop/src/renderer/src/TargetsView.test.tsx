@@ -27,6 +27,12 @@ describe('TargetsView', () => {
     expect(html).toContain('skill folders');
   });
 
+  it('disables the unimplemented copy mode option', () => {
+    const html = renderToStaticMarkup(<TargetsView targets={[]} />);
+
+    expect(html).toMatch(/<option value="copy"[^>]*disabled/);
+  });
+
   it('renders target paths and package counts', () => {
     const html = renderToStaticMarkup(<TargetsView targets={[target]} />);
 

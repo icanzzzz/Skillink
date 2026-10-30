@@ -40,6 +40,15 @@ export async function addTarget(input: AddTargetInput): Promise<TargetRoute> {
   const id = assertSafePackageName(
     input.id?.trim() || slugify(input.label ?? path.basename(targetPath)),
   );
+  const mode = input.mode ?? 'link';
+
+  if (mode !== 'link') {
+    throw new SkillinkError(
+      'COPY_MODE_UNSUPPORTED',
+      'Copy mode is not implemented yet; use mode "link" instead.',
+      { mode },
+    );
+  }
 
   assertNoCaseInsensitiveCollision(
     route.targets.map((target) => target.id),
@@ -72,7 +81,7 @@ export async function addTarget(input: AddTargetInput): Promise<TargetRoute> {
     id,
     label: input.label,
     path: targetPath,
-    mode: input.mode ?? 'link',
+    mode,
     enabled: true,
     packages: {},
   };

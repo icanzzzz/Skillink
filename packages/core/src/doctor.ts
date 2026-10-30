@@ -35,6 +35,7 @@ export type DoctorIssueCode =
   | 'SKILL_MD_MISSING'
   | 'SKILL_INTEGRITY_MISMATCH'
   | 'SKILL_VERSION_CONFLICT'
+  | 'UNSUPPORTED_MODE'
   | 'PACKAGE_CYCLE'
   | 'PACKAGE_MISSING_VERSION'
   | 'UNUSED_PACKAGE_VERSION'
@@ -222,6 +223,15 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
   const targetIds = new Set<string>();
   const resolvedTargetPaths: string[] = [];
   for (const target of route.targets) {
+    if (target.mode !== 'link') {
+      issues.push({
+        code: 'UNSUPPORTED_MODE',
+        message: `Target "${target.id}" uses unsupported mode "${target.mode}"; v2.0 only supports link mode.`,
+        targetId: target.id,
+        path: target.path,
+      });
+    }
+
     if (targetIds.has(target.id)) {
       issues.push({
         code: 'INVALID_CONFIG',

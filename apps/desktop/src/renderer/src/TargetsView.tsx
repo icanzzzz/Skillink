@@ -212,7 +212,9 @@ export function TargetsView({
                 }
               >
                 <option value="link">link</option>
-                <option value="copy">copy (coming later)</option>
+                <option value="copy" disabled>
+                  copy (coming later)
+                </option>
               </select>
             </label>
             <div className="form-actions">

@@ -169,8 +169,8 @@ async function planTarget(
 
   if (target.mode !== 'link' && desired.size > 0) {
     throw new SkillinkError(
-      'LINK_FAILED',
-      'Copy mode is not implemented in the MVP yet.',
+      'COPY_MODE_UNSUPPORTED',
+      'Copy mode is not implemented yet; use mode "link" instead.',
       { targetId: target.id, mode: target.mode },
     );
   }
