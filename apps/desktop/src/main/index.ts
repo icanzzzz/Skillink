@@ -31,6 +31,21 @@ function createWindow(): void {
   } else {
     void window.loadFile(path.join(app.getAppPath(), 'out', 'renderer', 'index.html'));
   }
+
+  if (process.env.SKILLINK_SMOKE === '1') {
+    window.webContents.once('did-finish-load', () => {
+      setTimeout(() => {
+        void window.webContents
+          .executeJavaScript('document.body.innerText')
+          .then((text: string) => {
+            console.log(
+              `SKILLINK_SMOKE_TEXT:${text.replaceAll(/\s+/g, ' ').slice(0, 400)}`,
+            );
+            app.quit();
+          });
+      }, 800);
+    });
+  }
 }
 
 async function getSnapshot(): Promise<DesktopSnapshot> {
