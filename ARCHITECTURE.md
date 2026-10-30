@@ -539,6 +539,8 @@ skillink apply|status|doctor|gc|history|rollback
 以下命令支持 `--json`：
 
 ```text
+init
+migrate
 skill list|add|tag|remove
 package list|create|copy|tag|remove
 target list|add|remove|enable|disable
@@ -733,7 +735,7 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 
 ## 10. 测试策略
 
-当前验证：38 个测试文件、309 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
+当前验证：38 个测试文件、313 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
 
 | 层级 | 内容 |
 |---|---|
@@ -808,7 +810,7 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 
 ### 11.1 当前实现验证
 
-- `pnpm test`：38 个测试文件、309 个测试通过；
+- `pnpm test`：38 个测试文件、313 个测试通过；
 - `pnpm typecheck`：通过；
 - `pnpm build`：CLI 与 Electron 桌面端构建成功；
 - 真实 CLI E2E：skill 安装、package 创建/复制、target/route、apply、status/doctor、冲突修复、history/rollback、gc dry-run 均跑通；

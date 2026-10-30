@@ -103,29 +103,29 @@ pnpm dev:cli -- package copy frontend@1.0.0 frontend@1.1.0 --package base@2.1.0
 ## 常用命令
 
 ```bash
-skillink init
-skillink migrate
+skillink init [--json]
+skillink migrate [--json]
 
-skillink skill add <folder> [--name <name>] [--version <version>]
+skillink skill add <folder> [--name <name>] [--version <version>] [--json]
 skillink skill list [--json]
-skillink skill tag <skill@version> <tag>
-skillink skill remove <skill@version>
+skillink skill tag <skill@version> <tag> [--json]
+skillink skill remove <skill@version> [--json]
 
-skillink package create <name@version> --skill <skill@version>... [--package <package@version>...] [--description <text>]
-skillink package copy <source@version> <target@version> [--skill ...] [--package ...] [--drop-skill ...] [--drop-package ...] [--description <text>]
+skillink package create <name@version> --skill <skill@version>... [--package <package@version>...] [--description <text>] [--json]
+skillink package copy <source@version> <target@version> [--skill ...] [--package ...] [--drop-skill ...] [--drop-package ...] [--description <text>] [--json]
 skillink package list [--json]
-skillink package tag <package@version> <tag>
-skillink package remove <package@version>
+skillink package tag <package@version> <tag> [--json]
+skillink package remove <package@version> [--json]
 
-skillink target add <path> [--id <id>] [--label <label>] [--mode <mode>]
+skillink target add <path> [--id <id>] [--label <label>] [--mode <mode>] [--json]
 skillink target list [--json]
-skillink target remove <id>
-skillink target enable|disable <id>
+skillink target remove <id> [--json]
+skillink target enable|disable <id> [--json]
 
-skillink route add <target-id> <package@range-or-tag>
-skillink route remove <target-id> <package> [--force]
+skillink route add <target-id> <package@range-or-tag> [--json]
+skillink route remove <target-id> <package> [--force] [--json]
 skillink route list [--json]
-skillink route enable|disable <target-id> <package>
+skillink route enable|disable <target-id> <package> [--json]
 
 skillink apply [--target <id>] [--dry-run] [--prune]
 skillink snapshot [--json]
@@ -136,7 +136,7 @@ skillink history [--json]
 skillink rollback <snapshot-id> [--apply] [--json]
 ```
 
-所有写命令都支持 `--json`；失败时会向 stderr 输出结构化错误。
+所有写命令（包括 `init` / `migrate`）都支持 `--json`；失败时会向 stderr 输出结构化错误。
 
 `add` 是 `skill add` 的顶层别名。
 
