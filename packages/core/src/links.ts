@@ -1,6 +1,7 @@
 import { lstat, readlink, symlink, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { SkillinkError, type SkillinkPaths } from '@skillink/shared';
+import { withFsRetry } from './fs-retry.js';
 import { isPathInside, isSamePath } from './path-policy.js';
 
 export type PathInspection =
@@ -59,7 +60,7 @@ export async function createDirectoryLink(
   const type = process.platform === 'win32' ? 'junction' : 'dir';
 
   try {
-    await symlink(sourceDir, destination, type);
+    await withFsRetry(() => symlink(sourceDir, destination, type));
   } catch (error) {
     throw new SkillinkError(
       'LINK_FAILED',
@@ -72,7 +73,7 @@ export async function createDirectoryLink(
 
 export async function removeLink(linkPath: string): Promise<void> {
   try {
-    await unlink(linkPath);
+    await withFsRetry(() => unlink(linkPath));
   } catch (error) {
     throw new SkillinkError(
       'LINK_FAILED',

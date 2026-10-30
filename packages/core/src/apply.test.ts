@@ -243,6 +243,94 @@ describe('apply', () => {
     });
   });
 
+  it('rejects a migrated copy target before writing links', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'combo',
+      requested: '1.0.0',
+    });
+    const route = await readRouteFile(paths);
+    route.targets[0]!.mode = 'copy';
+    await writeRouteFile(paths, route);
+
+    await expect(apply({ paths })).rejects.toMatchObject({
+      code: 'COPY_MODE_UNSUPPORTED',
+    });
+    await expect(lstat(path.join(targetPath, 'pdf'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
+  it('does not create a missing target directory when validation fails', async () => {
+    const { paths } = await setup();
+    const missingTargetPath = path.join(paths.home, '..', 'not-created');
+    await addTarget({
+      paths,
+      id: 'missing-target',
+      path: missingTargetPath,
+      mode: 'link',
+    });
+    const route = await readRouteFile(paths);
+    route.targets.find((target) => target.id === 'missing-target')!.packages = {
+      broken: {
+        requested: '1.0.0',
+        resolved: '1.0.0',
+        integrity: 'sha256-wrong',
+        enabled: true,
+      },
+    };
+    await writeRouteFile(paths, route);
+
+    await expect(apply({ paths })).rejects.toMatchObject({
+      code: 'PACKAGE_NOT_FOUND',
+    });
+    await expect(lstat(missingTargetPath)).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
+  it('does not project earlier targets when a later target fails validation', async () => {
+    const { paths, targetPath } = await setup();
+    const secondTargetPath = path.join(
+      await tempDir('skillink-apply-second-'),
+      'skills',
+    );
+    await addTarget({
+      paths,
+      id: 'project-b',
+      path: secondTargetPath,
+      mode: 'link',
+    });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'docs-pack',
+      requested: '1.0.0',
+    });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-b',
+      name: 'pdf-pack',
+      requested: '1.0.0',
+    });
+    await rm(getSkillDir(paths, 'pdf', '1.0.0'), {
+      recursive: true,
+      force: true,
+    });
+
+    await expect(apply({ paths })).rejects.toMatchObject({
+      code: 'VERSION_NOT_FOUND',
+    });
+    await expect(lstat(path.join(targetPath, 'docs'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    await expect(lstat(secondTargetPath)).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
   it('skips links that already point at the correct skill version', async () => {
     const { paths } = await setup();
     await addRouteEntry({
@@ -387,6 +475,32 @@ describe('apply', () => {
     await expect(apply({ paths })).rejects.toMatchObject({
       code: 'SKILL_MD_MISSING',
     });
+  });
+
+  it('rejects a route whose skill content was modified after import', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'pdf-pack',
+      requested: '1.0.0',
+    });
+    await writeFile(
+      path.join(getSkillDir(paths, 'pdf', '1.0.0'), 'content.txt'),
+      'tampered',
+      'utf8',
+    );
+
+    await expect(apply({ paths })).rejects.toMatchObject({
+      code: 'SKILL_INTEGRITY_MISMATCH',
+      details: expect.objectContaining({
+        name: 'pdf',
+        version: '1.0.0',
+      }),
+    });
+    await expect(
+      lstat(path.join(targetPath, 'pdf')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('rejects unsafe skill references before writing outside the target', async () => {

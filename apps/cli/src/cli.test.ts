@@ -304,6 +304,104 @@ describe('CLI', () => {
     expect(routeFile.targets[0].packages.new).toBeUndefined();
   });
 
+  it('enables and disables targets and route packages', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    await runCli(
+      ['skill', 'add', source, '--name', 'pdf', '--version', '1.0.0'],
+      ctx,
+    );
+    await runCli(
+      ['package', 'create', 'pdf-pack@1.0.0', '--skill', 'pdf@1.0.0'],
+      ctx,
+    );
+    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
+    await runCli(['route', 'add', 'project-a', 'pdf-pack@1.0.0'], ctx);
+
+    expect(await runCli(['target', 'disable', 'project-a'], ctx)).toBe(0);
+    expect((await readJson(path.join(home, 'route.json'))).targets[0].enabled).toBe(
+      false,
+    );
+    expect(await runCli(['target', 'enable', 'project-a'], ctx)).toBe(0);
+    expect((await readJson(path.join(home, 'route.json'))).targets[0].enabled).toBe(
+      true,
+    );
+
+    expect(
+      await runCli(['route', 'disable', 'project-a', 'pdf-pack'], ctx),
+    ).toBe(0);
+    expect(
+      (await readJson(path.join(home, 'route.json'))).targets[0].packages[
+        'pdf-pack'
+      ].enabled,
+    ).toBe(false);
+    expect(
+      await runCli(['route', 'enable', 'project-a', 'pdf-pack'], ctx),
+    ).toBe(0);
+    expect(
+      (await readJson(path.join(home, 'route.json'))).targets[0].packages[
+        'pdf-pack'
+      ].enabled,
+    ).toBe(true);
+  });
+
+  it('rejects route remove when the remaining graph is invalid unless --force is used', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    await runCli(
+      ['skill', 'add', source, '--name', 'pdf', '--version', '1.0.0'],
+      ctx,
+    );
+    await runCli(
+      ['package', 'create', 'old@1.0.0', '--skill', 'pdf@1.0.0'],
+      ctx,
+    );
+    await runCli(
+      ['package', 'create', 'new@1.0.0', '--skill', 'pdf@1.0.0'],
+      ctx,
+    );
+    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
+    await runCli(['route', 'add', 'project-a', 'old@1.0.0'], ctx);
+    await runCli(['route', 'add', 'project-a', 'new@1.0.0'], ctx);
+
+    const packagePath = path.join(home, 'package.json');
+    const packageFile = await readJson(packagePath);
+    packageFile.packages.old.versions['1.0.0'].skills.pdf = '9.9.9';
+    await writeFile(packagePath, JSON.stringify(packageFile), 'utf8');
+
+    expect(await runCli(['route', 'remove', 'project-a', 'new'], ctx)).toBe(1);
+    expect(ctx.err.join('\n')).toContain('ROUTE_INVALID');
+    await expect(
+      readJson(path.join(home, 'route.json')),
+    ).resolves.toMatchObject({
+      targets: [
+        {
+          packages: {
+            new: expect.anything(),
+          },
+        },
+      ],
+    });
+
+    expect(
+      await runCli(['route', 'remove', 'project-a', 'new', '--force'], ctx),
+    ).toBe(0);
+    const routeFile = await readJson(path.join(home, 'route.json'));
+    expect(routeFile.targets[0].packages.new).toBeUndefined();
+  });
+
   it('tags and removes skill and package versions', async () => {
     const home = await tempDir('skillink-cli-');
     const source = await makeSkillSource();

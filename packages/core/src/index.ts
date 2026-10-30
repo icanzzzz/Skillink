@@ -1,6 +1,7 @@
 export * from './apply.js';
 export * from './doctor.js';
 export * from './folder-scan.js';
+export * from './fs-retry.js';
 export * from './gc.js';
 export * from './history.js';
 export * from './import-skill.js';
@@ -12,6 +13,9 @@ export * from './package-name.js';
 export * from './package-store.js';
 export * from './path-policy.js';
 export * from './route.js';
+export * from './skill-integrity.js';
+export * from './skill-md.js';
 export * from './skill-store.js';
 export * from './status.js';
 export * from './target.js';
+export * from './target-resolution.js';

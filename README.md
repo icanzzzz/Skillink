@@ -9,7 +9,7 @@ target -> package -> skill -> 实体内容
 - **Skill 是唯一安装单位，也是唯一实体**：内容存放在 `%USERPROFILE%\.agents\skillink\skills\<skill>\<version>\`，根目录必须有 `SKILL.md`。
 - **Package 只是配置文件**：`package.json` 描述 package 版本如何组合 skill 和其他 package；它没有内容目录，也不会投影到 target。
 - **Route 只依赖 package**：`route.json` 的 target 声明 package 版本，不直接声明 skill。
-- **Target 最终只包含 skill**：apply 会把 package 图展开为 skill 集合，再链接 skill 文件夹（MVP 只实现 link；copy 模式保留明确错误）。
+- **Target 最终只包含 skill**：apply 会把 package 图展开为 skill 集合，再链接 skill 文件夹（v2.0 只实现 link；copy target 在创建时直接拒绝）。
 - **三个全局配置**：`route.json`、`package.json`、`skill.json` 同级，均位于控制面。
 - **可复现**：route 锁定 package 版本；package 版本锁定精确 skill/package 版本；package 使用传递闭包哈希校验。
 - **不在项目中生成配置**：target 是普通目录，只放投影结果。
@@ -18,18 +18,24 @@ target -> package -> skill -> 实体内容
 
 ## 当前状态
 
-- skill 导入强制检查根级 `SKILL.md`；
+- skill 导入强制检查根级 `SKILL.md`，并限制文件数/大小/深度；
 - `skill.json` 管理所有 skill 版本、完整性、标签；
+- `apply` / `doctor` / history 回滚会重新校验 skill 内容完整性；
 - `package.json` 管理 package 组合，支持 package 嵌套 package；
 - DFS 环检测、skill 同版本去重、不同版本冲突报错；
 - `package copy` 支持复制 package 并覆盖/删除依赖，用于解决 skill 版本冲突；
 - `route.json` 只写 package lock；
 - Windows junction / POSIX symlink 投影；
 - `apply` / `status` / `doctor` / `gc`；
-- 三个配置文件的历史快照与成对回滚；
+- apply 先完成全量预检再写文件系统，执行失败有进程内回滚；
+- 三个配置文件的历史快照；普通写入失败会尝试恢复三文件，恢复本身失败会报 `IO_ERROR` 并列出 `restoreFailures`；
 - v1 `skills.json` -> v2 全有或全无迁移；
+- target/import 路径支持 `~`、`%USERPROFILE%`、`$HOME`；
+- Windows 大小写不敏感名称冲突检测、文件占用重试；
 - GUI 的 Targets / Skills / Packages / History / Doctor 页面；
 - Electron 打包（NSIS + portable）。
+
+> v2.0 仅支持 `mode: link`。copy target 会被拒绝，迁移遗留的 copy target 由 `doctor` 报 `UNSUPPORTED_MODE`。
 
 ## 快速开始
 
@@ -110,13 +116,15 @@ skillink package list [--json]
 skillink package tag <package@version> <tag>
 skillink package remove <package@version>
 
-skillink target add <path> [--id <id>] [--label <label>] [--mode link|copy]
+skillink target add <path> [--id <id>] [--label <label>]
 skillink target list [--json]
 skillink target remove <id>
+skillink target enable|disable <id>
 
 skillink route add <target-id> <package@range-or-tag>
-skillink route remove <target-id> <package>
+skillink route remove <target-id> <package> [--force]
 skillink route list [--json]
+skillink route enable|disable <target-id> <package>
 
 skillink apply [--target <id>] [--dry-run] [--prune]
 skillink status [--json] [--target <id>]
@@ -137,7 +145,7 @@ pnpm dev:desktop
 GUI 页面：
 
 - **Overview**：skills、packages、targets、links、doctor 概览；
-- **Targets**：添加 target、分配 package、apply；
+- **Targets**：添加/删除 target、分配/删除 package、target/package enable/disable、显示 package 数与解析后的 skill 数、apply 预览（dry-run）、prune、apply 结果；
 - **Skills**：导入 skill（必须 `SKILL.md`）、标签、删除、GC；
 - **Packages**：创建/复制 package、查看组合、标签、删除；
 - **History**：查看三文件快照并回滚；

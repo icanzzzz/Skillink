@@ -2,6 +2,7 @@ import { SkillinkError } from './errors.js';
 
 const INVALID_SEGMENT_CHARS = /[<>:"/\\|?*\u0000-\u001f]/;
 const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
+const RESERVED_OBJECT_NAMES = new Set(['__proto__', 'prototype', 'constructor']);
 const SAFE_VERSION_START = /^[0-9A-Za-z]/;
 
 export function isSafeSegment(value: string): boolean {
@@ -13,7 +14,8 @@ export function isSafeSegment(value: string): boolean {
     value === value.trim() &&
     !INVALID_SEGMENT_CHARS.test(value) &&
     !/[. ]$/.test(value) &&
-    !WINDOWS_RESERVED.test(value)
+    !WINDOWS_RESERVED.test(value) &&
+    !RESERVED_OBJECT_NAMES.has(value.toLowerCase())
   );
 }
 

@@ -2,6 +2,8 @@ import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { registerIpcHandlers } from './ipc.js';
 
+let mainWindow: BrowserWindow | null = null;
+
 function createWindow(): void {
   const window = new BrowserWindow({
     width: 1180,
@@ -16,6 +18,13 @@ function createWindow(): void {
       sandbox: true,
       nodeIntegration: false,
     },
+  });
+
+  mainWindow = window;
+  window.on('closed', () => {
+    if (mainWindow === window) {
+      mainWindow = null;
+    }
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -41,7 +50,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  registerIpcHandlers();
+  registerIpcHandlers(() => mainWindow);
   createWindow();
 
   app.on('activate', () => {

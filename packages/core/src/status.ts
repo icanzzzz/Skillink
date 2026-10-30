@@ -9,7 +9,7 @@ import {
 } from '@skillink/shared';
 import { inspectPath, isManagedLink } from './links.js';
 import {
-  assertSafeTargetPath,
+  assertSafeRealTargetPath,
   isPathInside,
   isSamePath,
 } from './path-policy.js';
@@ -91,7 +91,7 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
   for (const target of targets) {
     let targetPath: string;
     try {
-      targetPath = assertSafeTargetPath(target.path, paths);
+      targetPath = await assertSafeRealTargetPath(target.path, paths);
     } catch (error) {
       entries.push({
         targetId: target.id,

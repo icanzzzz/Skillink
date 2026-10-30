@@ -1,6 +1,7 @@
 export type SkillinkErrorCode =
   | 'INVALID_NAME'
   | 'INVALID_VERSION'
+  | 'INVALID_PATH'
   | 'UNSAFE_PATH'
   | 'PACKAGE_EXISTS'
   | 'PACKAGE_NOT_FOUND'
@@ -10,7 +11,9 @@ export type SkillinkErrorCode =
   | 'PACKAGE_INTEGRITY_MISMATCH'
   | 'SKILL_MD_REQUIRED'
   | 'SKILL_MD_MISSING'
+  | 'SKILL_INTEGRITY_MISMATCH'
   | 'SKILL_VERSION_CONFLICT'
+  | 'IMPORT_LIMIT_EXCEEDED'
   | 'VERSION_NOT_FOUND'
   | 'ROUTE_INVALID'
   | 'TARGET_EXISTS'
@@ -19,7 +22,9 @@ export type SkillinkErrorCode =
   | 'VERSION_IN_USE'
   | 'UNMANAGED_CONFLICT'
   | 'LINK_FAILED'
-  | 'IO_ERROR';
+  | 'IO_ERROR'
+  | 'IPC_FORBIDDEN'
+  | 'COPY_MODE_UNSUPPORTED';
 
 export class SkillinkError extends Error {
   readonly code: SkillinkErrorCode;

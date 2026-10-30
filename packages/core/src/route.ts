@@ -15,6 +15,7 @@ import {
   resolvePackageGraph,
 } from './package-graph.js';
 import { withHistory } from './history.js';
+import { assertSafePackageName } from './package-name.js';
 
 export async function readRouteFile(paths: SkillinkPaths): Promise<RouteFile> {
   return readJsonFile(paths.routeFile, RouteFileSchema, createEmptyRouteFile());
@@ -58,19 +59,16 @@ export async function addRouteEntry(
   }
 
   const target = route.targets[targetIndex]!;
+  const name = assertSafePackageName(input.name);
   const packageFile = await readPackageFile(input.paths);
   const skillFile = await readSkillFile(input.paths);
-  const resolved = resolvePackageVersion(
-    packageFile,
-    input.name,
-    input.requested,
-  );
+  const resolved = resolvePackageVersion(packageFile, name, input.requested);
 
   const lock: PackageLock = {
     requested: input.requested,
     resolved: resolved.version,
     integrity: computePackageIntegrity(packageFile, [
-      { name: input.name, version: resolved.version },
+      { name, version: resolved.version },
     ]),
     enabled: true,
   };
@@ -79,7 +77,7 @@ export async function addRouteEntry(
     ...target,
     packages: {
       ...target.packages,
-      [input.name]: lock,
+      [name]: lock,
     },
   };
 
@@ -88,8 +86,8 @@ export async function addRouteEntry(
     skillFile,
     Object.entries(candidate.packages)
       .filter(([, packageLock]) => packageLock.enabled !== false)
-      .map(([name, packageLock]) => ({
-        name,
+      .map(([packageName, packageLock]) => ({
+        name: packageName,
         version: packageLock.resolved,
       })),
   );
@@ -103,10 +101,82 @@ export async function addRouteEntry(
   return lock;
 }
 
+export async function validateTargetRoute(
+  paths: SkillinkPaths,
+  target: TargetRoute,
+): Promise<void> {
+  const packageFile = await readPackageFile(paths);
+  const skillFile = await readSkillFile(paths);
+  const roots = Object.entries(target.packages)
+    .filter(([, lock]) => lock.enabled !== false)
+    .map(([name, lock]) => ({ name, version: lock.resolved }));
+
+  for (const [name, lock] of Object.entries(target.packages)) {
+    if (lock.enabled === false) {
+      continue;
+    }
+    const expected = computePackageIntegrity(packageFile, [
+      { name, version: lock.resolved },
+    ]);
+    if (expected !== lock.integrity) {
+      throw new SkillinkError(
+        'PACKAGE_INTEGRITY_MISMATCH',
+        `Route lock for ${name}@${lock.resolved} does not match package.json.`,
+        { name, version: lock.resolved, expected, actual: lock.integrity },
+      );
+    }
+  }
+
+  resolvePackageGraph(packageFile, skillFile, roots);
+}
+
+export async function setPackageEnabled(
+  paths: SkillinkPaths,
+  targetId: string,
+  packageName: string,
+  enabled: boolean,
+): Promise<PackageLock> {
+  const route = await readRouteFile(paths);
+  const target = findTarget(route, targetId);
+  const name = assertSafePackageName(packageName);
+
+  if (!target) {
+    throw new SkillinkError(
+      'TARGET_NOT_FOUND',
+      `Target "${targetId}" does not exist.`,
+      { targetId },
+    );
+  }
+
+  if (!Object.hasOwn(target.packages, name)) {
+    throw new SkillinkError(
+      'PACKAGE_NOT_FOUND',
+      `Package "${name}" is not assigned to target "${targetId}".`,
+      { targetId, name },
+    );
+  }
+
+  const lock = target.packages[name]!;
+  lock.enabled = enabled;
+  if (enabled) {
+    await validateTargetRoute(paths, target);
+  }
+  await withHistory(
+    paths,
+    enabled ? 'enable-route-package' : 'disable-route-package',
+    async () => {
+      await writeRouteFile(paths, route);
+    },
+  );
+
+  return lock;
+}
+
 export interface RemoveRouteEntryInput {
   paths: SkillinkPaths;
   targetId: string;
   name: string;
+  force?: boolean;
 }
 
 export async function removeRouteEntry(
@@ -114,6 +184,7 @@ export async function removeRouteEntry(
 ): Promise<boolean> {
   const route = await readRouteFile(input.paths);
   const target = findTarget(route, input.targetId);
+  const name = assertSafePackageName(input.name);
 
   if (!target) {
     throw new SkillinkError(
@@ -123,11 +194,37 @@ export async function removeRouteEntry(
     );
   }
 
-  if (!(input.name in target.packages)) {
+  if (!Object.hasOwn(target.packages, name)) {
     return false;
   }
 
-  delete target.packages[input.name];
+  delete target.packages[name];
+
+  if (!input.force) {
+    const packageFile = await readPackageFile(input.paths);
+    const skillFile = await readSkillFile(input.paths);
+    const roots = Object.entries(target.packages)
+      .filter(([, lock]) => lock.enabled !== false)
+      .map(([name, lock]) => ({ name, version: lock.resolved }));
+
+    try {
+      resolvePackageGraph(packageFile, skillFile, roots);
+    } catch (error) {
+      throw new SkillinkError(
+        'ROUTE_INVALID',
+        `Cannot remove route "${input.name}" from target "${input.targetId}" because the remaining graph is invalid: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        {
+          targetId: input.targetId,
+          name,
+          cause: error instanceof Error ? error.message : String(error),
+        },
+        { cause: error },
+      );
+    }
+  }
+
   await withHistory(input.paths, 'remove-route-entry', async () => {
     await writeRouteFile(input.paths, route);
   });

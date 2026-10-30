@@ -13,9 +13,12 @@ import {
   type PackageFile,
   type RouteFile,
   type SkillFile,
+  type SkillVersion,
   type SkillinkPaths,
 } from '@skillink/shared';
 import { readJsonFile, writeJsonAtomic } from './json-store.js';
+import { withFsRetry } from './fs-retry.js';
+import { scanFolder } from './folder-scan.js';
 import {
   computePackageIntegrity,
   resolvePackageGraph,
@@ -27,6 +30,75 @@ export interface HistoryEntry {
   path: string;
   createdAt: string;
   reason: string;
+}
+
+export interface ConfigSet {
+  route: RouteFile;
+  packages: PackageFile;
+  skills: SkillFile;
+}
+
+export interface WriteConfigSetOptions {
+  write?: (
+    filePath: string,
+    value: unknown,
+    schema: { parse: (input: unknown) => unknown },
+  ) => Promise<void>;
+}
+
+export async function writeConfigSet(
+  paths: SkillinkPaths,
+  set: ConfigSet,
+  options: WriteConfigSetOptions = {},
+): Promise<void> {
+  const write = options.write ?? writeJsonAtomic;
+  const [previousRoute, previousPackages, previousSkills] = await Promise.all([
+    readJsonFile(paths.routeFile, RouteFileSchema, createEmptyRouteFile()),
+    readJsonFile(
+      paths.packageFile,
+      PackageFileSchema,
+      createEmptyPackageFile(),
+    ),
+    readJsonFile(paths.skillFile, SkillFileSchema, createEmptySkillFile()),
+  ]);
+
+  try {
+    await write(paths.skillFile, set.skills, SkillFileSchema);
+    await write(paths.packageFile, set.packages, PackageFileSchema);
+    await write(paths.routeFile, set.route, RouteFileSchema);
+  } catch (error) {
+    const restoreFailures: unknown[] = [];
+    const restores: Array<() => Promise<void>> = [
+      () => write(paths.skillFile, previousSkills, SkillFileSchema),
+      () => write(paths.packageFile, previousPackages, PackageFileSchema),
+      () => write(paths.routeFile, previousRoute, RouteFileSchema),
+    ];
+
+    for (const restore of restores) {
+      try {
+        await restore();
+      } catch (restoreError) {
+        restoreFailures.push(restoreError);
+      }
+    }
+
+    if (restoreFailures.length > 0) {
+      throw new SkillinkError(
+        'IO_ERROR',
+        `Failed to write configuration and failed to restore the previous files: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        {
+          restoreFailures: restoreFailures.map((failure) =>
+            failure instanceof Error ? failure.message : String(failure),
+          ),
+        },
+        { cause: error },
+      );
+    }
+
+    throw error;
+  }
 }
 
 const HistoryMetaSchema = z.object({
@@ -91,7 +163,7 @@ async function pruneHistory(paths: SkillinkPaths): Promise<void> {
   const entries = await listHistory(paths);
 
   for (const entry of entries.slice(MAX_SNAPSHOTS)) {
-    await rm(entry.path, { recursive: true, force: true });
+    await withFsRetry(() => rm(entry.path, { recursive: true, force: true }));
   }
 }
 
@@ -151,7 +223,9 @@ export async function createHistorySnapshot(
       HistoryMetaSchema,
     );
   } catch (error) {
-    await rm(snapshotPath, { recursive: true, force: true });
+    await withFsRetry(() =>
+      rm(snapshotPath, { recursive: true, force: true }),
+    ).catch(() => undefined);
     throw error;
   }
 
@@ -234,10 +308,28 @@ async function isSkillContent(directory: string): Promise<boolean> {
   );
 }
 
+async function isValidSkillContent(
+  directory: string,
+  expected: SkillVersion,
+): Promise<boolean> {
+  if (!(await isSkillContent(directory))) {
+    return false;
+  }
+
+  const scan = await scanFolder(directory).catch(() => undefined);
+  return (
+    scan?.kind === 'skill' &&
+    scan.integrity === expected.integrity &&
+    scan.fileCount === expected.fileCount &&
+    scan.totalSize === expected.size
+  );
+}
+
 async function findTrashCopy(
   paths: SkillinkPaths,
   name: string,
   version: string,
+  expected: SkillVersion,
 ): Promise<string | undefined> {
   const directories = await readdir(paths.trashDir, {
     withFileTypes: true,
@@ -259,7 +351,7 @@ async function findTrashCopy(
       name,
       version,
     );
-    if (await isSkillContent(candidate)) {
+    if (await isValidSkillContent(candidate, expected)) {
       return candidate;
     }
   }
@@ -276,13 +368,14 @@ async function planContentRestores(
 
   for (const [name, skillEntry] of Object.entries(skills.skills)) {
     for (const version of Object.keys(skillEntry.versions)) {
+      const expected = skillEntry.versions[version]!;
       const destination = getSkillDir(paths, name, version);
 
-      if (await isSkillContent(destination)) {
+      if (await isValidSkillContent(destination, expected)) {
         continue;
       }
 
-      const source = await findTrashCopy(paths, name, version);
+      const source = await findTrashCopy(paths, name, version, expected);
       if (source) {
         restores.push({ source, destination });
       } else {
@@ -383,9 +476,11 @@ export async function restoreHistorySnapshot(
 
   for (const restore of restores) {
     await mkdir(path.dirname(restore.destination), { recursive: true });
-    await rm(restore.destination, { recursive: true, force: true });
+    await withFsRetry(() =>
+      rm(restore.destination, { recursive: true, force: true }),
+    );
     try {
-      await rename(restore.source, restore.destination);
+      await withFsRetry(() => rename(restore.source, restore.destination));
     } catch (error) {
       throw new SkillinkError(
         'IO_ERROR',
@@ -400,11 +495,7 @@ export async function restoreHistorySnapshot(
     }
   }
 
-  // Write in dependency order so the route never points at a config that is
-  // not yet on disk.
-  await writeJsonAtomic(paths.skillFile, skills, SkillFileSchema);
-  await writeJsonAtomic(paths.packageFile, packages, PackageFileSchema);
-  await writeJsonAtomic(paths.routeFile, route, RouteFileSchema);
+  await writeConfigSet(paths, { skills, packages, route });
 }
 
 export async function withHistory<T>(

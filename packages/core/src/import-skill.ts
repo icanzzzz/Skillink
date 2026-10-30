@@ -4,6 +4,7 @@ import {
   copyFile,
   lstat,
   mkdir,
+  readFile,
   rename,
   rm,
   stat,
@@ -11,16 +12,26 @@ import {
 import path from 'node:path';
 import {
   SkillinkError,
+  expandPath,
   getSkillDir,
   getSkillinkPaths,
 } from '@skillink/shared';
-import { scanFolder } from './folder-scan.js';
+import {
+  DEFAULT_IMPORT_LIMITS,
+  scanFolder,
+  type ScanFolderOptions,
+} from './folder-scan.js';
+import { assertSafeImportSource } from './path-policy.js';
+import { withFsRetry } from './fs-retry.js';
+import { parseSkillFrontmatter } from './skill-md.js';
+import { assertSkillIntegrity } from './skill-integrity.js';
 import {
   assertSkillContent,
   readSkillFile,
   upsertSkillVersion,
 } from './skill-store.js';
 import {
+  assertNoCaseInsensitiveCollision,
   assertSafePackageName,
   createAutoVersion,
   normalizeVersion,
@@ -31,6 +42,7 @@ export interface ImportSkillInput {
   name?: string;
   version?: string;
   home?: string;
+  limits?: ScanFolderOptions;
 }
 
 export interface ImportSkillResult {
@@ -51,7 +63,7 @@ export async function importSkill(
   input: ImportSkillInput,
 ): Promise<ImportSkillResult> {
   const paths = getSkillinkPaths(input.home);
-  const sourceDir = path.resolve(input.sourceDir);
+  const sourceDir = path.resolve(expandPath(input.sourceDir));
   const sourceStat = await stat(sourceDir).catch((error: unknown) => {
     throw new SkillinkError(
       'IO_ERROR',
@@ -65,7 +77,8 @@ export async function importSkill(
     throw sourceError(`Source is not a folder: ${sourceDir}`, sourceDir);
   }
 
-  const scan = await scanFolder(sourceDir);
+  await assertSafeImportSource(sourceDir);
+  const scan = await scanFolder(sourceDir, input.limits ?? DEFAULT_IMPORT_LIMITS);
   if (scan.kind !== 'skill') {
     throw new SkillinkError(
       'SKILL_MD_REQUIRED',
@@ -74,16 +87,36 @@ export async function importSkill(
     );
   }
 
+  const frontmatter = parseSkillFrontmatter(
+    await readFile(path.join(sourceDir, 'SKILL.md'), 'utf8'),
+  );
+  const metadata = {
+    ...(frontmatter?.name ? { name: frontmatter.name } : {}),
+    ...(frontmatter?.metadata ?? {}),
+  };
+  const description = frontmatter?.description;
+
   const name = assertSafePackageName(input.name ?? path.basename(sourceDir));
   const version =
     normalizeVersion(input.version) ?? createAutoVersion(scan.manifestHash);
   const skillDir = getSkillDir(paths, name, version);
   const skillFile = await readSkillFile(paths);
+  assertNoCaseInsensitiveCollision(Object.keys(skillFile.skills), name, 'skill');
   const existing = skillFile.skills[name]?.versions[version];
 
   if (existing) {
     if (existing.integrity === scan.integrity) {
       await assertSkillContent(paths, name, version);
+      await assertSkillIntegrity(paths, name, version, existing);
+      await upsertSkillVersion(paths, {
+        name,
+        version,
+        integrity: scan.integrity,
+        fileCount: existing.fileCount,
+        size: existing.size,
+        description,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+      });
       return {
         name,
         version,
@@ -138,14 +171,45 @@ export async function importSkill(
     for (const file of scan.files) {
       const destination = path.join(stagingDir, file.relativePath);
       await mkdir(path.dirname(destination), { recursive: true });
-      await copyFile(path.join(sourceDir, file.relativePath), destination);
+      await withFsRetry(() =>
+        copyFile(path.join(sourceDir, file.relativePath), destination),
+      );
       await chmod(destination, file.mode).catch(() => undefined);
     }
 
+    const directories = [...scan.directories].sort((left, right) => {
+      const depth = right.relativePath.split('/').length -
+        left.relativePath.split('/').length;
+      return depth !== 0
+        ? depth
+        : right.relativePath.localeCompare(left.relativePath);
+    });
+    for (const directory of directories) {
+      await chmod(
+        path.join(stagingDir, directory.relativePath),
+        directory.mode,
+      );
+    }
+
+    const stagedScan = await scanFolder(stagingDir);
+    if (stagedScan.integrity !== scan.integrity) {
+      throw new SkillinkError(
+        'SKILL_INTEGRITY_MISMATCH',
+        `Imported content does not match the scanned source: ${sourceDir}`,
+        {
+          sourceDir,
+          expected: scan.integrity,
+          actual: stagedScan.integrity,
+        },
+      );
+    }
+
     await mkdir(path.dirname(skillDir), { recursive: true });
-    await rename(stagingDir, skillDir);
+    await withFsRetry(() => rename(stagingDir, skillDir));
   } catch (error) {
-    await rm(stagingDir, { recursive: true, force: true });
+    await withFsRetry(() =>
+      rm(stagingDir, { recursive: true, force: true }),
+    ).catch(() => undefined);
     throw error;
   }
 
@@ -156,9 +220,13 @@ export async function importSkill(
       integrity: scan.integrity,
       fileCount: scan.fileCount,
       size: scan.totalSize,
+      description,
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
     });
   } catch (error) {
-    await rm(skillDir, { recursive: true, force: true });
+    await withFsRetry(() =>
+      rm(skillDir, { recursive: true, force: true }),
+    ).catch(() => undefined);
     throw error;
   }
 

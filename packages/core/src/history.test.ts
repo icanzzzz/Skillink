@@ -19,6 +19,7 @@ import {
   createHistorySnapshot,
   listHistory,
   restoreHistorySnapshot,
+  writeConfigSet,
 } from './history.js';
 import { importSkill } from './import-skill.js';
 import {
@@ -29,8 +30,14 @@ import {
 import {
   addRouteEntry,
   readRouteFile,
+  writeRouteFile,
 } from './route.js';
-import { readSkillFile, removeSkillVersion } from './skill-store.js';
+import {
+  readSkillFile,
+  removeSkillVersion,
+  writeSkillFile,
+} from './skill-store.js';
+import { writeJsonAtomic } from './json-store.js';
 import { addTarget } from './target.js';
 
 const tempDirs: string[] = [];
@@ -86,6 +93,123 @@ afterEach(async () => {
   await Promise.all(
     tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
   );
+});
+
+describe('writeConfigSet', () => {
+  it('attempts every restore and reports restore failures', async () => {
+    const { paths } = await setup();
+    await writeRouteFile(paths, { schemaVersion: 2, targets: [] });
+    await writePackageFile(paths, createEmptyPackageFile());
+    await writeSkillFile(paths, { schemaVersion: 2, skills: {} });
+
+    let routeWrites = 0;
+    let packageWrites = 0;
+    const write = async (
+      filePath: string,
+      value: unknown,
+      schema: { parse: (input: unknown) => unknown },
+    ): Promise<void> => {
+      if (filePath.endsWith('route.json')) {
+        routeWrites += 1;
+        if (routeWrites === 1) {
+          throw new Error('initial route failure');
+        }
+      }
+      if (filePath.endsWith('package.json')) {
+        packageWrites += 1;
+        if (packageWrites === 2) {
+          throw new Error('package restore failure');
+        }
+      }
+      await writeJsonAtomic(filePath, value, schema);
+    };
+
+    await expect(
+      writeConfigSet(
+        paths,
+        {
+          route: {
+            schemaVersion: 2,
+            targets: [
+              {
+                id: 'project-a',
+                path: 'C:/tmp/target',
+                mode: 'link',
+                enabled: true,
+                packages: {},
+              },
+            ],
+          },
+          packages: createEmptyPackageFile(),
+          skills: { schemaVersion: 2, skills: {} },
+        },
+        { write },
+      ),
+    ).rejects.toMatchObject({
+      code: 'IO_ERROR',
+      details: expect.objectContaining({
+        restoreFailures: expect.arrayContaining([
+          expect.stringContaining('package restore failure'),
+        ]),
+      }),
+    });
+    expect(routeWrites).toBe(2);
+  });
+
+  it('restores all three files when a later write fails', async () => {
+    const { paths } = await setup();
+    await writeRouteFile(paths, { schemaVersion: 2, targets: [] });
+    await writePackageFile(paths, createEmptyPackageFile());
+    await writeSkillFile(paths, { schemaVersion: 2, skills: {} });
+
+    let failed = false;
+    const write = async (
+      filePath: string,
+      value: unknown,
+      schema: { parse: (input: unknown) => unknown },
+    ): Promise<void> => {
+      if (filePath.endsWith('package.json') && !failed) {
+        failed = true;
+        throw new Error('simulated write failure');
+      }
+      await writeJsonAtomic(filePath, value, schema);
+    };
+
+    await expect(
+      writeConfigSet(
+        paths,
+        {
+          route: {
+            schemaVersion: 2,
+            targets: [
+              {
+                id: 'project-a',
+                path: 'C:/tmp/target',
+                mode: 'link',
+                enabled: true,
+                packages: {},
+              },
+            ],
+          },
+          packages: createEmptyPackageFile(),
+          skills: { schemaVersion: 2, skills: {} },
+        },
+        { write },
+      ),
+    ).rejects.toThrow(/simulated/);
+
+    await expect(readRouteFile(paths)).resolves.toEqual({
+      schemaVersion: 2,
+      targets: [],
+    });
+    await expect(readPackageFile(paths)).resolves.toEqual(
+      createEmptyPackageFile(),
+    );
+    await expect(readSkillFile(paths)).resolves.toEqual({
+      schemaVersion: 2,
+      skills: {},
+    });
+  });
 });
 
 describe('history snapshots', () => {
@@ -187,6 +311,34 @@ describe('history snapshots', () => {
     expect(packages.packages['other-pack']).toBeUndefined();
     expect(skills.skills.other).toBeUndefined();
     expect(skills.skills.demo?.versions['1.0.0']).toBeDefined();
+  });
+
+  it('rejects restoring when library content no longer matches the snapshot', async () => {
+    const { paths, targetPath } = await setup();
+    await importSkillVersion(paths.home, 'demo', '1.0.0');
+    await createPackageVersion({
+      paths,
+      name: 'demo-pack',
+      version: '1.0.0',
+      skills: { demo: '1.0.0' },
+    });
+    await addTarget({ paths, id: 'project-a', path: targetPath });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'demo-pack',
+      requested: '1.0.0',
+    });
+    const snapshot = await createHistorySnapshot(paths, 'before-tamper');
+    await writeFile(
+      path.join(getSkillDir(paths, 'demo', '1.0.0'), 'content.txt'),
+      'tampered',
+      'utf8',
+    );
+
+    await expect(
+      restoreHistorySnapshot(paths, snapshot.id),
+    ).rejects.toMatchObject({ code: 'VERSION_NOT_FOUND' });
   });
 
   it('rejects a snapshot whose package graph has a cycle', async () => {

@@ -16,6 +16,7 @@ import { readRouteFile } from './route.js';
 import { resolvePackageGraph } from './package-graph.js';
 import { isPathInside } from './path-policy.js';
 import { withHistory } from './history.js';
+import { withFsRetry } from './fs-retry.js';
 
 export interface GcOptions {
   dryRun?: boolean;
@@ -192,7 +193,7 @@ export async function gc(
         );
         await mkdir(path.dirname(destination), { recursive: true });
         try {
-          await rename(candidate.path, destination);
+          await withFsRetry(() => rename(candidate.path, destination));
           moved.push({ source: candidate.path, destination });
         } catch (error) {
           if (!(isNodeError(error) && error.code === 'ENOENT')) {
@@ -229,7 +230,9 @@ export async function gc(
     } catch (error) {
       for (const item of moved.reverse()) {
         await mkdir(path.dirname(item.source), { recursive: true });
-        await rename(item.destination, item.source).catch(() => undefined);
+        await withFsRetry(() =>
+          rename(item.destination, item.source),
+        ).catch(() => undefined);
       }
       throw error;
     }

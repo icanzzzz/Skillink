@@ -27,6 +27,59 @@ describe('TargetsView', () => {
     expect(html).toContain('skill folders');
   });
 
+  it('disables the unimplemented copy mode option', () => {
+    const html = renderToStaticMarkup(<TargetsView targets={[]} />);
+
+    expect(html).toMatch(/<option value="copy"[^>]*disabled/);
+  });
+
+  it('renders package and resolved skill counts', () => {
+    const html = renderToStaticMarkup(
+      <TargetsView
+        targets={[target]}
+        targetSkills={[
+          {
+            targetId: 'project-a',
+            skills: [{ name: 'pdf', version: '1.0.0' }],
+          },
+        ]}
+      />,
+    );
+
+    expect(html).toContain('1 package');
+    expect(html).toContain('1 skill');
+  });
+
+  it('renders lifecycle controls and apply reports', () => {
+    const html = renderToStaticMarkup(
+      <TargetsView
+        targets={[target]}
+        applyReport={{
+          dryRun: true,
+          ok: true,
+          operations: [
+            {
+              kind: 'create-link',
+              targetId: 'project-a',
+              targetPath: 'C:/Projects/ProjectA/skills',
+              name: 'pdf',
+              version: '1.0.0',
+              path: 'C:/Projects/ProjectA/skills/pdf',
+            },
+          ],
+          conflicts: [],
+        }}
+      />,
+    );
+
+    expect(html).toContain('Remove target');
+    expect(html).toContain('Disable target');
+    expect(html).toContain('Preview apply');
+    expect(html).toContain('frontend');
+    expect(html).toContain('Remove route');
+    expect(html).toContain('dry-run');
+  });
+
   it('renders target paths and package counts', () => {
     const html = renderToStaticMarkup(<TargetsView targets={[target]} />);
 

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { getSkillinkPaths } from '@skillink/shared';
-import { addTarget, removeTarget } from './target.js';
+import { addTarget, removeTarget, setTargetEnabled } from './target.js';
 import { readRouteFile } from './route.js';
 
 const tempDirs: string[] = [];
@@ -50,6 +50,56 @@ describe('targets', () => {
     expect(route.targets).toHaveLength(1);
   });
 
+  it('rejects copy mode until it is implemented', async () => {
+    const { paths, targetPath } = await setup();
+
+    await expect(
+      addTarget({
+        paths,
+        id: 'copy-target',
+        path: targetPath,
+        mode: 'copy',
+      }),
+    ).rejects.toMatchObject({ code: 'COPY_MODE_UNSUPPORTED' });
+
+    expect((await readRouteFile(paths)).targets).toEqual([]);
+  });
+
+  it('expands a tilde in a target path', async () => {
+    const { paths } = await setup();
+
+    const target = await addTarget({
+      paths,
+      id: 'home-target',
+      path: '~/skillink-target-expansion',
+    });
+
+    expect(target.path).toBe(
+      path.join(os.homedir(), 'skillink-target-expansion'),
+    );
+  });
+
+  it('expands environment variables in a target path', async () => {
+    const { root, paths } = await setup();
+    const previous = process.env.SKILLINK_TARGET_TEST;
+    process.env.SKILLINK_TARGET_TEST = root;
+    try {
+      const target = await addTarget({
+        paths,
+        id: 'env-target',
+        path: '%SKILLINK_TARGET_TEST%/env-target',
+      });
+
+      expect(target.path).toBe(path.join(root, 'env-target'));
+    } finally {
+      if (previous === undefined) {
+        delete process.env.SKILLINK_TARGET_TEST;
+      } else {
+        process.env.SKILLINK_TARGET_TEST = previous;
+      }
+    }
+  });
+
   it('generates a target id when omitted', async () => {
     const { paths, targetPath } = await setup();
 
@@ -73,6 +123,19 @@ describe('targets', () => {
         path: path.join(path.dirname(targetPath), 'other'),
       }),
     ).rejects.toThrow(/target/i);
+  });
+
+  it('rejects target ids that collide case-insensitively', async () => {
+    const { paths, targetPath } = await setup();
+    await addTarget({ paths, id: 'Project-A', path: targetPath });
+
+    await expect(
+      addTarget({
+        paths,
+        id: 'project-a',
+        path: path.join(path.dirname(targetPath), 'other'),
+      }),
+    ).rejects.toMatchObject({ code: 'TARGET_EXISTS' });
   });
 
   it('rejects duplicate target paths', async () => {
@@ -114,6 +177,23 @@ describe('targets', () => {
         path: path.join(paths.home, 'target'),
       }),
     ).rejects.toThrow(/control plane/i);
+  });
+
+  it('enables and disables a target with history', async () => {
+    const { paths, targetPath } = await setup();
+    await addTarget({ paths, id: 'project-a', path: targetPath });
+
+    const disabled = await setTargetEnabled(paths, 'project-a', false);
+
+    expect(disabled.enabled).toBe(false);
+    expect((await readRouteFile(paths)).targets[0]?.enabled).toBe(false);
+
+    const enabled = await setTargetEnabled(paths, 'project-a', true);
+    expect(enabled.enabled).toBe(true);
+
+    await expect(
+      setTargetEnabled(paths, 'missing', false),
+    ).rejects.toMatchObject({ code: 'TARGET_NOT_FOUND' });
   });
 
   it('removes a target without deleting the target directory', async () => {

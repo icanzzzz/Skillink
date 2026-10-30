@@ -17,7 +17,11 @@ import {
   resolvePackageGraph,
   validateAllPackages,
 } from './package-graph.js';
-import { assertSafePackageName, normalizeVersion } from './package-name.js';
+import {
+  assertNoCaseInsensitiveCollision,
+  assertSafePackageName,
+  normalizeVersion,
+} from './package-name.js';
 
 export async function readPackageFile(
   paths: SkillinkPaths,
@@ -43,10 +47,13 @@ export interface ResolvedPackageVersion {
 
 export function resolvePackageVersion(
   file: PackageFile,
-  name: string,
+  requestedName: string,
   requested: string,
 ): ResolvedPackageVersion {
-  const packageEntry = file.packages[name];
+  const name = assertSafePackageName(requestedName);
+  const packageEntry = Object.hasOwn(file.packages, name)
+    ? file.packages[name]
+    : undefined;
 
   if (!packageEntry) {
     throw new SkillinkError(
@@ -141,6 +148,7 @@ export async function createPackageVersion(
 
   const file = await readPackageFile(input.paths);
   const skillFile = await readSkillFile(input.paths);
+  assertNoCaseInsensitiveCollision(Object.keys(file.packages), name, 'package');
   const packageEntry = file.packages[name] ?? { versions: {} };
 
   if (packageEntry.versions[version]) {
@@ -202,26 +210,35 @@ export async function copyPackageVersion(
   input: CopyPackageVersionInput,
 ): Promise<PackageVersion> {
   const targetName = assertSafePackageName(input.targetName);
+  const sourceName = assertSafePackageName(input.sourceName);
   const targetVersion = assertVersion(input.targetVersion);
 
   const file = await readPackageFile(input.paths);
   const skillFile = await readSkillFile(input.paths);
-  const sourcePackage = file.packages[input.sourceName];
+  assertNoCaseInsensitiveCollision(Object.keys(file.packages), targetName, 'package');
+  const sourcePackage = Object.hasOwn(file.packages, sourceName)
+    ? file.packages[sourceName]
+    : undefined;
 
   if (!sourcePackage) {
     throw new SkillinkError(
       'PACKAGE_NOT_FOUND',
-      `Package "${input.sourceName}" is not defined in package.json.`,
-      { name: input.sourceName },
+      `Package "${sourceName}" is not defined in package.json.`,
+      { name: sourceName },
     );
   }
 
-  const sourceVersion = sourcePackage.versions[input.sourceVersion];
+  const sourceVersion = Object.hasOwn(
+    sourcePackage.versions,
+    input.sourceVersion,
+  )
+    ? sourcePackage.versions[input.sourceVersion]
+    : undefined;
   if (!sourceVersion) {
     throw new SkillinkError(
       'VERSION_NOT_FOUND',
-      `Version "${input.sourceVersion}" of package "${input.sourceName}" is not defined in package.json.`,
-      { name: input.sourceName, version: input.sourceVersion },
+      `Version "${input.sourceVersion}" of package "${sourceName}" is not defined in package.json.`,
+      { name: sourceName, version: input.sourceVersion },
     );
   }
 
@@ -255,7 +272,7 @@ export async function copyPackageVersion(
   const nextTargetPackage: PackageEntry = targetPackage ?? { versions: {} };
   const description =
     input.description ??
-    (targetName === input.sourceName
+    (targetName === sourceName
       ? nextTargetPackage.description
       : sourcePackage.description);
 
@@ -305,29 +322,32 @@ export async function setPackageTag(
     );
   }
 
+  const safeName = assertSafePackageName(name);
   const file = await readPackageFile(paths);
   const skillFile = await readSkillFile(paths);
-  const packageEntry = file.packages[name];
+  const packageEntry = Object.hasOwn(file.packages, safeName)
+    ? file.packages[safeName]
+    : undefined;
 
   if (!packageEntry) {
     throw new SkillinkError(
       'PACKAGE_NOT_FOUND',
-      `Package "${name}" is not defined in package.json.`,
-      { name },
+      `Package "${safeName}" is not defined in package.json.`,
+      { name: safeName },
     );
   }
 
-  if (!packageEntry.versions[version]) {
+  if (!Object.hasOwn(packageEntry.versions, version)) {
     throw new SkillinkError(
       'VERSION_NOT_FOUND',
-      `Version "${version}" of package "${name}" is not available.`,
-      { name, version },
+      `Version "${version}" of package "${safeName}" is not available.`,
+      { name: safeName, version },
     );
   }
 
   validateAllPackages(file, skillFile);
 
-  file.packages[name] = {
+  file.packages[safeName] = {
     ...packageEntry,
     tags: {
       ...packageEntry.tags,
@@ -354,7 +374,10 @@ export function listPackageReverseReferences(
       if (packageName === name && packageVersion === version) {
         continue;
       }
-      if (versionEntry.packages[name] === version) {
+      if (
+        Object.hasOwn(versionEntry.packages, name) &&
+        versionEntry.packages[name] === version
+      ) {
         references.push(`${packageName}@${packageVersion}`);
       }
     }
@@ -368,23 +391,26 @@ export async function removePackageVersion(
   name: string,
   version: string,
 ): Promise<void> {
+  const safeName = assertSafePackageName(name);
   const file = await readPackageFile(paths);
   const skillFile = await readSkillFile(paths);
-  const packageEntry = file.packages[name];
+  const packageEntry = Object.hasOwn(file.packages, safeName)
+    ? file.packages[safeName]
+    : undefined;
 
   if (!packageEntry) {
     throw new SkillinkError(
       'PACKAGE_NOT_FOUND',
-      `Package "${name}" is not defined in package.json.`,
-      { name },
+      `Package "${safeName}" is not defined in package.json.`,
+      { name: safeName },
     );
   }
 
-  if (!packageEntry.versions[version]) {
+  if (!Object.hasOwn(packageEntry.versions, version)) {
     throw new SkillinkError(
       'VERSION_NOT_FOUND',
-      `Version "${version}" of package "${name}" is not available.`,
-      { name, version },
+      `Version "${version}" of package "${safeName}" is not available.`,
+      { name: safeName, version },
     );
   }
 
@@ -394,23 +420,29 @@ export async function removePackageVersion(
     createEmptyRouteFile(),
   );
   const routeReference = route.targets.find(
-    (target) => target.packages[name]?.resolved === version,
+    (target) =>
+      Object.hasOwn(target.packages, safeName) &&
+      target.packages[safeName]?.resolved === version,
   );
 
   if (routeReference) {
     throw new SkillinkError(
       'VERSION_IN_USE',
-      `Package ${name}@${version} is still used by target "${routeReference.id}".`,
-      { name, version, targetId: routeReference.id },
+      `Package ${safeName}@${version} is still used by target "${routeReference.id}".`,
+      { name: safeName, version, targetId: routeReference.id },
     );
   }
 
-  const reverseReferences = listPackageReverseReferences(file, name, version);
+  const reverseReferences = listPackageReverseReferences(
+    file,
+    safeName,
+    version,
+  );
   if (reverseReferences.length > 0) {
     throw new SkillinkError(
       'PACKAGE_IN_USE',
-      `Package ${name}@${version} is still referenced by ${reverseReferences.join(', ')}.`,
-      { name, version, referencedBy: reverseReferences },
+      `Package ${safeName}@${version} is still referenced by ${reverseReferences.join(', ')}.`,
+      { name: safeName, version, referencedBy: reverseReferences },
     );
   }
 
@@ -419,14 +451,14 @@ export async function removePackageVersion(
 
   const packages = { ...file.packages };
   if (Object.keys(remainingVersions).length === 0) {
-    delete packages[name];
+    delete packages[safeName];
   } else {
     const tags = Object.fromEntries(
       Object.entries(packageEntry.tags ?? {}).filter(
         ([, taggedVersion]) => taggedVersion !== version,
       ),
     );
-    packages[name] = {
+    packages[safeName] = {
       ...packageEntry,
       versions: remainingVersions,
       ...(Object.keys(tags).length > 0 ? { tags } : { tags: undefined }),

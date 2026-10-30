@@ -5,6 +5,7 @@ import type {
   HistoryEntry,
   ImportSkillResult,
   StatusReport,
+  TargetSkillSummary,
 } from '@skillink/core';
 import type {
   PackageFile,
@@ -25,9 +26,12 @@ import type {
   PackageTagRequest,
   RollbackRequest,
   RouteAddRequest,
+  RouteEnableRequest,
   RouteRemoveRequest,
   SkillRemoveRequest,
   SkillTagRequest,
+  TargetEnableRequest,
+  TargetRemoveRequest,
 } from './ipc-schemas.js';
 
 export interface DesktopSnapshot {
@@ -37,6 +41,7 @@ export interface DesktopSnapshot {
   route: RouteFile;
   status: StatusReport;
   doctor: DoctorReport;
+  targetSkills?: TargetSkillSummary[];
 }
 
 export interface DesktopApi {
@@ -51,8 +56,11 @@ export interface DesktopApi {
   skillTag(input: SkillTagRequest): Promise<void>;
   skillRemove(input: SkillRemoveRequest): Promise<void>;
   addTarget(input: AddTargetRequest): Promise<TargetRoute>;
+  removeTarget(input: TargetRemoveRequest): Promise<TargetRoute>;
+  targetEnable(input: TargetEnableRequest): Promise<TargetRoute>;
   routeAdd(input: RouteAddRequest): Promise<PackageLock>;
   routeRemove(input: RouteRemoveRequest): Promise<boolean>;
+  routeEnable(input: RouteEnableRequest): Promise<PackageLock>;
   gc(input?: GcRequest): Promise<GcReport>;
   history(): Promise<HistoryEntry[]>;
   rollback(input: RollbackRequest): Promise<void>;

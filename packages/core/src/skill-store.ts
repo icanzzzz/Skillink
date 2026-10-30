@@ -5,6 +5,7 @@ import {
   RouteFileSchema,
   SkillFileSchema,
   SkillinkError,
+  assertSafeVersion,
   createEmptyPackageFile,
   createEmptyRouteFile,
   createEmptySkillFile,
@@ -16,6 +17,8 @@ import {
 import { readJsonFile, writeJsonAtomic } from './json-store.js';
 import { withHistory } from './history.js';
 import { collectPackageSkillRefs } from './package-graph.js';
+import { withFsRetry } from './fs-retry.js';
+import { assertSafePackageName } from './package-name.js';
 
 export async function readSkillFile(paths: SkillinkPaths): Promise<SkillFile> {
   return readJsonFile(paths.skillFile, SkillFileSchema, createEmptySkillFile());
@@ -33,7 +36,13 @@ export function getSkillVersion(
   name: string,
   version: string,
 ): SkillVersion | undefined {
-  return file.skills[name]?.versions[version];
+  if (!Object.hasOwn(file.skills, name)) {
+    return undefined;
+  }
+  const entry = file.skills[name]!;
+  return Object.hasOwn(entry.versions, version)
+    ? entry.versions[version]
+    : undefined;
 }
 
 export async function assertSkillContent(
@@ -92,28 +101,63 @@ export async function upsertSkillVersion(
   paths: SkillinkPaths,
   input: UpsertSkillVersionInput,
 ): Promise<{ created: boolean }> {
+  const name = assertSafePackageName(input.name);
+  const version = assertSafeVersion(input.version);
   const file = await readSkillFile(paths);
-  const skillEntry = file.skills[input.name] ?? { versions: {} };
-  const existing = skillEntry.versions[input.version];
+  const skillEntry = Object.hasOwn(file.skills, name)
+    ? file.skills[name]!
+    : { versions: {} };
+  const existing = Object.hasOwn(skillEntry.versions, version)
+    ? skillEntry.versions[version]
+    : undefined;
 
   if (existing) {
-    if (existing.integrity === input.integrity) {
+    if (existing.integrity !== input.integrity) {
+      throw new SkillinkError(
+        'PACKAGE_EXISTS',
+        `Skill ${name}@${version} already exists with different content.`,
+        {
+          name,
+          version,
+          existingIntegrity: existing.integrity,
+          incomingIntegrity: input.integrity,
+        },
+      );
+    }
+
+    const nextDescription =
+      skillEntry.description === undefined
+        ? input.description
+        : skillEntry.description;
+    const nextMetadata = {
+      ...(input.metadata ?? {}),
+      ...(existing.metadata ?? {}),
+    };
+    const descriptionChanged =
+      nextDescription !== undefined &&
+      nextDescription !== skillEntry.description;
+    const metadataChanged =
+      Object.keys(nextMetadata).length > 0 &&
+      JSON.stringify(nextMetadata) !== JSON.stringify(existing.metadata ?? {});
+
+    if (!descriptionChanged && !metadataChanged) {
       return { created: false };
     }
 
-    throw new SkillinkError(
-      'PACKAGE_EXISTS',
-      `Skill ${input.name}@${input.version} already exists with different content.`,
-      {
-        name: input.name,
-        version: input.version,
-        existingIntegrity: existing.integrity,
-        incomingIntegrity: input.integrity,
-      },
-    );
+    if (descriptionChanged) {
+      skillEntry.description = nextDescription;
+    }
+    if (metadataChanged) {
+      existing.metadata = nextMetadata;
+    }
+
+    await withHistory(paths, 'refresh-skill-metadata', async () => {
+      await writeSkillFile(paths, file);
+    });
+    return { created: false };
   }
 
-  const version: SkillVersion = {
+  const skillVersion: SkillVersion = {
     integrity: input.integrity,
     fileCount: input.fileCount,
     size: input.size,
@@ -121,14 +165,14 @@ export async function upsertSkillVersion(
     ...(input.metadata ? { metadata: input.metadata } : {}),
   };
 
-  file.skills[input.name] = {
+  file.skills[name] = {
     ...skillEntry,
     ...(skillEntry.description === undefined && input.description !== undefined
       ? { description: input.description }
       : {}),
     versions: {
       ...skillEntry.versions,
-      [input.version]: version,
+      [version]: skillVersion,
     },
   };
 
@@ -187,7 +231,7 @@ async function moveToTrash(
   }
 
   await mkdir(path.dirname(destination), { recursive: true });
-  await rename(source, destination);
+  await withFsRetry(() => rename(source, destination));
   return true;
 }
 
@@ -205,30 +249,34 @@ export async function setSkillTag(
     );
   }
 
+  const safeName = assertSafePackageName(name);
+  const safeVersion = assertSafeVersion(version);
   const file = await readSkillFile(paths);
-  const skillEntry = file.skills[name];
+  const skillEntry = Object.hasOwn(file.skills, safeName)
+    ? file.skills[safeName]
+    : undefined;
 
   if (!skillEntry) {
     throw new SkillinkError(
       'PACKAGE_NOT_FOUND',
-      `Skill "${name}" is not in skill.json.`,
-      { name },
+      `Skill "${safeName}" is not in skill.json.`,
+      { name: safeName },
     );
   }
 
-  if (!skillEntry.versions[version]) {
+  if (!Object.hasOwn(skillEntry.versions, safeVersion)) {
     throw new SkillinkError(
       'VERSION_NOT_FOUND',
-      `Version "${version}" of skill "${name}" is not available.`,
-      { name, version },
+      `Version "${safeVersion}" of skill "${safeName}" is not available.`,
+      { name: safeName, version: safeVersion },
     );
   }
 
-  file.skills[name] = {
+  file.skills[safeName] = {
     ...skillEntry,
     tags: {
       ...skillEntry.tags,
-      [tag]: version,
+      [tag]: safeVersion,
     },
   };
 
@@ -242,30 +290,34 @@ export async function removeSkillVersion(
   name: string,
   version: string,
 ): Promise<void> {
+  const safeName = assertSafePackageName(name);
+  const safeVersion = assertSafeVersion(version);
   const file = await readSkillFile(paths);
-  const skillEntry = file.skills[name];
+  const skillEntry = Object.hasOwn(file.skills, safeName)
+    ? file.skills[safeName]
+    : undefined;
 
   if (!skillEntry) {
     throw new SkillinkError(
       'PACKAGE_NOT_FOUND',
-      `Skill "${name}" is not in skill.json.`,
-      { name },
+      `Skill "${safeName}" is not in skill.json.`,
+      { name: safeName },
     );
   }
 
-  if (!skillEntry.versions[version]) {
+  if (!Object.hasOwn(skillEntry.versions, safeVersion)) {
     throw new SkillinkError(
       'VERSION_NOT_FOUND',
-      `Version "${version}" of skill "${name}" is not available.`,
-      { name, version },
+      `Version "${safeVersion}" of skill "${safeName}" is not available.`,
+      { name: safeName, version: safeVersion },
     );
   }
 
-  if (Object.values(skillEntry.tags ?? {}).includes(version)) {
+  if (Object.values(skillEntry.tags ?? {}).includes(safeVersion)) {
     throw new SkillinkError(
       'VERSION_IN_USE',
-      `Version ${name}@${version} is still referenced by a tag.`,
-      { name, version },
+      `Version ${safeName}@${safeVersion} is still referenced by a tag.`,
+      { name: safeName, version: safeVersion },
     );
   }
 
@@ -288,39 +340,45 @@ export async function removeSkillVersion(
 
   if (roots.length > 0) {
     const referenced = collectPackageSkillRefs(packages, roots);
-    if (referenced.has(`${name}@${version}`)) {
+    if (referenced.has(`${safeName}@${safeVersion}`)) {
       throw new SkillinkError(
         'VERSION_IN_USE',
-        `Version ${name}@${version} is still referenced by a route package.`,
-        { name, version },
+        `Version ${safeName}@${safeVersion} is still referenced by a route package.`,
+        { name: safeName, version: safeVersion },
       );
     }
   }
 
   await withHistory(paths, 'remove-skill-version', async () => {
     const trashDirectory = await createTrashDirectory(paths);
-    const source = getSkillDir(paths, name, version);
-    const destination = path.join(trashDirectory, name, version);
+    const source = getSkillDir(paths, safeName, safeVersion);
+    const destination = path.join(
+      trashDirectory,
+      safeName,
+      safeVersion,
+    );
     const moved = await moveToTrash(source, destination);
 
     const current = await readSkillFile(paths);
-    const currentSkill = current.skills[name];
+    const currentSkill = Object.hasOwn(current.skills, safeName)
+      ? current.skills[safeName]
+      : undefined;
     if (!currentSkill) {
       return;
     }
 
     const remainingVersions = { ...currentSkill.versions };
-    delete remainingVersions[version];
+    delete remainingVersions[safeVersion];
 
     if (Object.keys(remainingVersions).length === 0) {
-      delete current.skills[name];
+      delete current.skills[safeName];
     } else {
       const tags = Object.fromEntries(
         Object.entries(currentSkill.tags ?? {}).filter(
-          ([, taggedVersion]) => taggedVersion !== version,
+          ([, taggedVersion]) => taggedVersion !== safeVersion,
         ),
       );
-      current.skills[name] = {
+      current.skills[safeName] = {
         ...currentSkill,
         versions: remainingVersions,
         ...(Object.keys(tags).length > 0 ? { tags } : { tags: undefined }),
@@ -329,13 +387,15 @@ export async function removeSkillVersion(
 
     try {
       await writeSkillFile(paths, current);
-      if (!current.skills[name]) {
-        await removeEmptySkillParent(paths, name);
+      if (!Object.hasOwn(current.skills, safeName)) {
+        await removeEmptySkillParent(paths, safeName);
       }
     } catch (error) {
       if (moved) {
         await mkdir(path.dirname(source), { recursive: true });
-        await rename(destination, source).catch(() => undefined);
+        await withFsRetry(() => rename(destination, source)).catch(
+          () => undefined,
+        );
       }
       throw error;
     }

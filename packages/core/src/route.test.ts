@@ -16,7 +16,12 @@ import {
   setPackageTag,
   writePackageFile,
 } from './package-store.js';
-import { addRouteEntry, readRouteFile, removeRouteEntry } from './route.js';
+import {
+  addRouteEntry,
+  readRouteFile,
+  removeRouteEntry,
+  setPackageEnabled,
+} from './route.js';
 import { writeSkillFile } from './skill-store.js';
 import { addTarget } from './target.js';
 
@@ -291,6 +296,145 @@ describe('route entries', () => {
         requested: '9.9.9',
       }),
     ).rejects.toMatchObject({ code: 'VERSION_NOT_FOUND' });
+  });
+
+  it('rejects removing an entry when the remaining graph is invalid', async () => {
+    const { paths } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'frontend',
+      requested: '1.2.0',
+    });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'docs',
+      requested: '1.0.0',
+    });
+    const packageFile = await readPackageFile(paths);
+    packageFile.packages.base!.versions['2.0.0']!.skills = {
+      pdf: '9.9.9',
+    };
+    await writePackageFile(paths, packageFile);
+
+    await expect(
+      removeRouteEntry({
+        paths,
+        targetId: 'project-a',
+        name: 'docs',
+      }),
+    ).rejects.toMatchObject({ code: 'ROUTE_INVALID' });
+
+    const route = await readRouteFile(paths);
+    expect(route.targets[0]?.packages.docs).toBeDefined();
+
+    await expect(
+      removeRouteEntry({
+        paths,
+        targetId: 'project-a',
+        name: 'docs',
+        force: true,
+      }),
+    ).resolves.toBe(true);
+    expect(
+      (await readRouteFile(paths)).targets[0]?.packages.docs,
+    ).toBeUndefined();
+  });
+
+  it('enables and disables a package lock with history', async () => {
+    const { paths } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'frontend',
+      requested: '1.0.0',
+    });
+
+    const disabled = await setPackageEnabled(
+      paths,
+      'project-a',
+      'frontend',
+      false,
+    );
+    expect(disabled.enabled).toBe(false);
+    expect(
+      (await readRouteFile(paths)).targets[0]?.packages.frontend?.enabled,
+    ).toBe(false);
+
+    const enabled = await setPackageEnabled(
+      paths,
+      'project-a',
+      'frontend',
+      true,
+    );
+    expect(enabled.enabled).toBe(true);
+
+    await expect(
+      setPackageEnabled(paths, 'project-a', 'missing', false),
+    ).rejects.toMatchObject({ code: 'PACKAGE_NOT_FOUND' });
+  });
+
+  it('rejects enabling a package when the resulting graph conflicts', async () => {
+    const { paths } = await setup();
+    await createPackageVersion({
+      paths,
+      name: 'old',
+      version: '1.0.0',
+      skills: { pdf: '1.0.0' },
+    });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'frontend',
+      requested: '1.2.0',
+    });
+    await setPackageEnabled(paths, 'project-a', 'frontend', false);
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'old',
+      requested: '1.0.0',
+    });
+
+    await expect(
+      setPackageEnabled(paths, 'project-a', 'frontend', true),
+    ).rejects.toMatchObject({ code: 'SKILL_VERSION_CONFLICT' });
+
+    expect(
+      (await readRouteFile(paths)).targets[0]?.packages.frontend?.enabled,
+    ).toBe(false);
+  });
+
+  it('rejects prototype-like package names without polluting Object.prototype', async () => {
+    const { paths } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'frontend',
+      requested: '1.0.0',
+    });
+
+    await expect(
+      setPackageEnabled(paths, 'project-a', '__proto__', false),
+    ).rejects.toMatchObject({ code: 'INVALID_NAME' });
+    await expect(
+      removeRouteEntry({
+        paths,
+        targetId: 'project-a',
+        name: '__proto__',
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_NAME' });
+    await expect(
+      addRouteEntry({
+        paths,
+        targetId: 'project-a',
+        name: '__proto__',
+        requested: '1.0.0',
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_NAME' });
+
+    expect((Object.prototype as { enabled?: boolean }).enabled).toBeUndefined();
   });
 
   it('removes a route entry without touching the target directory', async () => {

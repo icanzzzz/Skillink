@@ -222,6 +222,35 @@ describe('createPackageVersion', () => {
     expect(file.packages.frontend?.versions['1.0.0']).toEqual(mixed);
   });
 
+  it('rejects package names that collide case-insensitively', async () => {
+    const paths = await setup();
+    await seedSkills(paths, { pdf: ['1.0.0'] });
+    await createPackageVersion({
+      paths,
+      name: 'Frontend',
+      version: '1.0.0',
+      skills: { pdf: '1.0.0' },
+    });
+
+    await expect(
+      createPackageVersion({
+        paths,
+        name: 'frontend',
+        version: '1.0.0',
+        skills: { pdf: '1.0.0' },
+      }),
+    ).rejects.toMatchObject({ code: 'PACKAGE_EXISTS' });
+
+    await expect(
+      createPackageVersion({
+        paths,
+        name: 'Frontend',
+        version: '1.1.0',
+        skills: { pdf: '1.0.0' },
+      }),
+    ).resolves.toMatchObject({ skills: { pdf: '1.0.0' } });
+  });
+
   it('rejects a package version with no dependencies', async () => {
     const paths = await setup();
     await seedSkills(paths, {});
@@ -483,6 +512,31 @@ describe('copyPackageVersion', () => {
       }),
     ).rejects.toMatchObject({ code: 'SKILL_VERSION_CONFLICT' });
     expect(await readFile(paths.packageFile, 'utf8')).toBe(beforeConflict);
+  });
+
+  it('inherits the source description when copying to a new package name', async () => {
+    const paths = await setup();
+    await seedSkills(paths, { pdf: ['1.0.0'] });
+    await createPackageVersion({
+      paths,
+      name: 'frontend',
+      version: '1.0.0',
+      description: 'Frontend baseline',
+      skills: { pdf: '1.0.0' },
+    });
+
+    await copyPackageVersion({
+      paths,
+      sourceName: 'frontend',
+      sourceVersion: '1.0.0',
+      targetName: 'frontend-copy',
+      targetVersion: '1.0.0',
+    });
+
+    const file = await readPackageFile(paths);
+    expect(file.packages['frontend-copy']?.description).toBe(
+      'Frontend baseline',
+    );
   });
 
   it('drops direct skills and packages', async () => {

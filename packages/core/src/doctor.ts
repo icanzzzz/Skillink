@@ -12,16 +12,18 @@ import {
 import { readRouteFile } from './route.js';
 import { readPackageFile } from './package-store.js';
 import { readSkillFile } from './skill-store.js';
+import { verifySkillIntegrity } from './skill-integrity.js';
 import {
   computePackageIntegrity,
   resolvePackageGraph,
   validateAllPackages,
 } from './package-graph.js';
 import {
-  assertSafeTargetPath,
+  assertSafeRealTargetPath,
   isPathInside,
   isSamePath,
 } from './path-policy.js';
+import { findCaseInsensitiveDuplicates } from './package-name.js';
 import { status } from './status.js';
 
 export type DoctorIssueCode =
@@ -31,7 +33,9 @@ export type DoctorIssueCode =
   | 'PACKAGE_INTEGRITY_MISMATCH'
   | 'SKILL_NOT_FOUND'
   | 'SKILL_MD_MISSING'
+  | 'SKILL_INTEGRITY_MISMATCH'
   | 'SKILL_VERSION_CONFLICT'
+  | 'UNSUPPORTED_MODE'
   | 'PACKAGE_CYCLE'
   | 'PACKAGE_MISSING_VERSION'
   | 'UNUSED_PACKAGE_VERSION'
@@ -47,6 +51,7 @@ export interface DoctorIssue {
   targetId?: string;
   path?: string;
   packageName?: string;
+  details?: Record<string, unknown>;
 }
 
 export interface DoctorReport {
@@ -185,9 +190,48 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
     };
   }
 
+  for (const [first, second] of findCaseInsensitiveDuplicates(
+    Object.keys(packageFile.packages),
+  )) {
+    issues.push({
+      code: 'INVALID_CONFIG',
+      message: `Package names collide case-insensitively: ${first} / ${second}`,
+      name: second,
+    });
+  }
+
+  for (const [first, second] of findCaseInsensitiveDuplicates(
+    Object.keys(skillFile.skills),
+  )) {
+    issues.push({
+      code: 'INVALID_CONFIG',
+      message: `Skill names collide case-insensitively: ${first} / ${second}`,
+      name: second,
+    });
+  }
+
+  for (const [first, second] of findCaseInsensitiveDuplicates(
+    route.targets.map((target) => target.id),
+  )) {
+    issues.push({
+      code: 'INVALID_CONFIG',
+      message: `Target ids collide case-insensitively: ${first} / ${second}`,
+      targetId: second,
+    });
+  }
+
   const targetIds = new Set<string>();
   const resolvedTargetPaths: string[] = [];
   for (const target of route.targets) {
+    if (target.mode !== 'link') {
+      issues.push({
+        code: 'UNSUPPORTED_MODE',
+        message: `Target "${target.id}" uses unsupported mode "${target.mode}"; v2.0 only supports link mode.`,
+        targetId: target.id,
+        path: target.path,
+      });
+    }
+
     if (targetIds.has(target.id)) {
       issues.push({
         code: 'INVALID_CONFIG',
@@ -199,7 +243,7 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
 
     let resolvedTargetPath: string;
     try {
-      resolvedTargetPath = assertSafeTargetPath(target.path, paths);
+      resolvedTargetPath = await assertSafeRealTargetPath(target.path, paths);
     } catch (error) {
       issues.push({
         code:
@@ -300,6 +344,41 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
         issues.push({
           code: 'SKILL_MD_MISSING',
           message: `Skill content has no SKILL.md: ${name}@${version}`,
+          name,
+          version,
+          path: contentPath,
+        });
+        continue;
+      }
+
+      try {
+        const integrity = await verifySkillIntegrity(
+          paths,
+          name,
+          version,
+          skillEntry.versions[version]!,
+        );
+        if (!integrity.ok) {
+          issues.push({
+            code: 'SKILL_INTEGRITY_MISMATCH',
+            message: `Skill content does not match skill.json: ${name}@${version}`,
+            name,
+            version,
+            path: contentPath,
+            details: {
+              expectedIntegrity: integrity.expected.integrity,
+              actualIntegrity: integrity.actual.integrity,
+              expectedFileCount: integrity.expected.fileCount,
+              actualFileCount: integrity.actual.fileCount,
+              expectedSize: integrity.expected.size,
+              actualSize: integrity.actual.size,
+            },
+          });
+        }
+      } catch (error) {
+        issues.push({
+          code: 'INVALID_CONFIG',
+          message: error instanceof Error ? error.message : String(error),
           name,
           version,
           path: contentPath,

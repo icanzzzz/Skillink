@@ -6,7 +6,6 @@ import {
   SkillinkError,
   getSkillinkPaths,
   isSkillinkError,
-  type TargetMode,
 } from '@skillink/shared';
 import {
   addRouteEntry,
@@ -27,8 +26,10 @@ import {
   removeSkillVersion,
   removeTarget,
   restoreHistorySnapshot,
+  setPackageEnabled,
   setPackageTag,
   setSkillTag,
+  setTargetEnabled,
   status,
   writePackageFile,
   writeRouteFile,
@@ -458,11 +459,10 @@ export async function runCli(
     .argument('<path>', 'Target directory')
     .option('--id <id>', 'Stable target id')
     .option('--label <label>', 'Display label')
-    .option('--mode <mode>', 'link or copy', 'link')
     .action(
       async (
         targetPath: string,
-        options: { id?: string; label?: string; mode: string },
+        options: { id?: string; label?: string },
       ) => {
         const paths = await ensureHome(context.home);
         const created = await addTarget({
@@ -470,7 +470,7 @@ export async function runCli(
           id: options.id,
           label: options.label,
           path: targetPath,
-          mode: options.mode as TargetMode,
+          mode: 'link',
         });
         context.stdout(`Added target ${created.id} -> ${created.path}`);
       },
@@ -509,6 +509,26 @@ export async function runCli(
       const paths = await ensureHome(context.home);
       const removed = await removeTarget({ paths, id });
       context.stdout(`Removed target ${removed.id}`);
+    });
+
+  target
+    .command('enable')
+    .description('Enable a target')
+    .argument('<id>', 'Target id')
+    .action(async (id: string) => {
+      const paths = await ensureHome(context.home);
+      await setTargetEnabled(paths, id, true);
+      context.stdout(`Enabled target ${id}`);
+    });
+
+  target
+    .command('disable')
+    .description('Disable a target')
+    .argument('<id>', 'Target id')
+    .action(async (id: string) => {
+      const paths = await ensureHome(context.home);
+      await setTargetEnabled(paths, id, false);
+      context.stdout(`Disabled target ${id}`);
     });
 
   const route = program.command('route').description('Manage target routes');
@@ -565,17 +585,47 @@ export async function runCli(
   });
 
   route
-    .command('remove')
-    .description('Remove a package assignment from a target')
+    .command('enable')
+    .description('Enable a package assignment on a target')
     .argument('<target-id>', 'Target id')
     .argument('<package>', 'Package name')
     .action(async (targetId: string, name: string) => {
       const paths = await ensureHome(context.home);
-      const removed = await removeRouteEntry({ paths, targetId, name });
-      context.stdout(
-        removed ? `Removed route ${targetId}/${name}` : 'No route found.',
-      );
+      await setPackageEnabled(paths, targetId, name, true);
+      context.stdout(`Enabled route ${targetId}/${name}`);
     });
+
+  route
+    .command('disable')
+    .description('Disable a package assignment on a target')
+    .argument('<target-id>', 'Target id')
+    .argument('<package>', 'Package name')
+    .action(async (targetId: string, name: string) => {
+      const paths = await ensureHome(context.home);
+      await setPackageEnabled(paths, targetId, name, false);
+      context.stdout(`Disabled route ${targetId}/${name}`);
+    });
+
+  route
+    .command('remove')
+    .description('Remove a package assignment from a target')
+    .argument('<target-id>', 'Target id')
+    .argument('<package>', 'Package name')
+    .option('--force', 'Remove even if the remaining graph is invalid')
+    .action(
+      async (targetId: string, name: string, options: { force?: boolean }) => {
+        const paths = await ensureHome(context.home);
+        const removed = await removeRouteEntry({
+          paths,
+          targetId,
+          name,
+          force: options.force,
+        });
+        context.stdout(
+          removed ? `Removed route ${targetId}/${name}` : 'No route found.',
+        );
+      },
+    );
 
   program
     .command('gc')

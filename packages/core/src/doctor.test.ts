@@ -198,6 +198,27 @@ describe('doctor', () => {
     );
   });
 
+  it('reports skill content that no longer matches skill.json', async () => {
+    const { paths } = await setup();
+    await writeFile(
+      path.join(getSkillDir(paths, 'pdf', '1.0.0'), 'content.txt'),
+      'tampered',
+      'utf8',
+    );
+
+    const report = await doctor({ paths });
+
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'SKILL_INTEGRITY_MISMATCH',
+          name: 'pdf',
+          version: '1.0.0',
+        }),
+      ]),
+    );
+  });
+
   it('does not report an empty removed skill directory as orphan', async () => {
     const { paths } = await setup();
     await importSkillVersion(paths.home, 'temp', '1.0.0');
@@ -210,6 +231,54 @@ describe('doctor', () => {
         (issue) => issue.code === 'ORPHAN_CONTENT' && issue.name === 'temp',
       ),
     ).toEqual([]);
+  });
+
+  it('reports a copy target that cannot be projected', async () => {
+    const { paths } = await setup();
+    const route = await readRouteFile(paths);
+    route.targets[0]!.mode = 'copy';
+    await writeRouteFile(paths, route);
+
+    const report = await doctor({ paths });
+
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'UNSUPPORTED_MODE',
+          targetId: 'project-a',
+        }),
+      ]),
+    );
+  });
+
+  it('reports names that collide case-insensitively', async () => {
+    const { paths } = await setup();
+    await writePackageFile(paths, {
+      schemaVersion: 2,
+      packages: {
+        Demo: {
+          versions: {
+            '1.0.0': { packages: {}, skills: { pdf: '1.0.0' } },
+          },
+        },
+        demo: {
+          versions: {
+            '1.0.0': { packages: {}, skills: { pdf: '1.0.0' } },
+          },
+        },
+      },
+    });
+
+    const report = await doctor({ paths });
+
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'INVALID_CONFIG',
+          message: expect.stringMatching(/case-insensitive/i),
+        }),
+      ]),
+    );
   });
 
   it('reports a package that references a missing skill', async () => {
