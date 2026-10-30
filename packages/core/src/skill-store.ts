@@ -98,20 +98,49 @@ export async function upsertSkillVersion(
   const existing = skillEntry.versions[input.version];
 
   if (existing) {
-    if (existing.integrity === input.integrity) {
+    if (existing.integrity !== input.integrity) {
+      throw new SkillinkError(
+        'PACKAGE_EXISTS',
+        `Skill ${input.name}@${input.version} already exists with different content.`,
+        {
+          name: input.name,
+          version: input.version,
+          existingIntegrity: existing.integrity,
+          incomingIntegrity: input.integrity,
+        },
+      );
+    }
+
+    const nextDescription =
+      skillEntry.description === undefined
+        ? input.description
+        : skillEntry.description;
+    const nextMetadata = {
+      ...(input.metadata ?? {}),
+      ...(existing.metadata ?? {}),
+    };
+    const descriptionChanged =
+      nextDescription !== undefined &&
+      nextDescription !== skillEntry.description;
+    const metadataChanged =
+      Object.keys(nextMetadata).length > 0 &&
+      JSON.stringify(nextMetadata) !== JSON.stringify(existing.metadata ?? {});
+
+    if (!descriptionChanged && !metadataChanged) {
       return { created: false };
     }
 
-    throw new SkillinkError(
-      'PACKAGE_EXISTS',
-      `Skill ${input.name}@${input.version} already exists with different content.`,
-      {
-        name: input.name,
-        version: input.version,
-        existingIntegrity: existing.integrity,
-        incomingIntegrity: input.integrity,
-      },
-    );
+    if (descriptionChanged) {
+      skillEntry.description = nextDescription;
+    }
+    if (metadataChanged) {
+      existing.metadata = nextMetadata;
+    }
+
+    await withHistory(paths, 'refresh-skill-metadata', async () => {
+      await writeSkillFile(paths, file);
+    });
+    return { created: false };
   }
 
   const version: SkillVersion = {

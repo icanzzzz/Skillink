@@ -13,7 +13,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { getSkillDir, getSkillinkPaths } from '@skillink/shared';
 import { importSkill } from './import-skill.js';
-import { readSkillFile } from './skill-store.js';
+import { readSkillFile, writeSkillFile } from './skill-store.js';
 
 const tempDirs: string[] = [];
 
@@ -152,6 +152,69 @@ describe('importSkill', () => {
       true,
     );
     expect((await lstat(result.path)).isDirectory()).toBe(true);
+  });
+
+  it('records frontmatter description and metadata', async () => {
+    const source = await tempDir('skillink-skill-source-');
+    await writeFile(
+      path.join(source, 'SKILL.md'),
+      `---
+name: pdf
+description: PDF tools
+metadata:
+  author: Skillink
+  featured: true
+---
+
+# PDF tools
+`,
+      'utf8',
+    );
+    const home = await tempDir('skillink-skill-home-');
+    const paths = getSkillinkPaths(home);
+
+    await importSkill({
+      sourceDir: source,
+      name: 'pdf',
+      version: '1.0.0',
+      home,
+    });
+
+    const entry = (await readSkillFile(paths)).skills.pdf;
+    expect(entry?.description).toBe('PDF tools');
+    expect(entry?.versions['1.0.0']?.metadata).toEqual({
+      name: 'pdf',
+      author: 'Skillink',
+      featured: 'true',
+    });
+  });
+
+  it('fills missing display metadata when the same version is reused', async () => {
+    const source = await makeSource();
+    const home = await tempDir('skillink-skill-home-');
+    const paths = getSkillinkPaths(home);
+
+    await importSkill({
+      sourceDir: source,
+      name: 'demo',
+      version: '1.0.0',
+      home,
+    });
+
+    const skillFile = await readSkillFile(paths);
+    delete skillFile.skills.demo?.description;
+    await writeSkillFile(paths, skillFile);
+
+    await importSkill({
+      sourceDir: source,
+      name: 'demo',
+      version: '1.0.0',
+      home,
+    });
+
+    expect((await readSkillFile(paths)).skills.demo?.description).toBe(
+      'Demo skill',
+    );
   });
 
   it('reuses the same version when content is unchanged', async () => {

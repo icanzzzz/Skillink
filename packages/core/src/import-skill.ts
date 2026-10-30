@@ -4,6 +4,7 @@ import {
   copyFile,
   lstat,
   mkdir,
+  readFile,
   rename,
   rm,
   stat,
@@ -22,6 +23,7 @@ import {
 } from './folder-scan.js';
 import { assertSafeImportSource } from './path-policy.js';
 import { withFsRetry } from './fs-retry.js';
+import { parseSkillFrontmatter } from './skill-md.js';
 import {
   assertSkillContent,
   readSkillFile,
@@ -84,6 +86,15 @@ export async function importSkill(
     );
   }
 
+  const frontmatter = parseSkillFrontmatter(
+    await readFile(path.join(sourceDir, 'SKILL.md'), 'utf8'),
+  );
+  const metadata = {
+    ...(frontmatter?.name ? { name: frontmatter.name } : {}),
+    ...(frontmatter?.metadata ?? {}),
+  };
+  const description = frontmatter?.description;
+
   const name = assertSafePackageName(input.name ?? path.basename(sourceDir));
   const version =
     normalizeVersion(input.version) ?? createAutoVersion(scan.manifestHash);
@@ -95,6 +106,15 @@ export async function importSkill(
   if (existing) {
     if (existing.integrity === scan.integrity) {
       await assertSkillContent(paths, name, version);
+      await upsertSkillVersion(paths, {
+        name,
+        version,
+        integrity: scan.integrity,
+        fileCount: existing.fileCount,
+        size: existing.size,
+        description,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+      });
       return {
         name,
         version,
@@ -171,6 +191,8 @@ export async function importSkill(
       integrity: scan.integrity,
       fileCount: scan.fileCount,
       size: scan.totalSize,
+      description,
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
     });
   } catch (error) {
     await withFsRetry(() =>
