@@ -1,14 +1,6 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
-import {
-  apply,
-  doctor,
-  readRouteFile,
-  readSkillsFile,
-  status,
-} from '@skillink/core';
-import { getSkillinkPaths } from '@skillink/shared';
-import type { ApplyOptions, DesktopSnapshot } from '../shared.js';
+import { registerIpcHandlers } from './ipc.js';
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -48,36 +40,8 @@ function createWindow(): void {
   }
 }
 
-async function getSnapshot(): Promise<DesktopSnapshot> {
-  const paths = getSkillinkPaths();
-  const [library, route, statusReport, doctorReport] = await Promise.all([
-    readSkillsFile(paths),
-    readRouteFile(paths),
-    status({ paths }),
-    doctor({ paths }),
-  ]);
-
-  return {
-    home: paths.home,
-    library,
-    route,
-    status: statusReport,
-    doctor: doctorReport,
-  };
-}
-
 app.whenReady().then(() => {
-  ipcMain.handle('skillink:snapshot', () => getSnapshot());
-  ipcMain.handle('skillink:apply', async (_event, options: ApplyOptions = {}) => {
-    const paths = getSkillinkPaths();
-    return apply({
-      paths,
-      dryRun: Boolean(options.dryRun),
-      prune: Boolean(options.prune),
-      targetId: options.targetId,
-    });
-  });
-
+  registerIpcHandlers();
   createWindow();
 
   app.on('activate', () => {
