@@ -11,36 +11,29 @@ import {
 import path from 'node:path';
 import {
   SkillinkError,
-  getPackageDir,
+  getSkillDir,
   getSkillinkPaths,
-  type PackageKind,
 } from '@skillink/shared';
 import { scanFolder } from './folder-scan.js';
-import {
-  librarySourcePath,
-  readSkillsFile,
-  upsertLibraryVersion,
-} from './library.js';
+import { readSkillFile, upsertSkillVersion } from './skill-store.js';
 import {
   assertSafePackageName,
   createAutoVersion,
   normalizeVersion,
 } from './package-name.js';
 
-export interface ImportFolderInput {
+export interface ImportSkillInput {
   sourceDir: string;
   name?: string;
   version?: string;
   home?: string;
 }
 
-export interface ImportResult {
+export interface ImportSkillResult {
   name: string;
   version: string;
   integrity: string;
-  source: string;
   path: string;
-  kind: PackageKind;
   fileCount: number;
   size: number;
   created: boolean;
@@ -50,7 +43,9 @@ function sourceError(message: string, sourceDir: string): SkillinkError {
   return new SkillinkError('IO_ERROR', message, { sourceDir });
 }
 
-export async function importFolder(input: ImportFolderInput): Promise<ImportResult> {
+export async function importSkill(
+  input: ImportSkillInput,
+): Promise<ImportSkillResult> {
   const paths = getSkillinkPaths(input.home);
   const sourceDir = path.resolve(input.sourceDir);
   const sourceStat = await stat(sourceDir).catch((error: unknown) => {
@@ -67,13 +62,20 @@ export async function importFolder(input: ImportFolderInput): Promise<ImportResu
   }
 
   const scan = await scanFolder(sourceDir);
+  if (scan.kind !== 'skill') {
+    throw new SkillinkError(
+      'SKILL_MD_REQUIRED',
+      `Skill root must contain SKILL.md: ${sourceDir}`,
+      { sourceDir },
+    );
+  }
+
   const name = assertSafePackageName(input.name ?? path.basename(sourceDir));
   const version =
     normalizeVersion(input.version) ?? createAutoVersion(scan.manifestHash);
-  const packageDir = getPackageDir(paths, name, version);
-  const source = librarySourcePath(name, version);
-  const library = await readSkillsFile(paths);
-  const existing = library.packages[name]?.versions[version];
+  const skillDir = getSkillDir(paths, name, version);
+  const skillFile = await readSkillFile(paths);
+  const existing = skillFile.skills[name]?.versions[version];
 
   if (existing) {
     if (existing.integrity === scan.integrity) {
@@ -81,9 +83,7 @@ export async function importFolder(input: ImportFolderInput): Promise<ImportResu
         name,
         version,
         integrity: existing.integrity,
-        source: existing.source,
-        path: packageDir,
-        kind: library.packages[name]?.kind ?? scan.kind,
+        path: skillDir,
         fileCount: existing.fileCount,
         size: existing.size,
         created: false,
@@ -92,7 +92,7 @@ export async function importFolder(input: ImportFolderInput): Promise<ImportResu
 
     throw new SkillinkError(
       'PACKAGE_EXISTS',
-      `Package ${name}@${version} already exists with different content.`,
+      `Skill ${name}@${version} already exists with different content.`,
       {
         name,
         version,
@@ -103,17 +103,19 @@ export async function importFolder(input: ImportFolderInput): Promise<ImportResu
   }
 
   try {
-    await lstat(packageDir);
+    await lstat(skillDir);
     throw new SkillinkError(
       'PACKAGE_EXISTS',
-      `Version directory already exists but is not in skills.json: ${packageDir}`,
-      { name, version, packageDir },
+      `Version directory already exists but is not in skill.json: ${skillDir}`,
+      { name, version, skillDir },
     );
   } catch (error) {
     if (error instanceof SkillinkError) {
       throw error;
     }
-    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+    if (
+      !(error instanceof Error && 'code' in error && error.code === 'ENOENT')
+    ) {
       throw error;
     }
   }
@@ -135,24 +137,23 @@ export async function importFolder(input: ImportFolderInput): Promise<ImportResu
       await chmod(destination, file.mode).catch(() => undefined);
     }
 
-    await mkdir(path.dirname(packageDir), { recursive: true });
-    await rename(stagingDir, packageDir);
+    await mkdir(path.dirname(skillDir), { recursive: true });
+    await rename(stagingDir, skillDir);
   } catch (error) {
     await rm(stagingDir, { recursive: true, force: true });
     throw error;
   }
 
   try {
-    await upsertLibraryVersion(paths, {
+    await upsertSkillVersion(paths, {
       name,
       version,
       integrity: scan.integrity,
       fileCount: scan.fileCount,
       size: scan.totalSize,
-      kind: scan.kind,
     });
   } catch (error) {
-    await rm(packageDir, { recursive: true, force: true });
+    await rm(skillDir, { recursive: true, force: true });
     throw error;
   }
 
@@ -160,9 +161,7 @@ export async function importFolder(input: ImportFolderInput): Promise<ImportResu
     name,
     version,
     integrity: scan.integrity,
-    source,
-    path: packageDir,
-    kind: scan.kind,
+    path: skillDir,
     fileCount: scan.fileCount,
     size: scan.totalSize,
     created: true,

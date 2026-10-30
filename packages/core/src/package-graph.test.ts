@@ -6,6 +6,7 @@ import type {
   SkillVersion,
 } from '@skillink/shared';
 import {
+  collectPackageSkillRefs,
   computePackageIntegrity,
   resolvePackageGraph,
   validateAllPackages,
@@ -407,5 +408,42 @@ describe('validateAllPackages', () => {
     const catalog = skills({ pdf: { '1.0.0': skillVersion() } });
 
     expect(() => validateAllPackages(file, catalog)).not.toThrow();
+  });
+});
+
+describe('collectPackageSkillRefs', () => {
+  it('collects skill refs through nested packages without needing skill.json', () => {
+    const file = packages({
+      frontend: {
+        '1.0.0': packageVersion({
+          packages: { base: '2.0.0' },
+          skills: { pdf: '1.0.0' },
+        }),
+      },
+      base: {
+        '2.0.0': packageVersion({ skills: { review: '1.0.0' } }),
+      },
+    });
+
+    expect(
+      collectPackageSkillRefs(file, [
+        { name: 'frontend', version: '1.0.0' },
+      ]),
+    ).toEqual(new Set(['pdf@1.0.0', 'review@1.0.0']));
+  });
+
+  it('rejects cycles while collecting skill refs', () => {
+    const file = packages({
+      a: {
+        '1.0.0': packageVersion({ packages: { b: '1.0.0' } }),
+      },
+      b: {
+        '1.0.0': packageVersion({ packages: { a: '1.0.0' } }),
+      },
+    });
+
+    expect(() =>
+      collectPackageSkillRefs(file, [{ name: 'a', version: '1.0.0' }]),
+    ).toThrowError(/a@1\.0\.0 -> b@1\.0\.0 -> a@1\.0\.0/);
   });
 });

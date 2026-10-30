@@ -237,3 +237,46 @@ export function validateAllPackages(
     }
   }
 }
+
+export function collectPackageSkillRefs(
+  packages: PackageFile,
+  roots: PackageRef[],
+): Set<string> {
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const path: string[] = [];
+  const refs = new Set<string>();
+
+  function visit(ref: PackageRef): void {
+    const id = nodeId(ref);
+
+    if (visiting.has(id)) {
+      throw cycleError(path, id);
+    }
+    if (visited.has(id)) {
+      return;
+    }
+
+    visiting.add(id);
+    path.push(id);
+    const entry = getPackageVersion(packages, ref);
+
+    for (const [skillName, skillVersion] of Object.entries(entry.skills)) {
+      refs.add(`${skillName}@${skillVersion}`);
+    }
+
+    for (const [packageName, packageVersion] of Object.entries(entry.packages)) {
+      visit({ name: packageName, version: packageVersion });
+    }
+
+    path.pop();
+    visiting.delete(id);
+    visited.add(id);
+  }
+
+  for (const root of roots) {
+    visit(root);
+  }
+
+  return refs;
+}
