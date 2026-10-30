@@ -11,12 +11,22 @@ describe('package names', () => {
     expect(assertSafePackageName(name)).toBe(name);
   });
 
-  it.each(['', '.', '..', 'a/b', 'a\\b', 'CON', 'name.', 'name ', 'a:b'])(
-    'rejects %s',
-    (name) => {
-      expect(() => assertSafePackageName(name)).toThrow();
-    },
-  );
+  it.each([
+    '',
+    '.',
+    '..',
+    'a/b',
+    'a\\b',
+    'CON',
+    'name.',
+    'name ',
+    'a:b',
+    '__proto__',
+    'constructor',
+    'prototype',
+  ])('rejects %s', (name) => {
+    expect(() => assertSafePackageName(name)).toThrow();
+  });
 });
 
 describe('case-insensitive names', () => {

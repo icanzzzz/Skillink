@@ -3,6 +3,7 @@ import { SkillinkError } from '@skillink/shared';
 
 const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
 const INVALID_WINDOWS_CHARS = /[<>:"/\\|?*\u0000-\u001f]/;
+const RESERVED_OBJECT_NAMES = new Set(['__proto__', 'prototype', 'constructor']);
 
 export type NameCollisionKind = 'package' | 'skill' | 'target';
 
@@ -102,6 +103,14 @@ export function assertSafePackageName(name: string): string {
     throw new SkillinkError(
       'INVALID_NAME',
       `Package name "${name}" is reserved on Windows.`,
+      { name },
+    );
+  }
+
+  if (RESERVED_OBJECT_NAMES.has(name.toLowerCase())) {
+    throw new SkillinkError(
+      'INVALID_NAME',
+      `Package name "${name}" is reserved for object safety.`,
       { name },
     );
   }

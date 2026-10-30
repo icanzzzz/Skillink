@@ -39,7 +39,9 @@ function getPackageVersion(
   packages: PackageFile,
   ref: PackageRef,
 ): PackageVersion {
-  const entry = packages.packages[ref.name];
+  const entry = Object.hasOwn(packages.packages, ref.name)
+    ? packages.packages[ref.name]
+    : undefined;
   if (!entry) {
     throw new SkillinkError(
       'PACKAGE_NOT_FOUND',
@@ -48,7 +50,9 @@ function getPackageVersion(
     );
   }
 
-  const version = entry.versions[ref.version];
+  const version = Object.hasOwn(entry.versions, ref.version)
+    ? entry.versions[ref.version]
+    : undefined;
   if (!version) {
     throw new SkillinkError(
       'VERSION_NOT_FOUND',
@@ -108,7 +112,11 @@ export function resolvePackageGraph(
     const entry = getPackageVersion(packages, ref);
 
     for (const [skillName, skillVersion] of Object.entries(entry.skills)) {
-      const skillEntry = skills.skills[skillName]?.versions[skillVersion];
+      const skillEntry =
+        Object.hasOwn(skills.skills, skillName) &&
+        Object.hasOwn(skills.skills[skillName]!.versions, skillVersion)
+          ? skills.skills[skillName]!.versions[skillVersion]
+          : undefined;
       if (!skillEntry) {
         throw new SkillinkError(
           'VERSION_NOT_FOUND',

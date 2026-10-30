@@ -375,6 +375,37 @@ describe('route entries', () => {
     ).rejects.toMatchObject({ code: 'PACKAGE_NOT_FOUND' });
   });
 
+  it('rejects prototype-like package names without polluting Object.prototype', async () => {
+    const { paths } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'frontend',
+      requested: '1.0.0',
+    });
+
+    await expect(
+      setPackageEnabled(paths, 'project-a', '__proto__', false),
+    ).rejects.toMatchObject({ code: 'INVALID_NAME' });
+    await expect(
+      removeRouteEntry({
+        paths,
+        targetId: 'project-a',
+        name: '__proto__',
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_NAME' });
+    await expect(
+      addRouteEntry({
+        paths,
+        targetId: 'project-a',
+        name: '__proto__',
+        requested: '1.0.0',
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_NAME' });
+
+    expect((Object.prototype as { enabled?: boolean }).enabled).toBeUndefined();
+  });
+
   it('removes a route entry without touching the target directory', async () => {
     const { paths, targetPath } = await setup();
     await addRouteEntry({

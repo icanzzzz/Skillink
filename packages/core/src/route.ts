@@ -15,6 +15,7 @@ import {
   resolvePackageGraph,
 } from './package-graph.js';
 import { withHistory } from './history.js';
+import { assertSafePackageName } from './package-name.js';
 
 export async function readRouteFile(paths: SkillinkPaths): Promise<RouteFile> {
   return readJsonFile(paths.routeFile, RouteFileSchema, createEmptyRouteFile());
@@ -58,19 +59,16 @@ export async function addRouteEntry(
   }
 
   const target = route.targets[targetIndex]!;
+  const name = assertSafePackageName(input.name);
   const packageFile = await readPackageFile(input.paths);
   const skillFile = await readSkillFile(input.paths);
-  const resolved = resolvePackageVersion(
-    packageFile,
-    input.name,
-    input.requested,
-  );
+  const resolved = resolvePackageVersion(packageFile, name, input.requested);
 
   const lock: PackageLock = {
     requested: input.requested,
     resolved: resolved.version,
     integrity: computePackageIntegrity(packageFile, [
-      { name: input.name, version: resolved.version },
+      { name, version: resolved.version },
     ]),
     enabled: true,
   };
@@ -79,7 +77,7 @@ export async function addRouteEntry(
     ...target,
     packages: {
       ...target.packages,
-      [input.name]: lock,
+      [name]: lock,
     },
   };
 
@@ -88,8 +86,8 @@ export async function addRouteEntry(
     skillFile,
     Object.entries(candidate.packages)
       .filter(([, packageLock]) => packageLock.enabled !== false)
-      .map(([name, packageLock]) => ({
-        name,
+      .map(([packageName, packageLock]) => ({
+        name: packageName,
         version: packageLock.resolved,
       })),
   );
@@ -111,6 +109,7 @@ export async function setPackageEnabled(
 ): Promise<PackageLock> {
   const route = await readRouteFile(paths);
   const target = findTarget(route, targetId);
+  const name = assertSafePackageName(packageName);
 
   if (!target) {
     throw new SkillinkError(
@@ -120,15 +119,15 @@ export async function setPackageEnabled(
     );
   }
 
-  const lock = target.packages[packageName];
-  if (!lock) {
+  if (!Object.hasOwn(target.packages, name)) {
     throw new SkillinkError(
       'PACKAGE_NOT_FOUND',
-      `Package "${packageName}" is not assigned to target "${targetId}".`,
-      { targetId, name: packageName },
+      `Package "${name}" is not assigned to target "${targetId}".`,
+      { targetId, name },
     );
   }
 
+  const lock = target.packages[name]!;
   lock.enabled = enabled;
   await withHistory(
     paths,
@@ -153,6 +152,7 @@ export async function removeRouteEntry(
 ): Promise<boolean> {
   const route = await readRouteFile(input.paths);
   const target = findTarget(route, input.targetId);
+  const name = assertSafePackageName(input.name);
 
   if (!target) {
     throw new SkillinkError(
@@ -162,11 +162,11 @@ export async function removeRouteEntry(
     );
   }
 
-  if (!(input.name in target.packages)) {
+  if (!Object.hasOwn(target.packages, name)) {
     return false;
   }
 
-  delete target.packages[input.name];
+  delete target.packages[name];
 
   if (!input.force) {
     const packageFile = await readPackageFile(input.paths);
@@ -185,7 +185,7 @@ export async function removeRouteEntry(
         }`,
         {
           targetId: input.targetId,
-          name: input.name,
+          name,
           cause: error instanceof Error ? error.message : String(error),
         },
         { cause: error },
