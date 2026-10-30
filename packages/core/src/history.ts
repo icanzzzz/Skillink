@@ -13,10 +13,12 @@ import {
   type PackageFile,
   type RouteFile,
   type SkillFile,
+  type SkillVersion,
   type SkillinkPaths,
 } from '@skillink/shared';
 import { readJsonFile, writeJsonAtomic } from './json-store.js';
 import { withFsRetry } from './fs-retry.js';
+import { scanFolder } from './folder-scan.js';
 import {
   computePackageIntegrity,
   resolvePackageGraph,
@@ -300,10 +302,28 @@ async function isSkillContent(directory: string): Promise<boolean> {
   );
 }
 
+async function isValidSkillContent(
+  directory: string,
+  expected: SkillVersion,
+): Promise<boolean> {
+  if (!(await isSkillContent(directory))) {
+    return false;
+  }
+
+  const scan = await scanFolder(directory).catch(() => undefined);
+  return (
+    scan?.kind === 'skill' &&
+    scan.integrity === expected.integrity &&
+    scan.fileCount === expected.fileCount &&
+    scan.totalSize === expected.size
+  );
+}
+
 async function findTrashCopy(
   paths: SkillinkPaths,
   name: string,
   version: string,
+  expected: SkillVersion,
 ): Promise<string | undefined> {
   const directories = await readdir(paths.trashDir, {
     withFileTypes: true,
@@ -325,7 +345,7 @@ async function findTrashCopy(
       name,
       version,
     );
-    if (await isSkillContent(candidate)) {
+    if (await isValidSkillContent(candidate, expected)) {
       return candidate;
     }
   }
@@ -342,13 +362,14 @@ async function planContentRestores(
 
   for (const [name, skillEntry] of Object.entries(skills.skills)) {
     for (const version of Object.keys(skillEntry.versions)) {
+      const expected = skillEntry.versions[version]!;
       const destination = getSkillDir(paths, name, version);
 
-      if (await isSkillContent(destination)) {
+      if (await isValidSkillContent(destination, expected)) {
         continue;
       }
 
-      const source = await findTrashCopy(paths, name, version);
+      const source = await findTrashCopy(paths, name, version, expected);
       if (source) {
         restores.push({ source, destination });
       } else {

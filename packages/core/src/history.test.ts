@@ -253,6 +253,34 @@ describe('history snapshots', () => {
     expect(skills.skills.demo?.versions['1.0.0']).toBeDefined();
   });
 
+  it('rejects restoring when library content no longer matches the snapshot', async () => {
+    const { paths, targetPath } = await setup();
+    await importSkillVersion(paths.home, 'demo', '1.0.0');
+    await createPackageVersion({
+      paths,
+      name: 'demo-pack',
+      version: '1.0.0',
+      skills: { demo: '1.0.0' },
+    });
+    await addTarget({ paths, id: 'project-a', path: targetPath });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'demo-pack',
+      requested: '1.0.0',
+    });
+    const snapshot = await createHistorySnapshot(paths, 'before-tamper');
+    await writeFile(
+      path.join(getSkillDir(paths, 'demo', '1.0.0'), 'content.txt'),
+      'tampered',
+      'utf8',
+    );
+
+    await expect(
+      restoreHistorySnapshot(paths, snapshot.id),
+    ).rejects.toMatchObject({ code: 'VERSION_NOT_FOUND' });
+  });
+
   it('rejects a snapshot whose package graph has a cycle', async () => {
     const { paths } = await setup();
     await writePackageFile(paths, {
