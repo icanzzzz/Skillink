@@ -71,6 +71,28 @@ describe('importSkill', () => {
     expect(await pathExists(getSkillDir(paths, 'demo', '1.0.0'))).toBe(false);
   });
 
+  it('rejects an import that exceeds configured limits without writing content', async () => {
+    const source = await makeSource();
+    const home = await tempDir('skillink-skill-home-');
+    const paths = getSkillinkPaths(home);
+
+    await expect(
+      importSkill({
+        sourceDir: source,
+        name: 'demo',
+        version: '1.0.0',
+        home,
+        limits: { maxFiles: 2 },
+      }),
+    ).rejects.toMatchObject({
+      code: 'IMPORT_LIMIT_EXCEEDED',
+      details: expect.objectContaining({ maxFiles: 2 }),
+    });
+
+    expect(await pathExists(paths.skillFile)).toBe(false);
+    expect(await pathExists(getSkillDir(paths, 'demo', '1.0.0'))).toBe(false);
+  });
+
   it('imports a folder with SKILL.md and records it in skill.json', async () => {
     const source = await makeSource();
     const home = await tempDir('skillink-skill-home-');

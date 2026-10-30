@@ -3,7 +3,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { getSkillinkPaths } from '@skillink/shared';
-import { assertSafeTargetPath, isPathInside } from './path-policy.js';
+import {
+  assertSafeImportSource,
+  assertSafeTargetPath,
+  isPathInside,
+} from './path-policy.js';
 
 const tempDirs: string[] = [];
 
@@ -15,6 +19,24 @@ async function tempDir(): Promise<string> {
 
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
+
+describe('import source policy', () => {
+  it('rejects a configured system directory', async () => {
+    const dir = await tempDir();
+
+    await expect(
+      assertSafeImportSource(dir, { systemDirectories: [dir] }),
+    ).rejects.toMatchObject({ code: 'UNSAFE_PATH' });
+  });
+
+  it('accepts a normal source directory', async () => {
+    const dir = await tempDir();
+
+    await expect(
+      assertSafeImportSource(dir, { systemDirectories: [] }),
+    ).resolves.toBe(path.resolve(dir));
+  });
 });
 
 describe('target path policy', () => {

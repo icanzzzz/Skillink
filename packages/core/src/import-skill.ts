@@ -15,7 +15,12 @@ import {
   getSkillDir,
   getSkillinkPaths,
 } from '@skillink/shared';
-import { scanFolder } from './folder-scan.js';
+import {
+  DEFAULT_IMPORT_LIMITS,
+  scanFolder,
+  type ScanFolderOptions,
+} from './folder-scan.js';
+import { assertSafeImportSource } from './path-policy.js';
 import {
   assertSkillContent,
   readSkillFile,
@@ -32,6 +37,7 @@ export interface ImportSkillInput {
   name?: string;
   version?: string;
   home?: string;
+  limits?: ScanFolderOptions;
 }
 
 export interface ImportSkillResult {
@@ -66,7 +72,8 @@ export async function importSkill(
     throw sourceError(`Source is not a folder: ${sourceDir}`, sourceDir);
   }
 
-  const scan = await scanFolder(sourceDir);
+  await assertSafeImportSource(sourceDir);
+  const scan = await scanFolder(sourceDir, input.limits ?? DEFAULT_IMPORT_LIMITS);
   if (scan.kind !== 'skill') {
     throw new SkillinkError(
       'SKILL_MD_REQUIRED',

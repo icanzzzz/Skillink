@@ -1,6 +1,11 @@
+import { lstat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { SkillinkError, type SkillinkPaths } from '@skillink/shared';
+import {
+  SkillinkError,
+  expandPath,
+  type SkillinkPaths,
+} from '@skillink/shared';
 
 function normalizeForCompare(value: string): string {
   const resolved = path.resolve(value);
@@ -25,7 +30,7 @@ export function isPathInside(child: string, parent: string): boolean {
   );
 }
 
-function systemDirectories(): string[] {
+export function getSystemDirectories(): string[] {
   if (process.platform === 'win32') {
     return [
       process.env.SystemRoot,
@@ -36,6 +41,59 @@ function systemDirectories(): string[] {
   }
 
   return ['/etc', '/usr', '/bin', '/sbin', '/boot', '/dev', '/proc', '/sys', '/var'];
+}
+
+export interface ImportSourceOptions {
+  systemDirectories?: string[];
+}
+
+export async function assertSafeImportSource(
+  sourceDir: string,
+  options: ImportSourceOptions = {},
+): Promise<string> {
+  const resolved = path.resolve(expandPath(sourceDir));
+  const root = path.parse(resolved).root;
+
+  if (isSamePath(resolved, root)) {
+    throw new SkillinkError(
+      'UNSAFE_PATH',
+      'Import source cannot be a filesystem root.',
+      { sourceDir: resolved },
+    );
+  }
+
+  const info = await lstat(resolved);
+  if (info.isSymbolicLink()) {
+    throw new SkillinkError(
+      'UNSAFE_PATH',
+      `Import source cannot be a symbolic link: ${resolved}`,
+      { sourceDir: resolved },
+    );
+  }
+
+  if (!info.isDirectory()) {
+    throw new SkillinkError(
+      'UNSAFE_PATH',
+      `Import source is not a directory: ${resolved}`,
+      { sourceDir: resolved },
+    );
+  }
+
+  const directories = options.systemDirectories ?? getSystemDirectories();
+  for (const systemDirectory of directories) {
+    if (
+      isSamePath(resolved, systemDirectory) ||
+      isPathInside(resolved, systemDirectory)
+    ) {
+      throw new SkillinkError(
+        'UNSAFE_PATH',
+        `Import source cannot be a system directory: ${systemDirectory}`,
+        { sourceDir: resolved, systemDirectory },
+      );
+    }
+  }
+
+  return resolved;
 }
 
 export function assertSafeTargetPath(
@@ -85,7 +143,7 @@ export function assertSafeTargetPath(
     );
   }
 
-  for (const systemDirectory of systemDirectories()) {
+  for (const systemDirectory of getSystemDirectories()) {
     if (
       isSamePath(resolved, systemDirectory) ||
       isPathInside(resolved, systemDirectory)
