@@ -210,5 +210,6 @@ describe('language packs', () => {
     expect(missing).toEqual([]);
     expect(pack.locale).toBe('zh-CN');
     expect(pack.nativeName).toBe('简体中文');
+    expect(pack.messages['skills.form.versionPlaceholder']).toBe('版本');
   });
 });

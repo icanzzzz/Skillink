@@ -2,7 +2,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { createEmptySkillFile } from '@skillink/shared';
 import { renderWithMessages } from './i18n.test-utils.js';
-import { SkillBatchCard, SkillsView } from './SkillsView.js';
+import {
+  SkillBatchCard,
+  SkillsView,
+  resolveSkillBatchName,
+} from './SkillsView.js';
 
 describe('SkillsView', () => {
   it('renders the empty state', () => {
@@ -138,6 +142,47 @@ describe('SkillsView', () => {
     expect(html).toContain('C:/Skills/linked@1.0.0');
     expect(html).toContain('Linked skill');
     expect(html).toContain('Confirm install');
+  });
+
+  it('shows scanned defaults as placeholders without filling the fields', () => {
+    const html = renderWithMessages(
+      <SkillBatchCard
+        item={{
+          sourceDir: 'C:/Skills/linked@1.0.0',
+          name: '',
+          autoName: 'linked',
+          version: '',
+          directoryLinks: [],
+          status: 'pending',
+        }}
+        onConfirm={() => undefined}
+      />,
+      {},
+    );
+
+    expect(html).toContain('placeholder="linked"');
+    expect(html).not.toContain('value="linked"');
+    expect(html).toContain('placeholder="Version"');
+    expect(html).not.toContain('0.0.0+hash');
+    expect(html).toContain('<strong>linked</strong>');
+    expect(html).not.toContain('disabled');
+  });
+
+  it('falls back to the scanned name when the name field is empty', () => {
+    const item = {
+      sourceDir: 'C:/Skills/linked@1.0.0',
+      name: '  ',
+      autoName: 'linked',
+      version: '',
+      directoryLinks: [],
+      status: 'pending' as const,
+    };
+
+    expect(resolveSkillBatchName(item)).toBe('linked');
+    expect(
+      resolveSkillBatchName({ ...item, name: 'custom' }),
+    ).toBe('custom');
+    expect(resolveSkillBatchName({ ...item, autoName: '' })).toBe('');
   });
 
   it('shows the directory link path and cancels that package install', () => {

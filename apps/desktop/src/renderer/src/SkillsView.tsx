@@ -46,13 +46,22 @@ export type SkillBatchStatus =
 
 export interface SkillBatchItem {
   sourceDir: string;
+  /** Name entered by the user; empty means use the scanned name. */
   name: string;
+  /** Name detected during scanning, shown as the name placeholder. */
+  autoName?: string;
   version: string;
   description?: string;
   directoryLinks: string[];
   status: SkillBatchStatus;
   error?: string;
   result?: ImportSkillResult;
+}
+
+export function resolveSkillBatchName(
+  item: Pick<SkillBatchItem, 'name' | 'autoName'>,
+): string {
+  return item.name.trim() || item.autoName?.trim() || '';
 }
 
 export interface SkillBatchCardProps {
@@ -83,7 +92,8 @@ function errorMessage(error: unknown): string {
 function toBatchItem(candidate: SkillPackageCandidate): SkillBatchItem {
   return {
     sourceDir: candidate.sourceDir,
-    name: candidate.name ?? '',
+    name: '',
+    autoName: candidate.name ?? '',
     version: candidate.version ?? '',
     ...(candidate.description
       ? { description: candidate.description }
@@ -100,6 +110,7 @@ export function SkillBatchCard({
   onConfirm,
 }: SkillBatchCardProps) {
   const { t } = useI18n();
+  const name = resolveSkillBatchName(item);
   const blocked = item.status === 'blocked';
   const installed = item.status === 'installed';
   const canConfirm =
@@ -107,7 +118,7 @@ export function SkillBatchCard({
     !blocked &&
     !installed &&
     item.status !== 'installing' &&
-    item.name.trim() !== '';
+    name !== '';
 
   const buttonLabel =
     item.status === 'installing'
@@ -121,7 +132,7 @@ export function SkillBatchCard({
   return (
     <article className={`package-card install-card install-card-${item.status}`}>
       <div className="package-title">
-        <strong>{item.name.trim() || folderName(item.sourceDir)}</strong>
+        <strong>{name || folderName(item.sourceDir)}</strong>
         <span>{t('skills.badge')}</span>
       </div>
       <p className="path-value install-path">{item.sourceDir}</p>
@@ -134,8 +145,10 @@ export function SkillBatchCard({
             value={item.name}
             readOnly={!onChange}
             onChange={(event) => onChange?.({ name: event.target.value })}
-            placeholder={t('skills.form.namePlaceholder')}
-            required
+            placeholder={
+              item.autoName?.trim() || t('skills.form.namePlaceholder')
+            }
+            required={!item.autoName?.trim()}
           />
         </label>
         <label className="field">
@@ -289,13 +302,16 @@ export function SkillsView({
 
   async function confirmItem(itemSourceDir: string): Promise<void> {
     const item = batch.find((entry) => entry.sourceDir === itemSourceDir);
+    if (!item || !onImportSkill) {
+      return;
+    }
+
+    const name = resolveSkillBatchName(item);
     if (
-      !item ||
-      !onImportSkill ||
       item.status === 'installing' ||
       item.status === 'installed' ||
       item.status === 'blocked' ||
-      item.name.trim() === ''
+      name === ''
     ) {
       return;
     }
@@ -314,12 +330,13 @@ export function SkillsView({
     try {
       const result = await onImportSkill({
         sourceDir: item.sourceDir,
-        name: item.name.trim(),
+        name,
         version: item.version.trim() || undefined,
       });
       updateItem(itemSourceDir, {
         status: 'installed',
-        name: result.name,
+        name: item.name.trim() ? result.name : '',
+        autoName: result.name,
         version: result.version,
         result,
         error: undefined,

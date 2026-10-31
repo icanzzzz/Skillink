@@ -185,7 +185,7 @@ skillink locale remove zh-CN
 
 语言包格式、key 规则、覆盖率、回退和安全限制见 [docs/language-packs.md](./docs/language-packs.md)。CLI 的普通帮助和命令输出仍为英文。
 
-Windows NSIS 安装包会在安装时把内置的 `zh-CN.json` 复制到 `%USERPROFILE%\.agents\skillink\locales\zh-cn.json`（已存在则不覆盖）。应用仍按 `settings.json` / 系统语言规则决定是否启用；portable 包不执行安装步骤，不会自动复制。
+Windows NSIS 安装包会在安装时把内置的 `zh-CN.json` 复制到 `%USERPROFILE%\.agents\skillink\locales\zh-cn.json`（已存在则不覆盖）。应用启动时如果发现该文件仍是内置语言包，且缺少新版本文案或内置包版本更新，会自动刷新它；自定义语言包不会被覆盖。应用仍按 `settings.json` / 系统语言规则决定是否启用；portable 包不执行安装步骤，不会自动复制首次安装的语言包。
 
 ## 开发
 

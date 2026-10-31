@@ -19,7 +19,7 @@ Skillink 的 GUI 界面、错误提示和 Doctor 诊断支持通过本地 JSON �
 - 语言包安装到控制面的 `locales/`，文件名统一为 `locale.toLowerCase()`；例如 `zh-CN` 写入 `locales/zh-cn.json`。
 - 内置英文 `en` 不落盘，始终可用，不能删除或覆盖。
 - `settings.json` 只保存用户偏好，不进入 route / package / skill 的历史快照。
-- Windows NSIS 安装包会在安装阶段把仓库自带 `zh-CN.json` 复制到 `locales/zh-cn.json`；如果目标已存在则保留用户版本。portable 包不执行安装步骤，不会自动复制。应用启动时只按 `settings.json` / 系统语言加载已安装语言包，没有额外的启动复制逻辑。
+- Windows NSIS 安装包会在安装阶段把仓库自带 `zh-CN.json` 复制到 `locales/zh-cn.json`；如果目标已存在则保留用户版本。portable 包不执行安装步骤，不会自动复制首次安装的语言包。应用启动时，如果已安装的 `zh-CN` 语言包与内置包的 `locale` / `name` / `nativeName` 一致，且内置包版本更新或缺少新版本文案，会自动刷新内置包；自定义语言包不会被覆盖。
 
 ## 语言包格式
 

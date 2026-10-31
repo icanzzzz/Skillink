@@ -1,7 +1,8 @@
 # Skillink 项目架构（v2.0）
 
-> 日期：2026-10-30  
-> 状态：v2.0 MVP + hardening（2026-10-31）  
+> 日期：2026-10-31  
+> 状态：v2.0 MVP + hardening + i18n + batch import + language pack refresh（2026-10-31）  
+> 文档基线：`2012023 feat: add batch skill installation` + 2026-10-31 语言包刷新与安装卡片修订  
 > 取代：v1.2 的 `skills.json` 公用库模型  
 > 路径约定：`<user>`、`<repo>` 为占位符；Windows 使用 `%USERPROFILE%`，Linux/macOS 使用 `~`。
 
@@ -106,6 +107,48 @@ route.json
 ```
 
 `skill.json` 取代 v1 的 `skills.json`。`route.json`、`package.json`、`skill.json` 是三个数据配置，不是每个包目录里的文件。`settings.json` 和 `locales/` 只服务 UI，不参与 route/package/skill 图，也不写入 history 快照。
+
+### 3.4 代码模块边界
+
+```text
+apps/
+├─ cli/                      # CLI 入口、命令注册、人类/JSON 输出
+│  └─ src/{index,run}.ts
+├─ desktop/
+│  ├─ src/main/              # Electron 主进程：窗口、IPC、CLI 适配、错误本地化、内置语言包同步
+│  ├─ src/preload/           # contextBridge 白名单 API
+│  └─ src/renderer/          # React 页面与 i18n Provider
+packages/
+├─ shared/                   # Zod schema、报告类型、错误、路径/语言/skill 目录名工具
+└─ core/                     # 业务实现：配置存储、package 图、apply/status/doctor/gc/history、导入/扫描、语言包存储
+```
+
+依赖方向：
+
+```text
+renderer -> preload -> main -> @skillink/cli -> @skillink/core -> @skillink/shared
+CLI ------------------------> @skillink/core -> @skillink/shared
+```
+
+- `@skillink/core` 不依赖 Electron 或 React，可在 CLI、主进程和测试中直接调用；
+- `@skillink/shared` 只放类型、schema 和纯函数，不读写文件系统；
+- `@skillink/cli` 是唯一业务命令层；桌面端主进程通过 `main/cli-adapter.ts` 把 IPC 请求翻译成 CLI argv 并调用 `runCli`，不直接 import core；
+- 语言包解析位于 `shared/src/i18n.ts`，语言包安装/选择位于 `core/src/language-store.ts`；Renderer 只消费 preload 返回的 `LanguageState`。
+
+关键模块：
+
+| 模块 | 职责 |
+|---|---|
+| `shared/src/schemas.ts` | route/package/skill 三配置、settings 与语言包 schema |
+| `shared/src/reports.ts` | CLI/GUI 共用的报告、快照和错误类型 |
+| `shared/src/skill-directory.ts` | 解析 `<name>@<version>` 目录名 |
+| `core/src/package-graph.ts` | package DFS、环检测、skill 冲突、传递闭包哈希 |
+| `core/src/apply.ts` / `status.ts` / `doctor.ts` / `gc.ts` / `history.ts` | 核心生命周期 |
+| `core/src/import-skill.ts` / `skill-scan.ts` | 单包导入与批量扫描 |
+| `desktop/src/main/ipc.ts` | IPC 白名单、Zod 输入校验、sender 校验 |
+| `desktop/src/main/bundled-language.ts` | 启动时刷新版本过旧或缺 key 的内置 `zh-CN` 语言包，保护自定义包 |
+| `desktop/src/main/cli-commands.ts` | IPC 请求 -> CLI argv |
+| `desktop/src/preload/index.ts` | `window.skillink` 白名单 API |
 
 ---
 
@@ -303,6 +346,15 @@ route.json
 
 CLI 通过 `skillink locale list|install|use|remove` 管理语言包；GUI 主进程通过同一套 CLI 命令层执行，Renderer 只消费 preload API 返回的 `LanguageState`。
 
+Windows NSIS 安装包会把内置 `zh-CN.json` 复制到 `locales/zh-cn.json`，目标已存在时不覆盖，以免覆盖用户自定义语言包。应用启动时 `main/bundled-language.ts` 会比较内置包和已安装包：
+
+- `locale` / `name` / `nativeName` 必须一致，确认已安装文件仍代表内置包；
+- 内置包版本更高，或内置包包含已安装包缺失的 key 时，通过 `locale install <bundled> --force` 原子刷新；
+- 身份不一致的自定义语言包保持原样；
+- 刷新失败只记录日志，不阻止应用启动。
+
+因此新增或调整内置文案后，正式安装版升级不需要用户手动删除旧语言包；portable 包没有安装阶段，首次仍需手动安装语言包，但之后同样适用启动刷新。
+
 ---
 
 ## 5. Package 引用图
@@ -406,6 +458,8 @@ skillink package copy <source>@<version> <target>@<version> \
 - 批量扫描不跟随目录链接，但会记录包内目录链接的绝对路径；
 - GUI 在点击确认时检测目录链接，命中则提示链接路径、取消该包安装，其他包不受影响；
 - 默认名/版本：源目录名为 `<name>@<version>` 时解析并分别使用；显式 `--name` / `--version` 优先；
+- 安装卡片把扫描名称保存为 `autoName`，名称输入框初始为空并只把扫描名称显示为 placeholder；用户留空确认时使用 `autoName`，手动输入时以输入值为准；
+- 版本输入框的 placeholder 固定为“版本 / Version”，不向用户展示内部 `0.0.0+hash` 提示；
 - 目录名缺少名称时，GUI 要求用户手动填写；名称仍缺失时批量扫描回退 `SKILL.md` frontmatter 的 name；CLI 回退文件夹名；
 - 版本缺失或不是合法 semver 时回退 `0.0.0+<hash8>`；
 - 同 name@version + 同 integrity：复用；
@@ -426,6 +480,23 @@ skillink skill scan <folder> --json
 - `directoryLinks` 只记录包内目录符号链接/junction 的绝对路径，不跟随、不读取链接目标；
 - 名称优先取源目录名中的 `<name>`，缺失时回退 `SKILL.md` frontmatter 的 `name`；版本优先取 `<name>@<version>` 中的 version；
 - CLI 输出人类可读列表；桌面端通过 `skillink:scan-skills` IPC 获取同一份 JSON 报告。
+
+批量安装的模块链路：
+
+```text
+SkillsView
+  -> window.skillink.scanSkills({ sourceDir })
+  -> preload: ipcRenderer.invoke('skillink:scan-skills', input)
+  -> main/ipc.ts: ScanSkillsRequestSchema.parse
+  -> main/cli-commands.ts: ['skill', 'scan', <sourceDir>, '--json']
+  -> @skillink/cli/run -> core/skill-scan.ts
+  -> shared/skill-directory.ts + core/skill-md.ts
+```
+
+- 扫描阶段只读，不创建目录、不写配置；
+- 每个候选包在 GUI 中独立展示；确认后逐个调用 `skill add`，某个包失败或取消不会回滚其他包；
+- 包内目录链接在扫描报告中返回；GUI 在确认导入该包时拦截并展示绝对路径，不进入 `skill add`；
+- 批量扫描限制递归深度（`DEFAULT_IMPORT_LIMITS.maxDepth`），不跟随目录链接；实际导入仍执行文件数、字节数、深度和符号链接检查。
 
 ### 6.2 创建 package
 
@@ -643,7 +714,7 @@ drift / missing       -> apply
 
 - **Overview**：skills、packages、targets、links、doctor；
 - **Targets**：target 列表、package 数、解析后的 skill 数、分配 package、target/package enable/disable、删除 target/route、apply 预览（dry-run）、prune、apply 结果；
-- **Skills**：选择目录批量扫描 `SKILL.md`，逐个确认安装；确认时检测包内目录链接，命中则提示绝对路径并取消该包安装；标签、删除、GC；
+- **Skills**：选择目录批量扫描 `SKILL.md`，逐个确认安装；扫描名称只作为名称输入框 placeholder，留空确认时作为默认名称；版本输入框使用“版本 / Version”占位；确认时检测包内目录链接，命中则提示绝对路径并取消该包安装；标签、删除、GC；
 - **Packages**：创建/复制 package、组合列表、标签、删除；
 - **History**：三文件快照与回滚；
 - **Doctor**：健康检查；
@@ -709,7 +780,7 @@ NSIS 安装细节：
 
 - `oneClick: false`，允许用户选择安装目录；
 - 安装时执行 `skillink-path.ps1 add`，把 `$INSTDIR\resources\cli` 放到当前用户 PATH 前面；
-- 安装时把 `resources\locales\zh-CN.json` 复制到 `%USERPROFILE%\.agents\skillink\locales\zh-cn.json`，目标已存在则不覆盖；应用启动时仍按 `settings.json` / 系统语言决定是否启用；
+- 安装时把 `resources\locales\zh-CN.json` 复制到 `%USERPROFILE%\.agents\skillink\locales\zh-cn.json`，目标已存在则不覆盖；应用启动时若内置 `zh-CN` 包版本更新或缺少新版本文案，且已安装文件仍匹配内置包身份，会自动刷新；应用仍按 `settings.json` / 系统语言决定是否启用；
 - 卸载时执行 `skillink-path.ps1 remove`，只移除该条目；
 - 卸载向导提供“Delete Skillink data and configuration”复选框，默认不勾选；勾选后删除 `%USERPROFILE%\.agents\skillink\`（包括 `skills/`、三个数据配置、`history/`、`settings.json` 和语言包）；
 - 静默卸载可传 `--delete-app-data`（兼容 electron-builder）或 `--delete-skillink-data`，效果等同勾选；覆盖安装/升级时即使带参数也不会删除用户数据；
@@ -787,7 +858,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 
 ## 10. 测试策略
 
-当前验证：45 个测试文件、394 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
+当前验证（2026-10-31）：46 个测试文件、403 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
 
 | 层级 | 内容 |
 |---|---|
@@ -795,6 +866,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 | 集成测试 | 临时目录、真实 junction/symlink、冲突、崩溃恢复 |
 | CLI 测试 | 完整 skill -> package -> route -> apply 闭环、迁移、回滚、批量扫描 |
 | GUI 测试 | IPC schema、页面渲染、空状态、组合展示、target/route 生命周期、apply 预览、批量安装与目录链接警告 |
+| 桌面/i18n 测试 | 语言包 schema/覆盖率、内置包启动刷新、安装卡片 placeholder 与默认名称 |
 | 安全测试 | 恶意源文件夹、路径穿越、断链、只读文件、同名冲突、内容篡改、非受信 IPC |
 | 兼容测试 | Windows 11 本地主验收；Windows/Ubuntu/macOS CI 矩阵 |
 
@@ -829,6 +901,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 - Linux/macOS 已加入 CI 矩阵，但尚未在真实设备上手工验证；
 - apply 回滚只清理本次创建的 target 目录本身，不追踪 `mkdir({ recursive: true })` 创建的父目录；
 - 导入限制覆盖文件数、字节数和深度，但不限制空目录数量；
+- 批量扫描只限制递归深度，不统计文件数和字节数；完整限制在确认导入时执行，超大目录的扫描阶段仍可能较慢；
 - skill manifest 与 package hash 使用 `localeCompare` 排序；保留该行为以兼容已有库，跨 locale 的极端差异可能影响哈希可复现性；
 - 当前安装包未配置代码签名和自动更新；
 - doctor/apply 会重新哈希 skill 内容，超大版本库首次检查可能较慢；
@@ -862,16 +935,19 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 21. `route remove` 默认校验剩余图，`--force` 可修复；target/package enable/disable 可用；
 22. GUI 能删除 target/route、切换 enable、预览/执行 apply/prune，并显示解析后的 skill 数；
 23. `locale` 命令能安装、切换、列出、删除语言包；缺失/损坏语言包回退英文；`zh-CN` 覆盖全部英文 key；
-24. `skill scan` 能批量发现技能包；每个包独立确认安装；包含目录链接的包提示绝对路径并取消该包安装，其余包不受影响。
+24. `skill scan` 能批量发现技能包；每个包独立确认安装；包含目录链接的包提示绝对路径并取消该包安装，其余包不受影响；
+25. 内置 `zh-CN` 包版本更新或缺 key 时，应用启动后自动刷新已安装副本；身份不同的自定义语言包不被覆盖；
+26. 安装卡片中的扫描名称只显示为输入框 placeholder，留空确认时使用扫描名称；版本输入框不展示 `0.0.0+hash`。
 
 ---
 
 ### 11.1 当前实现验证
 
-- `pnpm test`：45 个测试文件、394 个测试通过；
+- `pnpm test`：46 个测试文件、403 个测试通过（2026-10-31）；
 - `pnpm typecheck`：通过；
 - `pnpm build`：CLI 与 Electron 桌面端构建成功；
 - 真实 CLI E2E：skill 安装、package 创建/复制、target/route、apply、status/doctor、冲突修复、history/rollback、gc dry-run 均跑通；
+- 桌面冒烟：旧版 `zh-CN` 语言包在启动后自动刷新到内置版本，版本 placeholder 更新为“版本”；
 - hardening 验证：内容完整性篡改、apply 预检/回滚、导入限制、路径展开、文件锁重试、IPC sender、大小写冲突、frontmatter、GUI 生命周期均有测试覆盖。
 
 ---
