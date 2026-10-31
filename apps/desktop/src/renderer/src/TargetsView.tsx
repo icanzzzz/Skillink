@@ -5,7 +5,9 @@ import type {
   TargetMode,
   TargetRoute,
   TargetSkillSummary,
+  Translator,
 } from '@skillink/shared';
+import { useI18n } from './i18n.js';
 
 export interface AddTargetFormInput {
   path: string;
@@ -61,12 +63,15 @@ export interface TargetsViewProps {
   onPreview?: (options?: ApplyOptionsInput) => void;
 }
 
-function packageCountLabel(count: number): string {
-  return `${count} package${count === 1 ? '' : 's'}`;
+function statusLabel(state: string, t: Translator['t']): string {
+  if (state === '—') {
+    return state;
+  }
+  return t(`status.${state.replace(/-/g, '_')}`, {}, state);
 }
 
-function skillCountLabel(count: number): string {
-  return `${count} skill${count === 1 ? '' : 's'}`;
+function operationKindLabel(kind: string, t: Translator['t']): string {
+  return t(`apply.kind.${kind.replace(/-/g, '_')}`, {}, kind);
 }
 
 function confirmRemoval(message: string): boolean {
@@ -89,6 +94,7 @@ export function TargetsView({
   onApply,
   onPreview,
 }: TargetsViewProps) {
+  const { t } = useI18n();
   const [targetPath, setTargetPath] = useState('');
   const [targetId, setTargetId] = useState('');
   const [targetLabel, setTargetLabel] = useState('');
@@ -176,8 +182,8 @@ export function TargetsView({
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">ROUTES</p>
-            <h2>Target directories</h2>
+            <p className="eyebrow">{t('targets.routes.eyebrow')}</p>
+            <h2>{t('targets.routes.title')}</h2>
           </div>
           <div className="row-actions">
             <label className="checkbox">
@@ -187,7 +193,7 @@ export function TargetsView({
                 onChange={(event) => setPrune(event.target.checked)}
                 disabled={busy}
               />
-              Prune
+              {t('targets.prune')}
             </label>
             <button
               className="secondary"
@@ -195,7 +201,7 @@ export function TargetsView({
               onClick={() => onPreview?.({ prune })}
               disabled={busy || !onPreview}
             >
-              Preview apply
+              {t('targets.previewApply')}
             </button>
             <button
               className="primary"
@@ -203,25 +209,22 @@ export function TargetsView({
               onClick={() => onApply?.({ prune })}
               disabled={busy || !onApply}
             >
-              Apply routes
+              {t('app.actions.applyRoutes')}
             </button>
           </div>
         </div>
 
         {targets.length === 0 ? (
-          <p className="empty">
-            No targets yet. Choose a directory that should directly contain skill
-            folders.
-          </p>
+          <p className="empty">{t('targets.routes.empty')}</p>
         ) : (
           <div className="table targets-table">
             <div className="table-row table-head">
-              <span>Target</span>
-              <span>Path</span>
-              <span>Mode</span>
-              <span>Packages</span>
-              <span>Status</span>
-              <span>Actions</span>
+              <span>{t('targets.table.target')}</span>
+              <span>{t('targets.table.path')}</span>
+              <span>{t('targets.table.mode')}</span>
+              <span>{t('targets.table.packages')}</span>
+              <span>{t('targets.table.status')}</span>
+              <span>{t('targets.table.actions')}</span>
             </div>
             {targets.map((target) => {
               const count = Object.keys(target.packages).length;
@@ -233,15 +236,17 @@ export function TargetsView({
                     <small>{target.id}</small>
                   </span>
                   <span className="path-value">{target.path}</span>
-                  <span>{target.mode}</span>
+                  <span>{t(`targets.mode.${target.mode}`, {}, target.mode)}</span>
                   <span>
-                    {packageCountLabel(count)}
+                    {t('targets.counts.packages', { count })}
                     {resolved && !resolved.error
-                      ? ` · ${skillCountLabel(resolved.skills.length)}`
+                      ? ` · ${t('targets.counts.skills', {
+                          count: resolved.skills.length,
+                        })}`
                       : ''}
-                    {resolved?.error ? ' · unresolved' : ''}
+                    {resolved?.error ? ` · ${t('status.unresolved')}` : ''}
                   </span>
-                  <span>{targetStatus(target.id)}</span>
+                  <span>{statusLabel(targetStatus(target.id), t)}</span>
                   <span className="row-actions">
                     <button
                       className="secondary"
@@ -254,7 +259,9 @@ export function TargetsView({
                         })
                       }
                     >
-                      {target.enabled ? 'Disable target' : 'Enable target'}
+                      {target.enabled
+                        ? t('targets.actions.disableTarget')
+                        : t('targets.actions.enableTarget')}
                     </button>
                     <button
                       className="danger"
@@ -263,14 +270,16 @@ export function TargetsView({
                       onClick={() => {
                         if (
                           confirmRemoval(
-                            `Remove target "${target.label ?? target.id}" from route.json?`,
+                            t('targets.confirm.removeTarget', {
+                              name: target.label ?? target.id,
+                            }),
                           )
                         ) {
                           onRemoveTarget?.({ id: target.id });
                         }
                       }}
                     >
-                      Remove target
+                      {t('targets.actions.removeTarget')}
                     </button>
                   </span>
                 </div>
@@ -283,22 +292,22 @@ export function TargetsView({
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">PACKAGES</p>
-            <h2>Package assignments</h2>
+            <p className="eyebrow">{t('targets.packages.eyebrow')}</p>
+            <h2>{t('targets.packages.title')}</h2>
           </div>
           <span className="count">{assignments.length}</span>
         </div>
 
         {assignments.length === 0 ? (
-          <p className="empty">No package assignments.</p>
+          <p className="empty">{t('targets.packages.empty')}</p>
         ) : (
           <div className="table">
             <div className="table-row table-head">
-              <span>Target</span>
-              <span>Package</span>
-              <span>Version</span>
-              <span>Status</span>
-              <span>Actions</span>
+              <span>{t('targets.table.target')}</span>
+              <span>{t('targets.table.package')}</span>
+              <span>{t('targets.table.version')}</span>
+              <span>{t('targets.table.status')}</span>
+              <span>{t('targets.table.actions')}</span>
             </div>
             {assignments.map(({ target, name, lock }) => (
               <div className="table-row" key={`${target.id}/${name}`}>
@@ -307,7 +316,11 @@ export function TargetsView({
                   <code>{name}</code>
                 </span>
                 <span>{lock.resolved}</span>
-                <span>{lock.enabled === false ? 'disabled' : 'enabled'}</span>
+                <span>
+                  {lock.enabled === false
+                    ? t('status.disabled')
+                    : t('status.enabled')}
+                </span>
                 <span className="row-actions">
                   <button
                     className="secondary"
@@ -321,7 +334,9 @@ export function TargetsView({
                       })
                     }
                   >
-                    {lock.enabled === false ? 'Enable route' : 'Disable route'}
+                    {lock.enabled === false
+                      ? t('targets.actions.enableRoute')
+                      : t('targets.actions.disableRoute')}
                   </button>
                   <button
                     className="danger"
@@ -330,14 +345,17 @@ export function TargetsView({
                     onClick={() => {
                       if (
                         confirmRemoval(
-                          `Remove package "${name}" from target "${target.label ?? target.id}"?`,
+                          t('targets.confirm.removeRoute', {
+                            name,
+                            target: target.label ?? target.id,
+                          }),
                         )
                       ) {
                         onRemoveRoute?.({ targetId: target.id, name });
                       }
                     }}
                   >
-                    Remove route
+                    {t('targets.actions.removeRoute')}
                   </button>
                 </span>
               </div>
@@ -350,31 +368,44 @@ export function TargetsView({
         <section className="panel">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">APPLY</p>
-              <h2>{applyReport.dryRun ? 'Apply preview' : 'Apply result'}</h2>
+              <p className="eyebrow">{t('targets.apply.eyebrow')}</p>
+              <h2>
+                {applyReport.dryRun
+                  ? t('targets.apply.preview')
+                  : t('targets.apply.result')}
+              </h2>
             </div>
             <span className="count">
-              {applyReport.operations.length} operations ·{' '}
-              {applyReport.conflicts.length} conflicts
+              {t('targets.apply.operations', {
+                count: applyReport.operations.length,
+              })}{' '}
+              ·{' '}
+              {t('targets.apply.conflicts', {
+                count: applyReport.conflicts.length,
+              })}
             </span>
           </div>
           <p className="empty">
-            {applyReport.dryRun ? 'dry-run' : 'applied'}
-            {applyReport.ok ? ' · ok' : ' · needs attention'}
+            {applyReport.dryRun
+              ? t('targets.apply.dryRun')
+              : t('targets.apply.applied')}
+            {applyReport.ok
+              ? ` · ${t('targets.apply.ok')}`
+              : ` · ${t('targets.apply.needsAttention')}`}
           </p>
           {applyReport.operations.map((operation, index) => (
             <div
               className="issue-row"
               key={`${operation.kind}-${operation.name ?? operation.targetId}-${index}`}
             >
-              <code>{operation.kind}</code>
+              <code>{operationKindLabel(operation.kind, t)}</code>
               <span>{operation.name ?? operation.targetId}</span>
               <span className="path-value">{operation.path}</span>
             </div>
           ))}
           {applyReport.conflicts.map((conflict, index) => (
             <div className="issue-row" key={`conflict-${index}`}>
-              <code>conflict</code>
+              <code>{t('targets.apply.conflict')}</code>
               <span>{conflict.name}</span>
               <span>{conflict.reason}</span>
             </div>
@@ -386,19 +417,19 @@ export function TargetsView({
         <section className="panel">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">TARGET</p>
-              <h2>Add target</h2>
+              <p className="eyebrow">{t('targets.form.targetEyebrow')}</p>
+              <h2>{t('targets.form.addTarget')}</h2>
             </div>
           </div>
 
           <form className="form-grid" onSubmit={submitTarget}>
             <label className="field field-wide">
-              <span>Directory path</span>
+              <span>{t('targets.form.directoryPath')}</span>
               <div className="input-row">
                 <input
                   value={targetPath}
                   onChange={(event) => setTargetPath(event.target.value)}
-                  placeholder="C:/Projects/ProjectA/skills"
+                  placeholder={t('targets.form.pathPlaceholder')}
                   required
                 />
                 <button
@@ -407,37 +438,37 @@ export function TargetsView({
                   onClick={() => void browse()}
                   disabled={busy || !onBrowse}
                 >
-                  Browse
+                  {t('common.browse')}
                 </button>
               </div>
             </label>
             <label className="field">
-              <span>Target id</span>
+              <span>{t('targets.form.targetId')}</span>
               <input
                 value={targetId}
                 onChange={(event) => setTargetId(event.target.value)}
-                placeholder="project-a"
+                placeholder={t('targets.form.targetIdPlaceholder')}
               />
             </label>
             <label className="field">
-              <span>Label</span>
+              <span>{t('targets.form.label')}</span>
               <input
                 value={targetLabel}
                 onChange={(event) => setTargetLabel(event.target.value)}
-                placeholder="Project A"
+                placeholder={t('targets.form.labelPlaceholder')}
               />
             </label>
             <label className="field">
-              <span>Mode</span>
+              <span>{t('targets.form.mode')}</span>
               <select
                 value={mode}
                 onChange={(event) =>
                   setMode(event.target.value as TargetMode)
                 }
               >
-                <option value="link">link</option>
+                <option value="link">{t('targets.mode.link')}</option>
                 <option value="copy" disabled>
-                  copy (coming later)
+                  {t('targets.mode.copy')}
                 </option>
               </select>
             </label>
@@ -447,7 +478,7 @@ export function TargetsView({
                 type="submit"
                 disabled={busy || !onAddTarget}
               >
-                Add target
+                {t('targets.form.addTarget')}
               </button>
             </div>
           </form>
@@ -456,20 +487,20 @@ export function TargetsView({
         <section className="panel">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">ROUTE</p>
-              <h2>Assign package</h2>
+              <p className="eyebrow">{t('targets.form.routeEyebrow')}</p>
+              <h2>{t('targets.form.assignPackage')}</h2>
             </div>
           </div>
 
           <form className="form-grid" onSubmit={submitRoute}>
             <label className="field">
-              <span>Target</span>
+              <span>{t('targets.form.target')}</span>
               <select
                 value={routeTarget}
                 onChange={(event) => setRouteTarget(event.target.value)}
               >
                 {targets.length === 0 ? (
-                  <option value="">No targets</option>
+                  <option value="">{t('targets.form.noTargets')}</option>
                 ) : null}
                 {targets.map((target) => (
                   <option value={target.id} key={target.id}>
@@ -479,20 +510,20 @@ export function TargetsView({
               </select>
             </label>
             <label className="field">
-              <span>Package</span>
+              <span>{t('targets.form.package')}</span>
               <input
                 value={routeName}
                 onChange={(event) => setRouteName(event.target.value)}
-                placeholder="frontend"
+                placeholder={t('targets.form.packagePlaceholder')}
                 required
               />
             </label>
             <label className="field">
-              <span>Version or tag</span>
+              <span>{t('targets.form.versionOrTag')}</span>
               <input
                 value={routeVersion}
                 onChange={(event) => setRouteVersion(event.target.value)}
-                placeholder="1.0.0"
+                placeholder={t('targets.form.versionPlaceholder')}
                 required
               />
             </label>
@@ -502,7 +533,7 @@ export function TargetsView({
                 type="submit"
                 disabled={busy || !onRouteAdd}
               >
-                Assign
+                {t('targets.form.assign')}
               </button>
             </div>
           </form>

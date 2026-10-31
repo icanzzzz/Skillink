@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { TargetRoute } from '@skillink/shared';
+import { renderWithMessages } from './i18n.test-utils.js';
 import { TargetsView } from './TargetsView.js';
 
 const target: TargetRoute = {
@@ -89,5 +90,36 @@ describe('TargetsView', () => {
     expect(html).toContain('Add target');
     expect(html).toContain('Assign package');
     expect(html).toContain('Apply routes');
+  });
+
+  it('renders translated headings', () => {
+    const html = renderWithMessages(<TargetsView targets={[]} />, {
+      'targets.routes.title': '目标目录',
+      'targets.form.addTarget': '添加目标',
+    });
+
+    expect(html).toContain('目标目录');
+    expect(html).toContain('添加目标');
+  });
+
+  it('pluralizes package and skill counts', () => {
+    const html = renderToStaticMarkup(
+      <TargetsView
+        targets={[target]}
+        targetSkills={[
+          {
+            targetId: 'project-a',
+            skills: [
+              { name: 'pdf', version: '1.0.0' },
+              { name: 'review', version: '1.0.0' },
+              { name: 'slides', version: '1.0.0' },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    expect(html).toContain('1 package');
+    expect(html).toContain('3 skills');
   });
 });
