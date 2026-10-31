@@ -5,6 +5,10 @@ import { assertSafeSegment, assertSafeVersion } from './safe-path.js';
 
 export interface SkillinkPaths {
   home: string;
+  /** user preferences, including the selected UI locale */
+  settingsFile: string;
+  /** installed language packs */
+  localesDir: string;
   routeFile: string;
   /** v2 skill catalog */
   skillFile: string;
@@ -36,6 +40,8 @@ export function getSkillinkPaths(home = getDefaultSkillinkHome()): SkillinkPaths
 
   return {
     home: resolvedHome,
+    settingsFile: path.join(resolvedHome, 'settings.json'),
+    localesDir: path.join(resolvedHome, 'locales'),
     routeFile: path.join(resolvedHome, 'route.json'),
     skillFile: path.join(resolvedHome, 'skill.json'),
     packageFile: path.join(resolvedHome, 'package.json'),

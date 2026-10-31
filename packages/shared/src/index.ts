@@ -1,4 +1,6 @@
 export * from './errors.js';
+export * from './i18n.js';
+export * from './i18n-en.js';
 export * from './path-expand.js';
 export * from './paths.js';
 export * from './reports.js';
