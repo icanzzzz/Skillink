@@ -8,6 +8,25 @@ import type {
   Translator,
 } from '@skillink/shared';
 import { useI18n } from './i18n.js';
+import {
+  EMPTY_ASSIGNMENT_DRAFT,
+  createRouteAddInput,
+  createRouteEnableInput,
+  createRouteRemoveInput,
+  setAssignmentName,
+  setAssignmentVersion,
+  toggleAssignmentTarget,
+  type AssignmentDraft,
+  type RouteAddFormInput,
+  type RouteEnableFormInput,
+  type RouteRemoveFormInput,
+} from './targetAssignment.js';
+
+export type {
+  RouteAddFormInput,
+  RouteEnableFormInput,
+  RouteRemoveFormInput,
+} from './targetAssignment.js';
 
 export interface AddTargetFormInput {
   path: string;
@@ -16,29 +35,12 @@ export interface AddTargetFormInput {
   mode?: TargetMode;
 }
 
-export interface RouteAddFormInput {
-  targetId: string;
-  name: string;
-  requested: string;
-}
-
 export interface TargetRemoveFormInput {
   id: string;
 }
 
 export interface TargetEnableFormInput {
   id: string;
-  enabled: boolean;
-}
-
-export interface RouteRemoveFormInput {
-  targetId: string;
-  name: string;
-}
-
-export interface RouteEnableFormInput {
-  targetId: string;
-  name: string;
   enabled: boolean;
 }
 
@@ -99,11 +101,8 @@ export function TargetsView({
   const [targetId, setTargetId] = useState('');
   const [targetLabel, setTargetLabel] = useState('');
   const [mode, setMode] = useState<TargetMode>('link');
-  const [assigningTargetId, setAssigningTargetId] = useState<string | null>(
-    null,
-  );
-  const [routeName, setRouteName] = useState('');
-  const [routeVersion, setRouteVersion] = useState('');
+  const [assignment, setAssignment] =
+    useState<AssignmentDraft>(EMPTY_ASSIGNMENT_DRAFT);
   const [prune, setPrune] = useState(false);
 
   async function browse(): Promise<void> {
@@ -131,11 +130,9 @@ export function TargetsView({
   }
 
   function beginAssignment(targetIdValue: string): void {
-    setAssigningTargetId((current) =>
-      current === targetIdValue ? null : targetIdValue,
+    setAssignment((current) =>
+      toggleAssignmentTarget(current, targetIdValue),
     );
-    setRouteName('');
-    setRouteVersion('');
   }
 
   function submitRoute(
@@ -143,22 +140,13 @@ export function TargetsView({
     targetIdValue: string,
   ): void {
     event.preventDefault();
-    if (
-      !onRouteAdd ||
-      routeName.trim() === '' ||
-      routeVersion.trim() === ''
-    ) {
+    const input = createRouteAddInput(assignment, targetIdValue);
+    if (!onRouteAdd || !input) {
       return;
     }
 
-    onRouteAdd({
-      targetId: targetIdValue,
-      name: routeName.trim(),
-      requested: routeVersion.trim(),
-    });
-    setRouteName('');
-    setRouteVersion('');
-    setAssigningTargetId(null);
+    onRouteAdd(input);
+    setAssignment(EMPTY_ASSIGNMENT_DRAFT);
   }
 
   const statusByTarget = new Map<string, StatusEntry[]>();
@@ -236,9 +224,13 @@ export function TargetsView({
               const packageEntries = Object.entries(target.packages);
               const count = packageEntries.length;
               const resolved = skillsByTarget.get(target.id);
-              const assigning = assigningTargetId === target.id;
+              const assigning = assignment.targetId === target.id;
               return (
-                <div className="target-block" key={target.id}>
+                <div
+                  className="target-block"
+                  data-target-id={target.id}
+                  key={target.id}
+                >
                   <div className="table-row">
                     <span>
                       <strong>{target.label ?? target.id}</strong>
@@ -326,11 +318,13 @@ export function TargetsView({
                               type="button"
                               disabled={busy || !onRouteEnable}
                               onClick={() =>
-                                onRouteEnable?.({
-                                  targetId: target.id,
-                                  name,
-                                  enabled: lock.enabled === false,
-                                })
+                                onRouteEnable?.(
+                                  createRouteEnableInput(
+                                    target.id,
+                                    name,
+                                    lock,
+                                  ),
+                                )
                               }
                             >
                               {lock.enabled === false
@@ -350,10 +344,9 @@ export function TargetsView({
                                     }),
                                   )
                                 ) {
-                                  onRemoveRoute?.({
-                                    targetId: target.id,
-                                    name,
-                                  });
+                                  onRemoveRoute?.(
+                                    createRouteRemoveInput(target.id, name),
+                                  );
                                 }
                               }}
                             >
@@ -373,8 +366,12 @@ export function TargetsView({
                       <label className="field">
                         <span>{t('targets.form.package')}</span>
                         <input
-                          value={routeName}
-                          onChange={(event) => setRouteName(event.target.value)}
+                          value={assignment.name}
+                          onChange={(event) =>
+                            setAssignment((current) =>
+                              setAssignmentName(current, event.target.value),
+                            )
+                          }
                           placeholder={t('targets.form.packagePlaceholder')}
                           required
                           autoFocus
@@ -383,9 +380,14 @@ export function TargetsView({
                       <label className="field">
                         <span>{t('targets.form.versionOrTag')}</span>
                         <input
-                          value={routeVersion}
+                          value={assignment.version}
                           onChange={(event) =>
-                            setRouteVersion(event.target.value)
+                            setAssignment((current) =>
+                              setAssignmentVersion(
+                                current,
+                                event.target.value,
+                              ),
+                            )
                           }
                           placeholder={t('targets.form.versionPlaceholder')}
                           required
@@ -402,7 +404,7 @@ export function TargetsView({
                         <button
                           className="secondary"
                           type="button"
-                          onClick={() => setAssigningTargetId(null)}
+                          onClick={() => setAssignment(EMPTY_ASSIGNMENT_DRAFT)}
                         >
                           {t('common.cancel')}
                         </button>

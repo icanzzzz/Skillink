@@ -29,12 +29,20 @@ const secondTarget: TargetRoute = {
   packages: {},
 };
 
+function targetBlock(html: string, targetId: string): string {
+  const marker = `data-target-id="${targetId}"`;
+  const start = html.indexOf(marker);
+  const next = html.indexOf('data-target-id="', start + marker.length);
+  return html.slice(start, next === -1 ? undefined : next);
+}
+
 describe('TargetsView', () => {
   it('renders the empty state', () => {
     const html = renderToStaticMarkup(<TargetsView targets={[]} />);
 
     expect(html).toContain('No targets yet');
     expect(html).toContain('skill folders');
+    expect(html).toContain('Add target');
   });
 
   it('disables the unimplemented copy mode option', () => {
@@ -64,12 +72,17 @@ describe('TargetsView', () => {
     const html = renderToStaticMarkup(
       <TargetsView targets={[target, secondTarget]} />,
     );
+    const projectA = targetBlock(html, 'project-a');
+    const projectB = targetBlock(html, 'project-b');
 
-    expect(html).toContain('frontend');
-    expect(html).toContain('No packages assigned yet.');
-    expect(html.match(/Assign package/g)).toHaveLength(2);
+    expect(projectA).toContain('frontend');
+    expect(projectA).not.toContain('No packages assigned yet.');
+    expect(projectA.match(/Assign package/g)).toHaveLength(1);
+    expect(projectB).toContain('No packages assigned yet.');
+    expect(projectB).not.toContain('frontend');
+    expect(projectB.match(/Assign package/g)).toHaveLength(1);
+    expect(html.match(/<select/g)).toHaveLength(1);
     expect(html).not.toContain('Package assignments');
-    expect(html).not.toContain('No targets');
   });
 
   it('keeps disabled packages manageable from the target row', () => {
