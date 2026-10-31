@@ -191,7 +191,7 @@ export function PackagesView({
           </div>
           <span className="count">{entries.length}</span>
         </div>
-        <p className="empty">
+        <p className="hint">
           A package is configuration only. It groups skills and other packages;
           the target installs the resolved skills.
         </p>
@@ -265,7 +265,7 @@ export function PackagesView({
             <h2>Copy package</h2>
           </div>
         </div>
-        <p className="empty">
+        <p className="hint">
           Copy a package version and override its direct dependencies to resolve
           skill version conflicts.
         </p>

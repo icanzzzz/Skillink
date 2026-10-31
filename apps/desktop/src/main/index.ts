@@ -14,7 +14,7 @@ function createWindow(): void {
     ...(app.isPackaged
       ? {}
       : { icon: path.join(app.getAppPath(), 'build', 'icon.png') }),
-    backgroundColor: '#0f1115',
+    backgroundColor: '#f3ede1',
     webPreferences: {
       preload: path.join(app.getAppPath(), 'out', 'preload', 'index.cjs'),
       contextIsolation: true,

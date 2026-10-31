@@ -55,6 +55,68 @@ const VIEW_TITLES: Record<ViewId, string> = {
   doctor: 'Doctor',
 };
 
+function NavIcon({ view }: { view: ViewId }) {
+  const props = {
+    className: 'nav-icon',
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.7,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+  };
+
+  switch (view) {
+    case 'overview':
+      return (
+        <svg {...props}>
+          <rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.6" />
+          <rect x="14" y="3.5" width="6.5" height="6.5" rx="1.6" />
+          <rect x="3.5" y="14" width="6.5" height="6.5" rx="1.6" />
+          <rect x="14" y="14" width="6.5" height="6.5" rx="1.6" />
+        </svg>
+      );
+    case 'targets':
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="12" r="7.5" />
+          <circle cx="12" cy="12" r="2" />
+          <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3" />
+        </svg>
+      );
+    case 'skills':
+      return (
+        <svg {...props}>
+          <path d="M12 3.2l1.7 4.9 4.9 1.7-4.9 1.7L12 16.4l-1.7-4.9-4.9-1.7 4.9-1.7L12 3.2Z" />
+          <path d="M18.6 15.2l.8 2.3 2.3.8-2.3.8-.8 2.3-.8-2.3-2.3-.8 2.3-.8.8-2.3Z" />
+        </svg>
+      );
+    case 'packages':
+      return (
+        <svg {...props}>
+          <path d="M20.5 8.4 12 3.5 3.5 8.4v7.2L12 20.5l8.5-4.9V8.4Z" />
+          <path d="M3.7 8.5 12 13.8l8.3-5.3M12 20.4v-6.6" />
+        </svg>
+      );
+    case 'history':
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 7.5V12l3 2" />
+        </svg>
+      );
+    case 'doctor':
+      return (
+        <svg {...props}>
+          <path d="M3 12.5h3.6L8.8 8l3.1 8 2-4h6.1" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
 export interface AppProps {
   api?: DesktopApi;
 }
@@ -225,19 +287,22 @@ export function App({ api }: AppProps) {
           <img className="brand-mark" src={BRAND_ICON} alt="" />
           <div>
             <strong>Skillink</strong>
-            <span>skill and package manager</span>
+            <span>skill &amp; package manager</span>
           </div>
         </div>
 
-        <nav className="nav">
+        <nav className="nav" aria-label="Primary">
+          <p className="nav-label">Navigate</p>
           {NAV_ITEMS.map((item) => (
             <button
+              aria-current={view === item.id ? 'page' : undefined}
               className={view === item.id ? 'nav-item active' : 'nav-item'}
               key={item.id}
               type="button"
               onClick={() => setView(item.id)}
             >
-              {item.label}
+              <NavIcon view={item.id} />
+              <span>{item.label}</span>
             </button>
           ))}
         </nav>
