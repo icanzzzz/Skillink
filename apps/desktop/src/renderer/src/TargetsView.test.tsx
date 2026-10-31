@@ -20,6 +20,15 @@ const target: TargetRoute = {
   },
 };
 
+const secondTarget: TargetRoute = {
+  id: 'project-b',
+  label: 'Project B',
+  path: 'C:/Projects/ProjectB/skills',
+  mode: 'link',
+  enabled: true,
+  packages: {},
+};
+
 describe('TargetsView', () => {
   it('renders the empty state', () => {
     const html = renderToStaticMarkup(<TargetsView targets={[]} />);
@@ -51,6 +60,42 @@ describe('TargetsView', () => {
     expect(html).toContain('1 skill');
   });
 
+  it('renders packages inside their target and one assign action per target', () => {
+    const html = renderToStaticMarkup(
+      <TargetsView targets={[target, secondTarget]} />,
+    );
+
+    expect(html).toContain('frontend');
+    expect(html).toContain('No packages assigned yet.');
+    expect(html.match(/Assign package/g)).toHaveLength(2);
+    expect(html).not.toContain('Package assignments');
+    expect(html).not.toContain('No targets');
+  });
+
+  it('keeps disabled packages manageable from the target row', () => {
+    const disabledTarget: TargetRoute = {
+      ...target,
+      packages: {
+        frontend: {
+          requested: '1.0.0',
+          resolved: '1.0.0',
+          integrity: 'sha256-abc',
+          enabled: false,
+        },
+      },
+    };
+    const html = renderToStaticMarkup(
+      <TargetsView
+        targets={[disabledTarget]}
+        onRouteEnable={() => {}}
+        onRemoveRoute={() => {}}
+      />,
+    );
+
+    expect(html).toContain('Enable route');
+    expect(html).toContain('Remove route');
+  });
+
   it('renders lifecycle controls and apply reports', () => {
     const html = renderToStaticMarkup(
       <TargetsView
@@ -79,6 +124,8 @@ describe('TargetsView', () => {
     expect(html).toContain('frontend');
     expect(html).toContain('Remove route');
     expect(html).toContain('dry-run');
+    expect(html).toContain('Assign package');
+    expect(html).not.toContain('Package assignments');
   });
 
   it('renders target paths and package counts', () => {

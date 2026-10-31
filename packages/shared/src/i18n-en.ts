@@ -107,6 +107,7 @@ export const EN_MESSAGES = {
   'apply.kind.skip': 'skip',
 
   'common.browse': 'Browse',
+  'common.cancel': 'Cancel',
 
   'targets.routes.eyebrow': 'ROUTES',
   'targets.routes.title': 'Target directories',
@@ -142,7 +143,7 @@ export const EN_MESSAGES = {
     'Remove package "{name}" from target "{target}"?',
   'targets.packages.eyebrow': 'PACKAGES',
   'targets.packages.title': 'Package assignments',
-  'targets.packages.empty': 'No package assignments.',
+  'targets.packages.empty': 'No packages assigned yet.',
   'targets.apply.eyebrow': 'APPLY',
   'targets.apply.preview': 'Apply preview',
   'targets.apply.result': 'Apply result',

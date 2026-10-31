@@ -99,7 +99,9 @@ export function TargetsView({
   const [targetId, setTargetId] = useState('');
   const [targetLabel, setTargetLabel] = useState('');
   const [mode, setMode] = useState<TargetMode>('link');
-  const [routeTarget, setRouteTarget] = useState(targets[0]?.id ?? '');
+  const [assigningTargetId, setAssigningTargetId] = useState<string | null>(
+    null,
+  );
   const [routeName, setRouteName] = useState('');
   const [routeVersion, setRouteVersion] = useState('');
   const [prune, setPrune] = useState(false);
@@ -128,11 +130,21 @@ export function TargetsView({
     setTargetLabel('');
   }
 
-  function submitRoute(event: FormEvent<HTMLFormElement>): void {
+  function beginAssignment(targetIdValue: string): void {
+    setAssigningTargetId((current) =>
+      current === targetIdValue ? null : targetIdValue,
+    );
+    setRouteName('');
+    setRouteVersion('');
+  }
+
+  function submitRoute(
+    event: FormEvent<HTMLFormElement>,
+    targetIdValue: string,
+  ): void {
     event.preventDefault();
     if (
       !onRouteAdd ||
-      routeTarget === '' ||
       routeName.trim() === '' ||
       routeVersion.trim() === ''
     ) {
@@ -140,12 +152,13 @@ export function TargetsView({
     }
 
     onRouteAdd({
-      targetId: routeTarget,
+      targetId: targetIdValue,
       name: routeName.trim(),
       requested: routeVersion.trim(),
     });
     setRouteName('');
     setRouteVersion('');
+    setAssigningTargetId(null);
   }
 
   const statusByTarget = new Map<string, StatusEntry[]>();
@@ -157,13 +170,6 @@ export function TargetsView({
 
   const skillsByTarget = new Map(
     targetSkills.map((summary) => [summary.targetId, summary]),
-  );
-  const assignments = targets.flatMap((target) =>
-    Object.entries(target.packages).map(([name, lock]) => ({
-      target,
-      name,
-      lock,
-    })),
   );
 
   function targetStatus(targetIdValue: string): string {
@@ -227,139 +233,185 @@ export function TargetsView({
               <span>{t('targets.table.actions')}</span>
             </div>
             {targets.map((target) => {
-              const count = Object.keys(target.packages).length;
+              const packageEntries = Object.entries(target.packages);
+              const count = packageEntries.length;
               const resolved = skillsByTarget.get(target.id);
+              const assigning = assigningTargetId === target.id;
               return (
-                <div className="table-row" key={target.id}>
-                  <span>
-                    <strong>{target.label ?? target.id}</strong>
-                    <small>{target.id}</small>
-                  </span>
-                  <span className="path-value">{target.path}</span>
-                  <span>{t(`targets.mode.${target.mode}`, {}, target.mode)}</span>
-                  <span>
-                    {t('targets.counts.packages', { count })}
-                    {resolved && !resolved.error
-                      ? ` · ${t('targets.counts.skills', {
-                          count: resolved.skills.length,
-                        })}`
-                      : ''}
-                    {resolved?.error ? ` · ${t('status.unresolved')}` : ''}
-                  </span>
-                  <span>{statusLabel(targetStatus(target.id), t)}</span>
-                  <span className="row-actions">
-                    <button
-                      className="secondary"
-                      type="button"
-                      disabled={busy || !onTargetEnable}
-                      onClick={() =>
-                        onTargetEnable?.({
-                          id: target.id,
-                          enabled: !target.enabled,
-                        })
-                      }
-                    >
-                      {target.enabled
-                        ? t('targets.actions.disableTarget')
-                        : t('targets.actions.enableTarget')}
-                    </button>
-                    <button
-                      className="danger"
-                      type="button"
-                      disabled={busy || !onRemoveTarget}
-                      onClick={() => {
-                        if (
-                          confirmRemoval(
-                            t('targets.confirm.removeTarget', {
-                              name: target.label ?? target.id,
-                            }),
-                          )
-                        ) {
-                          onRemoveTarget?.({ id: target.id });
+                <div className="target-block" key={target.id}>
+                  <div className="table-row">
+                    <span>
+                      <strong>{target.label ?? target.id}</strong>
+                      <small>{target.id}</small>
+                    </span>
+                    <span className="path-value">{target.path}</span>
+                    <span>
+                      {t(`targets.mode.${target.mode}`, {}, target.mode)}
+                    </span>
+                    <span>
+                      {t('targets.counts.packages', { count })}
+                      {resolved && !resolved.error
+                        ? ` · ${t('targets.counts.skills', {
+                            count: resolved.skills.length,
+                          })}`
+                        : ''}
+                      {resolved?.error ? ` · ${t('status.unresolved')}` : ''}
+                    </span>
+                    <span>{statusLabel(targetStatus(target.id), t)}</span>
+                    <span className="row-actions">
+                      <button
+                        className="secondary"
+                        type="button"
+                        disabled={busy || !onRouteAdd}
+                        onClick={() => beginAssignment(target.id)}
+                      >
+                        {t('targets.form.assignPackage')}
+                      </button>
+                      <button
+                        className="secondary"
+                        type="button"
+                        disabled={busy || !onTargetEnable}
+                        onClick={() =>
+                          onTargetEnable?.({
+                            id: target.id,
+                            enabled: !target.enabled,
+                          })
                         }
-                      }}
+                      >
+                        {target.enabled
+                          ? t('targets.actions.disableTarget')
+                          : t('targets.actions.enableTarget')}
+                      </button>
+                      <button
+                        className="danger"
+                        type="button"
+                        disabled={busy || !onRemoveTarget}
+                        onClick={() => {
+                          if (
+                            confirmRemoval(
+                              t('targets.confirm.removeTarget', {
+                                name: target.label ?? target.id,
+                              }),
+                            )
+                          ) {
+                            onRemoveTarget?.({ id: target.id });
+                          }
+                        }}
+                      >
+                        {t('targets.actions.removeTarget')}
+                      </button>
+                    </span>
+                  </div>
+
+                  <div className="target-packages">
+                    {packageEntries.length === 0 ? (
+                      <p className="target-package-empty">
+                        {t('targets.packages.empty')}
+                      </p>
+                    ) : (
+                      packageEntries.map(([name, lock]) => (
+                        <div className="target-package-row" key={name}>
+                          <span>
+                            <code>{name}</code>{' '}
+                            <small>@{lock.resolved}</small>
+                          </span>
+                          <span>
+                            {lock.enabled === false
+                              ? t('status.disabled')
+                              : t('status.enabled')}
+                          </span>
+                          <span className="row-actions">
+                            <button
+                              className="secondary"
+                              type="button"
+                              disabled={busy || !onRouteEnable}
+                              onClick={() =>
+                                onRouteEnable?.({
+                                  targetId: target.id,
+                                  name,
+                                  enabled: lock.enabled === false,
+                                })
+                              }
+                            >
+                              {lock.enabled === false
+                                ? t('targets.actions.enableRoute')
+                                : t('targets.actions.disableRoute')}
+                            </button>
+                            <button
+                              className="danger"
+                              type="button"
+                              disabled={busy || !onRemoveRoute}
+                              onClick={() => {
+                                if (
+                                  confirmRemoval(
+                                    t('targets.confirm.removeRoute', {
+                                      name,
+                                      target: target.label ?? target.id,
+                                    }),
+                                  )
+                                ) {
+                                  onRemoveRoute?.({
+                                    targetId: target.id,
+                                    name,
+                                  });
+                                }
+                              }}
+                            >
+                              {t('targets.actions.removeRoute')}
+                            </button>
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {assigning ? (
+                    <form
+                      className="target-package-form form-grid"
+                      onSubmit={(event) => submitRoute(event, target.id)}
                     >
-                      {t('targets.actions.removeTarget')}
-                    </button>
-                  </span>
+                      <label className="field">
+                        <span>{t('targets.form.package')}</span>
+                        <input
+                          value={routeName}
+                          onChange={(event) => setRouteName(event.target.value)}
+                          placeholder={t('targets.form.packagePlaceholder')}
+                          required
+                          autoFocus
+                        />
+                      </label>
+                      <label className="field">
+                        <span>{t('targets.form.versionOrTag')}</span>
+                        <input
+                          value={routeVersion}
+                          onChange={(event) =>
+                            setRouteVersion(event.target.value)
+                          }
+                          placeholder={t('targets.form.versionPlaceholder')}
+                          required
+                        />
+                      </label>
+                      <div className="form-actions">
+                        <button
+                          className="primary"
+                          type="submit"
+                          disabled={busy || !onRouteAdd}
+                        >
+                          {t('targets.form.assign')}
+                        </button>
+                        <button
+                          className="secondary"
+                          type="button"
+                          onClick={() => setAssigningTargetId(null)}
+                        >
+                          {t('common.cancel')}
+                        </button>
+                      </div>
+                    </form>
+                  ) : null}
                 </div>
               );
             })}
-          </div>
-        )}
-      </section>
-
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">{t('targets.packages.eyebrow')}</p>
-            <h2>{t('targets.packages.title')}</h2>
-          </div>
-          <span className="count">{assignments.length}</span>
-        </div>
-
-        {assignments.length === 0 ? (
-          <p className="empty">{t('targets.packages.empty')}</p>
-        ) : (
-          <div className="table">
-            <div className="table-row table-head">
-              <span>{t('targets.table.target')}</span>
-              <span>{t('targets.table.package')}</span>
-              <span>{t('targets.table.version')}</span>
-              <span>{t('targets.table.status')}</span>
-              <span>{t('targets.table.actions')}</span>
-            </div>
-            {assignments.map(({ target, name, lock }) => (
-              <div className="table-row" key={`${target.id}/${name}`}>
-                <span>{target.label ?? target.id}</span>
-                <span>
-                  <code>{name}</code>
-                </span>
-                <span>{lock.resolved}</span>
-                <span>
-                  {lock.enabled === false
-                    ? t('status.disabled')
-                    : t('status.enabled')}
-                </span>
-                <span className="row-actions">
-                  <button
-                    className="secondary"
-                    type="button"
-                    disabled={busy || !onRouteEnable}
-                    onClick={() =>
-                      onRouteEnable?.({
-                        targetId: target.id,
-                        name,
-                        enabled: lock.enabled === false,
-                      })
-                    }
-                  >
-                    {lock.enabled === false
-                      ? t('targets.actions.enableRoute')
-                      : t('targets.actions.disableRoute')}
-                  </button>
-                  <button
-                    className="danger"
-                    type="button"
-                    disabled={busy || !onRemoveRoute}
-                    onClick={() => {
-                      if (
-                        confirmRemoval(
-                          t('targets.confirm.removeRoute', {
-                            name,
-                            target: target.label ?? target.id,
-                          }),
-                        )
-                      ) {
-                        onRemoveRoute?.({ targetId: target.id, name });
-                      }
-                    }}
-                  >
-                    {t('targets.actions.removeRoute')}
-                  </button>
-                </span>
-              </div>
-            ))}
           </div>
         )}
       </section>
@@ -413,132 +465,73 @@ export function TargetsView({
         </section>
       ) : null}
 
-      <div className="split">
-        <section className="panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">{t('targets.form.targetEyebrow')}</p>
-              <h2>{t('targets.form.addTarget')}</h2>
-            </div>
+      <section className="panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">{t('targets.form.targetEyebrow')}</p>
+            <h2>{t('targets.form.addTarget')}</h2>
           </div>
+        </div>
 
-          <form className="form-grid" onSubmit={submitTarget}>
-            <label className="field field-wide">
-              <span>{t('targets.form.directoryPath')}</span>
-              <div className="input-row">
-                <input
-                  value={targetPath}
-                  onChange={(event) => setTargetPath(event.target.value)}
-                  placeholder={t('targets.form.pathPlaceholder')}
-                  required
-                />
-                <button
-                  className="secondary"
-                  type="button"
-                  onClick={() => void browse()}
-                  disabled={busy || !onBrowse}
-                >
-                  {t('common.browse')}
-                </button>
-              </div>
-            </label>
-            <label className="field">
-              <span>{t('targets.form.targetId')}</span>
+        <form className="form-grid" onSubmit={submitTarget}>
+          <label className="field field-wide">
+            <span>{t('targets.form.directoryPath')}</span>
+            <div className="input-row">
               <input
-                value={targetId}
-                onChange={(event) => setTargetId(event.target.value)}
-                placeholder={t('targets.form.targetIdPlaceholder')}
-              />
-            </label>
-            <label className="field">
-              <span>{t('targets.form.label')}</span>
-              <input
-                value={targetLabel}
-                onChange={(event) => setTargetLabel(event.target.value)}
-                placeholder={t('targets.form.labelPlaceholder')}
-              />
-            </label>
-            <label className="field">
-              <span>{t('targets.form.mode')}</span>
-              <select
-                value={mode}
-                onChange={(event) =>
-                  setMode(event.target.value as TargetMode)
-                }
-              >
-                <option value="link">{t('targets.mode.link')}</option>
-                <option value="copy" disabled>
-                  {t('targets.mode.copy')}
-                </option>
-              </select>
-            </label>
-            <div className="form-actions">
-              <button
-                className="primary"
-                type="submit"
-                disabled={busy || !onAddTarget}
-              >
-                {t('targets.form.addTarget')}
-              </button>
-            </div>
-          </form>
-        </section>
-
-        <section className="panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">{t('targets.form.routeEyebrow')}</p>
-              <h2>{t('targets.form.assignPackage')}</h2>
-            </div>
-          </div>
-
-          <form className="form-grid" onSubmit={submitRoute}>
-            <label className="field">
-              <span>{t('targets.form.target')}</span>
-              <select
-                value={routeTarget}
-                onChange={(event) => setRouteTarget(event.target.value)}
-              >
-                {targets.length === 0 ? (
-                  <option value="">{t('targets.form.noTargets')}</option>
-                ) : null}
-                {targets.map((target) => (
-                  <option value={target.id} key={target.id}>
-                    {target.label ?? target.id}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>{t('targets.form.package')}</span>
-              <input
-                value={routeName}
-                onChange={(event) => setRouteName(event.target.value)}
-                placeholder={t('targets.form.packagePlaceholder')}
+                value={targetPath}
+                onChange={(event) => setTargetPath(event.target.value)}
+                placeholder={t('targets.form.pathPlaceholder')}
                 required
               />
-            </label>
-            <label className="field">
-              <span>{t('targets.form.versionOrTag')}</span>
-              <input
-                value={routeVersion}
-                onChange={(event) => setRouteVersion(event.target.value)}
-                placeholder={t('targets.form.versionPlaceholder')}
-                required
-              />
-            </label>
-            <div className="form-actions">
               <button
-                className="primary"
-                type="submit"
-                disabled={busy || !onRouteAdd}
+                className="secondary"
+                type="button"
+                onClick={() => void browse()}
+                disabled={busy || !onBrowse}
               >
-                {t('targets.form.assign')}
+                {t('common.browse')}
               </button>
             </div>
-          </form>
-        </section>
-      </div>
+          </label>
+          <label className="field">
+            <span>{t('targets.form.targetId')}</span>
+            <input
+              value={targetId}
+              onChange={(event) => setTargetId(event.target.value)}
+              placeholder={t('targets.form.targetIdPlaceholder')}
+            />
+          </label>
+          <label className="field">
+            <span>{t('targets.form.label')}</span>
+            <input
+              value={targetLabel}
+              onChange={(event) => setTargetLabel(event.target.value)}
+              placeholder={t('targets.form.labelPlaceholder')}
+            />
+          </label>
+          <label className="field">
+            <span>{t('targets.form.mode')}</span>
+            <select
+              value={mode}
+              onChange={(event) => setMode(event.target.value as TargetMode)}
+            >
+              <option value="link">{t('targets.mode.link')}</option>
+              <option value="copy" disabled>
+                {t('targets.mode.copy')}
+              </option>
+            </select>
+          </label>
+          <div className="form-actions">
+            <button
+              className="primary"
+              type="submit"
+              disabled={busy || !onAddTarget}
+            >
+              {t('targets.form.addTarget')}
+            </button>
+          </div>
+        </form>
+      </section>
     </main>
   );
 }
