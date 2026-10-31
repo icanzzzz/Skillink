@@ -21,6 +21,7 @@ import {
 } from './git.js';
 import {
   assertCleanControlRepo,
+  buildCommitMessage,
   commitRepoChanges,
 } from './git-commit.js';
 import { withHomeLock, type HomeLockOptions } from './git-lock.js';
@@ -329,28 +330,33 @@ async function rollbackToLocked(
   }
 
   const shortRevision = targetCommit.slice(0, 7);
-  const argv = input.argv ?? ['rollback', input.revision];
 
   if (restorable.restores.length > 0 || extraSkills.length > 0) {
     await commitRepoChanges({
       paths: input.paths,
       repo: 'skills',
-      commandPath: 'rollback',
-      argv,
-      action: 'restore',
-      summary: shortRevision,
-      scope: 'skills',
+      buildMessage: (changedFiles) =>
+        buildCommitMessage({
+          scope: 'skills',
+          action: 'restore',
+          summary: shortRevision,
+          command: `skillink rollback ${input.revision}`,
+          changedFiles,
+        }),
     });
   }
 
   const commit = await commitRepoChanges({
     paths: input.paths,
     repo: 'control',
-    commandPath: 'rollback',
-    argv,
-    action: 'restore',
-    summary: shortRevision,
-    scope: 'rollback',
+    buildMessage: (changedFiles) =>
+      buildCommitMessage({
+        scope: 'rollback',
+        action: 'restore',
+        summary: shortRevision,
+        command: `skillink rollback ${input.revision}`,
+        changedFiles,
+      }),
   });
 
   return {

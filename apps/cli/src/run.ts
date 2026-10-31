@@ -44,13 +44,14 @@ import {
   setTargetEnabled,
   status,
   summarizeTargetSkills,
-  withCliMutation,
   withHomeLock,
   writePackageFile,
   writeRouteFile,
   writeSettingsFile,
   writeSkillFile,
 } from '@skillink/core';
+import { withCliMutation } from './mutation.js';
+import { buildCliCommitMessage } from './commit-message.js';
 
 export interface CliContext {
   home?: string;
@@ -298,20 +299,28 @@ export async function runCli(
         await commitRepoChanges({
           paths,
           repo: 'control',
-          commandPath: 'init',
-          argv,
-          action: 'initialize',
-          summary: 'control plane',
-          scope: 'init',
+          buildMessage: (changedFiles) =>
+            buildCliCommitMessage({
+              repo: 'control',
+              commandPath: 'init',
+              argv,
+              action: 'initialize',
+              summary: 'control plane',
+              changedFiles,
+            }),
         });
         await commitRepoChanges({
           paths,
           repo: 'skills',
-          commandPath: 'init',
-          argv,
-          action: 'initialize',
-          summary: 'skills',
-          scope: 'skills',
+          buildMessage: (changedFiles) =>
+            buildCliCommitMessage({
+              repo: 'skills',
+              commandPath: 'init',
+              argv,
+              action: 'initialize',
+              summary: 'skills',
+              changedFiles,
+            }),
         });
 
         return migration;

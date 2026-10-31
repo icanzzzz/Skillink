@@ -11,5 +11,7 @@ describe('public API', () => {
     expect(surface.findTarget).toBeUndefined();
     expect(surface.planMissingSkillContent).toBeUndefined();
     expect(surface.resolveLinkTarget).toBeUndefined();
+    expect(surface.withCliMutation).toBeUndefined();
+    expect(surface.inferScope).toBeUndefined();
   });
 });

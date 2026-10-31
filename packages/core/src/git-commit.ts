@@ -14,7 +14,6 @@ import {
   gitTrackedFiles,
   type GitRepo,
 } from './git.js';
-import { withHomeLock, type HomeLockOptions } from './git-lock.js';
 import {
   readPackageFile,
   writePackageFile,
@@ -31,79 +30,15 @@ import {
 const MAX_SUBJECT_LENGTH = 72;
 const MAX_CHANGED_FILES = 20;
 
-const COMMAND_SCOPES = new Set([
-  'init',
-  'migrate',
-  'skill',
-  'package',
-  'target',
-  'route',
-  'gc',
-  'locale',
-  'rollback',
-  'apply',
-]);
-
-export interface CommitMessageInput {
-  commandPath: string;
-  argv: string[];
-  action?: string;
+export interface BuildCommitMessageInput {
+  scope: string;
+  action: string;
   summary?: string;
+  command?: string;
   changedFiles: string[];
-  scope?: string;
 }
 
-function commandToken(commandPath: string): string {
-  return commandPath.trim().split(/\s+/)[0] ?? '';
-}
-
-function fileScope(file: string): string | undefined {
-  const normalized = file.replace(/\\/g, '/');
-
-  if (normalized === 'route.json') {
-    return 'route';
-  }
-  if (normalized === 'package.json') {
-    return 'package';
-  }
-  if (normalized === 'skill.json') {
-    return 'skill';
-  }
-  if (normalized.startsWith('locales/')) {
-    return 'locale';
-  }
-  if (normalized.startsWith('skills/')) {
-    return 'skills';
-  }
-
-  return undefined;
-}
-
-export function inferScope(
-  commandPath: string,
-  changedFiles: string[],
-): string {
-  const command = commandToken(commandPath);
-  if (COMMAND_SCOPES.has(command)) {
-    return command;
-  }
-
-  const scopes = new Set<string>();
-  for (const file of changedFiles) {
-    const scope = fileScope(file);
-    if (scope) {
-      scopes.add(scope);
-    }
-  }
-
-  if (scopes.size === 1) {
-    return [...scopes][0]!;
-  }
-
-  return 'config';
-}
-
-export function truncateList(files: string[], max = MAX_CHANGED_FILES): string[] {
+function truncateList(files: string[], max = MAX_CHANGED_FILES): string[] {
   if (files.length <= max) {
     return files;
   }
@@ -122,26 +57,15 @@ function truncateSubject(subject: string): string {
   return `${subject.slice(0, MAX_SUBJECT_LENGTH - 3)}...`;
 }
 
-function buildCommitMessage(repo: GitRepo, input: CommitMessageInput): string {
-  const scope =
-    repo === 'skills'
-      ? 'skills'
-      : (input.scope ?? inferScope(input.commandPath, input.changedFiles));
-  const action =
-    input.action ??
-    (commandToken(input.commandPath) === ''
-      ? 'update'
-      : input.commandPath.trim().split(/\s+/).at(-1)!);
+export function buildCommitMessage(input: BuildCommitMessageInput): string {
   const summary = input.summary?.trim() ?? '';
   const subject = truncateSubject(
-    [`skillink(${scope}):`, action, summary].filter(Boolean).join(' '),
+    [`skillink(${input.scope}):`, input.action, summary].filter(Boolean).join(' '),
   );
-  const command = ['skillink', ...input.argv].join(' ');
   const visible = truncateList(input.changedFiles);
 
   const body = [
-    `Command: ${command}`,
-    '',
+    ...(input.command ? [`Command: ${input.command}`, ''] : []),
     'Changed:',
     ...visible.map((file) => `- ${file}`),
   ];
@@ -149,23 +73,12 @@ function buildCommitMessage(repo: GitRepo, input: CommitMessageInput): string {
   return `${subject}\n\n${body.join('\n')}`;
 }
 
-export function buildControlCommitMessage(input: CommitMessageInput): string {
-  return buildCommitMessage('control', input);
-}
-
-export function buildSkillsCommitMessage(input: CommitMessageInput): string {
-  return buildCommitMessage('skills', input);
-}
-
 export interface RepoCommitOptions {
   paths: SkillinkPaths;
   repo: GitRepo;
-  commandPath: string;
-  argv: string[];
-  action?: string;
-  summary?: string;
-  scope?: string;
   message?: string;
+  buildMessage?: (changedFiles: string[]) => string;
+  pathspec?: string[];
 }
 
 /**
@@ -175,12 +88,21 @@ export interface RepoCommitOptions {
 export async function commitRepoChanges(
   options: RepoCommitOptions,
 ): Promise<string | undefined> {
+  if (options.message === undefined && options.buildMessage === undefined) {
+    throw new SkillinkError(
+      'IO_ERROR',
+      'commitRepoChanges requires a message or buildMessage.',
+      { repo: options.repo },
+    );
+  }
+
   if (!(await gitRepoExists(options.paths, options.repo))) {
     return undefined;
   }
 
   const pathspec =
-    options.repo === 'control' ? await controlPathspec(options.paths) : [];
+    options.pathspec ??
+    (options.repo === 'control' ? await controlPathspec(options.paths) : []);
 
   if ((await gitStatus(options.paths, options.repo, pathspec)).length === 0) {
     return undefined;
@@ -199,11 +121,11 @@ export async function commitRepoChanges(
 
   const message =
     options.message ??
-    (options.repo === 'skills'
-      ? buildSkillsCommitMessage({ ...options, changedFiles })
-      : buildControlCommitMessage({ ...options, changedFiles }));
+    (options.buildMessage
+      ? options.buildMessage(changedFiles)
+      : undefined);
 
-  return gitCommit(options.paths, options.repo, message, {
+  return gitCommit(options.paths, options.repo, message!, {
     files: changedFiles,
   });
 }
@@ -294,7 +216,6 @@ export async function ensureControlFiles(
  */
 export async function ensureCleanOrBootstrap(
   paths: SkillinkPaths,
-  argv: string[],
 ): Promise<void> {
   const hadControlRepo = await gitRepoExists(paths, 'control');
   const controlHead = hadControlRepo
@@ -319,11 +240,13 @@ export async function ensureCleanOrBootstrap(
     await commitRepoChanges({
       paths,
       repo: 'control',
-      commandPath: 'init',
-      argv,
-      action: 'initialize',
-      summary: 'control plane',
-      scope: 'init',
+      buildMessage: (changedFiles) =>
+        buildCommitMessage({
+          scope: 'init',
+          action: 'initialize',
+          summary: 'control plane',
+          changedFiles,
+        }),
     });
   }
 
@@ -331,74 +254,13 @@ export async function ensureCleanOrBootstrap(
     await commitRepoChanges({
       paths,
       repo: 'skills',
-      commandPath: 'init',
-      argv,
-      action: 'initialize',
-      summary: 'skills',
-      scope: 'skills',
+      buildMessage: (changedFiles) =>
+        buildCommitMessage({
+          scope: 'skills',
+          action: 'initialize',
+          summary: 'skills',
+          changedFiles,
+        }),
     });
   }
-}
-
-export interface CliMutationOptions<T> {
-  paths: SkillinkPaths;
-  commandPath: string;
-  argv: string[];
-  action?: string;
-  summary: string | ((result: T) => string);
-  /** Commit the skills repository too. Defaults to false. */
-  skills?: boolean;
-  /** Set false for lock-only mutations such as apply. Defaults to true. */
-  commit?: boolean;
-  lockOptions?: HomeLockOptions;
-}
-
-/**
- * Run one CLI mutation under the home lock, then auto-commit the skills
- * repository (when requested) before the control plane.
- */
-export async function withCliMutation<T>(
-  options: CliMutationOptions<T>,
-  task: () => Promise<T>,
-): Promise<T> {
-  return withHomeLock(
-    options.paths,
-    async () => {
-      if (options.commit === false) {
-        return task();
-      }
-
-      await ensureCleanOrBootstrap(options.paths, options.argv);
-
-      const result = await task();
-      const summary =
-        typeof options.summary === 'function'
-          ? options.summary(result)
-          : options.summary;
-
-      if (options.skills) {
-        await commitRepoChanges({
-          paths: options.paths,
-          repo: 'skills',
-          commandPath: options.commandPath,
-          argv: options.argv,
-          action: options.action,
-          summary,
-          scope: 'skills',
-        });
-      }
-
-      await commitRepoChanges({
-        paths: options.paths,
-        repo: 'control',
-        commandPath: options.commandPath,
-        argv: options.argv,
-        action: options.action,
-        summary,
-      });
-
-      return result;
-    },
-    options.lockOptions,
-  );
 }
