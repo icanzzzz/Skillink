@@ -266,6 +266,21 @@ export const EN_MESSAGES = {
     'No history yet. Route, package, and skill changes create snapshots automatically.',
   'history.rollback': 'Rollback',
 
+  'language.eyebrow': 'LANGUAGE',
+  'language.trigger': 'Language',
+  'language.title': 'Language',
+  'language.current': 'Current',
+  'language.builtIn': 'Built-in',
+  'language.coverage': '{percent}% translated',
+  'language.use': 'Use',
+  'language.remove': 'Remove',
+  'language.install': 'Install language pack…',
+  'language.installHint': 'Choose a Skillink language pack (.json).',
+  'language.close': 'Close',
+  'language.empty': 'No language packs installed.',
+  'language.removeActiveHint':
+    'Removing the current language switches back to English.',
+
   'doctor.eyebrow': 'DIAGNOSTICS',
   'doctor.heading': 'Doctor',
   'doctor.issues': {

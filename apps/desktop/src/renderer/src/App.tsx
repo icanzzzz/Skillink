@@ -24,6 +24,7 @@ import type { DesktopApi, DesktopSnapshot } from '../../shared.js';
 import { DoctorView } from './DoctorView.js';
 import { HistoryView } from './HistoryView.js';
 import { useI18n } from './i18n.js';
+import { LanguageDialog, LanguageTrigger } from './LanguageDialog.js';
 import { PackagesView } from './PackagesView.js';
 import { SkillsView } from './SkillsView.js';
 import { SnapshotView } from './SnapshotView.js';
@@ -134,6 +135,7 @@ export function App({ api }: AppProps) {
   const [applyReport, setApplyReport] = useState<ApplyReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
 
   async function refresh(): Promise<void> {
     if (!client) {
@@ -310,9 +312,12 @@ export function App({ api }: AppProps) {
           ))}
         </nav>
 
-        <div className="sidebar-foot">
-          <span>{t('app.controlPlane')}</span>
-          <code>{snapshot?.home ?? '~/.agents/skillink'}</code>
+        <div className="sidebar-bottom">
+          <LanguageTrigger onClick={() => setLanguageOpen(true)} />
+          <div className="sidebar-foot">
+            <span>{t('app.controlPlane')}</span>
+            <code>{snapshot?.home ?? '~/.agents/skillink'}</code>
+          </div>
         </div>
       </aside>
 
@@ -390,6 +395,11 @@ export function App({ api }: AppProps) {
           <div className="loading">{t('app.loading')}</div>
         )}
       </section>
+
+      <LanguageDialog
+        open={languageOpen}
+        onClose={() => setLanguageOpen(false)}
+      />
     </div>
   );
 }
