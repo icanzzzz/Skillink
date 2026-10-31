@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Menu } from 'electron';
 import path from 'node:path';
 import { registerIpcHandlers } from './ipc.js';
 
@@ -53,6 +53,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
   registerIpcHandlers(() => mainWindow);
   createWindow();
 
