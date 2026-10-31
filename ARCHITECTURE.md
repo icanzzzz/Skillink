@@ -88,13 +88,15 @@ route.json
 - package 可以随时复制、重构组合，而不用复制内容；
 - GC 只回收 skill 内容，package 配置不占内容空间。
 
-### 3.3 三个全局配置文件
+### 3.3 三个数据配置与用户偏好
 
 ```text
 %USERPROFILE%\.agents\skillink\          # 或 ~/.agents/skillink
 ├─ route.json      # target -> package
 ├─ package.json    # package -> skill/package 组合
 ├─ skill.json      # skill -> 版本、完整性、标签
+├─ settings.json   # 用户偏好（UI 语言），不进入历史快照
+├─ locales\        # 已安装语言包（纯 JSON 数据）
 ├─ skills\         # 唯一实体内容
 ├─ history\        # 三文件快照
 ├─ trash\          # 删除/GC 的内容
@@ -103,7 +105,7 @@ route.json
 └─ tmp\
 ```
 
-`skill.json` 取代 v1 的 `skills.json`。三个文件都是全局配置，不是每个包目录里的文件。
+`skill.json` 取代 v1 的 `skills.json`。`route.json`、`package.json`、`skill.json` 是三个数据配置，不是每个包目录里的文件。`settings.json` 和 `locales/` 只服务 UI，不参与 route/package/skill 图，也不写入 history 快照。
 
 ---
 
@@ -276,6 +278,30 @@ route.json
 - `fileCount`、`size` 与目录内容一致；
 - tags 必须指向已存在版本；
 - 写入采用临时文件 + rename。
+
+### 4.4 settings.json 与语言包
+
+`settings.json` 只保存用户偏好：
+
+```json
+{
+  "schemaVersion": 1,
+  "locale": "zh-CN"
+}
+```
+
+语言包是单个经过 Zod 校验的 JSON 文件，安装到 `locales/`，文件名统一为 `locale.toLowerCase()`。内置英文 `en` 不落盘，是唯一权威 key 集合和回退来源。语言包只能包含数据，不能执行代码；安装前校验文件大小、JSON、schema、locale、key 格式、key 数量和消息长度。
+
+当前语言解析顺序：
+
+1. `SKILLINK_LOCALE` 环境变量；
+2. `settings.json` 的 `locale`；
+3. 系统语言与已安装语言包的匹配结果；
+4. `en`。
+
+缺失、损坏或已删除的语言包不会阻止应用启动，解析时回退 `en`。删除当前语言包会把 `settings.json` 的 locale 重置为 `en`。`settings.json` 和语言包不进入 route/package/skill 的历史快照。
+
+CLI 通过 `skillink locale list|install|use|remove` 管理语言包；GUI 主进程通过同一套 CLI 命令层执行，Renderer 只消费 preload API 返回的 `LanguageState`。
 
 ---
 
@@ -530,6 +556,7 @@ skillink target add|list|remove|enable|disable
 skillink route add|remove|list|enable|disable
 skillink snapshot
 skillink apply|status|doctor|gc|history|rollback
+skillink locale list|install|use|remove
 ```
 
 `add` 是 `skill add` 的顶层别名。`route remove` 支持 `--force`，用于移除会导致剩余图不可解析的 route entry。
@@ -601,9 +628,10 @@ drift / missing       -> apply
 - **Skills**：导入 skill、标签、删除、GC；
 - **Packages**：创建/复制 package、组合列表、标签、删除；
 - **History**：三文件快照与回滚；
-- **Doctor**：健康检查。
+- **Doctor**：健康检查；
+- **Language**：安装/切换/删除语言包，显示 nativeName、版本和翻译覆盖率；切换后立即刷新界面，删除当前语言回到英文。
 
-GUI 的刷新通过一次只读 `skillink snapshot --json` 获取 skills、packages、route、status、doctor、target 解析结果和 history。Renderer 只调用 preload API；Electron 主进程负责 IPC 校验、argv 映射和串行队列，不直接调用 Core。
+GUI 的刷新通过一次只读 `skillink snapshot --json` 获取 skills、packages、route、status、doctor、target 解析结果和 history。Renderer 只调用 preload API；Electron 主进程负责 IPC 校验、argv 映射和串行队列，不直接调用 Core。语言包操作同样走 `locale ... --json` 命令层。
 
 ### 7.3 双入口与安装包
 
@@ -723,8 +751,9 @@ $env:SKILLINK_HOME = "$PSScriptRoot\skillink-data"
 
 ## 9. 数据与运行时
 
-MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和 target 扫描得出。
+MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和 target 扫描得出。
 
+- `settings.json`、`locales/`：UI 语言偏好与语言包，不参与业务图；
 - `history/`：配置快照；
 - `trash/`：删除/GC 的内容；
 - `cache/`、`logs/`、`tmp/`：运行时辅助目录；
@@ -735,7 +764,7 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 
 ## 10. 测试策略
 
-当前验证：38 个测试文件、313 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
+当前验证：43 个测试文件、363 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
 
 | 层级 | 内容 |
 |---|---|
@@ -777,7 +806,9 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 - 导入限制覆盖文件数、字节数和深度，但不限制空目录数量；
 - skill manifest 与 package hash 使用 `localeCompare` 排序；保留该行为以兼容已有库，跨 locale 的极端差异可能影响哈希可复现性；
 - 当前安装包未配置代码签名和自动更新；
-- doctor/apply 会重新哈希 skill 内容，超大版本库首次检查可能较慢。
+- doctor/apply 会重新哈希 skill 内容，超大版本库首次检查可能较慢；
+- CLI 的普通帮助和命令输出仍为英文；`locale` 管理命令本身也输出英文；
+- `direction: rtl` 会应用到 `document.documentElement.dir`，但 Arabic/Hebrew 的逐页视觉验收尚未完成。
 
 ---
 
@@ -804,13 +835,14 @@ MVP 不依赖数据库；所有状态从三个配置文件、`skills/` 内容和
 19. target/import 路径支持 `~`、`%USERPROFILE%`、`$HOME`；导入拒绝系统目录和超限目录；
 20. `target add --mode copy` 返回 `COPY_MODE_UNSUPPORTED`，doctor 能诊断遗留 copy target；
 21. `route remove` 默认校验剩余图，`--force` 可修复；target/package enable/disable 可用；
-22. GUI 能删除 target/route、切换 enable、预览/执行 apply/prune，并显示解析后的 skill 数。
+22. GUI 能删除 target/route、切换 enable、预览/执行 apply/prune，并显示解析后的 skill 数；
+23. `locale` 命令能安装、切换、列出、删除语言包；缺失/损坏语言包回退英文；`zh-CN` 覆盖全部英文 key。
 
 ---
 
 ### 11.1 当前实现验证
 
-- `pnpm test`：38 个测试文件、313 个测试通过；
+- `pnpm test`：43 个测试文件、363 个测试通过；
 - `pnpm typecheck`：通过；
 - `pnpm build`：CLI 与 Electron 桌面端构建成功；
 - 真实 CLI E2E：skill 安装、package 创建/复制、target/route、apply、status/doctor、冲突修复、history/rollback、gc dry-run 均跑通；

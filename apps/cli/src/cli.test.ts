@@ -9,6 +9,7 @@ import {
 } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runCli, type CliContext } from './run.js';
 
@@ -979,5 +980,34 @@ describe('CLI', () => {
     expect(await runCli(['locale', 'install', packPath], ctx)).toBe(0);
     expect(ctx.out.join('\n')).toContain('Installed');
     expect(ctx.out.join('\n')).toContain('Chinese (Simplified)');
+  });
+
+  it('installs the repository Simplified Chinese pack end to end', async () => {
+    const home = await tempDir('skillink-cli-');
+    const ctx = context(home);
+    const packPath = fileURLToPath(
+      new URL('../../../locales/zh-CN.json', import.meta.url),
+    );
+
+    await runCli(['init'], ctx);
+    ctx.out.length = 0;
+    expect(
+      await runCli(['locale', 'install', packPath, '--use', '--json'], ctx),
+    ).toBe(0);
+    const report = JSON.parse(ctx.out.join('\n'));
+    expect(report.pack).toMatchObject({
+      locale: 'zh-CN',
+      coverage: 1,
+    });
+
+    ctx.out.length = 0;
+    expect(await runCli(['locale', 'list', '--json'], ctx)).toBe(0);
+    const state = JSON.parse(ctx.out.join('\n'));
+    expect(state.current).toBe('zh-CN');
+    expect(state.messages['app.nav.overview']).toBe('概览');
+
+    ctx.out.length = 0;
+    expect(await runCli(['locale', 'remove', 'zh-CN', '--json'], ctx)).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({ current: 'en' });
   });
 });

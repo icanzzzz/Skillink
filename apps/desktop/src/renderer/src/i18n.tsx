@@ -60,7 +60,7 @@ const DEFAULT_CONTEXT: I18nContextValue = {
   formatNumber: ENGLISH_TRANSLATOR.formatNumber,
   chooseLanguagePack: async () => null,
   installLanguagePack: async () => {
-    throw new Error('Language packs are unavailable.');
+    throw new Error(ENGLISH_TRANSLATOR.t('language.unavailable'));
   },
   useLanguage: async () => undefined,
   removeLanguage: async () => undefined,
@@ -136,13 +136,13 @@ export function I18nProvider({
   const installLanguagePack = useCallback(
     async (input: LanguageInstallRequest): Promise<LocaleInstallReport> => {
       if (!resolvedApi) {
-        throw new Error('Language packs are unavailable.');
+        throw new Error(translator.t('language.unavailable'));
       }
       const report = await resolvedApi.installLanguagePack(input);
       await refresh();
       return report;
     },
-    [refresh, resolvedApi],
+    [refresh, resolvedApi, translator],
   );
 
   const useLanguage = useCallback(

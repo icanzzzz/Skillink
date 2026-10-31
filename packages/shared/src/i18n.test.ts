@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import zhCN from '../../../locales/zh-CN.json';
 import { SKILLINK_ERROR_CODES } from './errors.js';
 import {
   LanguagePackSchema,
@@ -158,5 +159,16 @@ describe('language packs', () => {
         fallback,
       ),
     ).toBe(fallback);
+  });
+
+  it('ships a complete Simplified Chinese language pack', () => {
+    const pack = LanguagePackSchema.parse(zhCN);
+    const missing = Object.keys(EN_MESSAGES).filter(
+      (key) => !(key in pack.messages),
+    );
+
+    expect(missing).toEqual([]);
+    expect(pack.locale).toBe('zh-CN');
+    expect(pack.nativeName).toBe('简体中文');
   });
 });

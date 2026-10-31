@@ -10,7 +10,7 @@ target -> package -> skill -> 实体内容
 - **Package 只是配置文件**：`package.json` 描述 package 版本如何组合 skill 和其他 package；它没有内容目录，也不会投影到 target。
 - **Route 只依赖 package**：`route.json` 的 target 声明 package 版本，不直接声明 skill。
 - **Target 最终只包含 skill**：apply 会把 package 图展开为 skill 集合，再链接 skill 文件夹（v2.0 只实现 link；copy target 在创建时直接拒绝）。
-- **三个全局配置**：`route.json`、`package.json`、`skill.json` 同级，均位于控制面。
+- **三个数据配置 + 用户偏好**：`route.json`、`package.json`、`skill.json` 同级，均位于控制面；`settings.json` 只保存 UI 语言等用户偏好，不进入历史快照。
 - **可复现**：route 锁定 package 版本；package 版本锁定精确 skill/package 版本；package 使用传递闭包哈希校验。
 - **不在项目中生成配置**：target 是普通目录，只放投影结果。
 
@@ -34,6 +34,7 @@ target -> package -> skill -> 实体内容
 - Windows 大小写不敏感名称冲突检测、文件占用重试；
 - GUI 的 Targets / Skills / Packages / History / Doctor 页面；
 - GUI 通过 CLI command layer 在进程内执行所有业务操作，CLI 是唯一业务入口；
+- 可安装、可切换的数据型语言包（`locale` 命令 + GUI 语言弹窗），当前语言保存到 `settings.json`；
 - Electron 打包（NSIS + portable）。
 
 > v2.0 仅支持 `mode: link`。copy target 会被拒绝，迁移遗留的 copy target 由 `doctor` 报 `UNSUPPORTED_MODE`。
@@ -63,6 +64,9 @@ pnpm dev:cli -- apply
 # 查看状态 / 健康检查
 pnpm dev:cli -- status
 pnpm dev:cli -- doctor
+
+# 安装并启用简体中文语言包
+pnpm dev:cli -- locale install ./locales/zh-CN.json --use
 ```
 
 `target` 下最终只会出现 skill 文件夹，例如：
@@ -134,6 +138,11 @@ skillink doctor [--json]
 skillink gc [--apply] [--max-age-days <n>] [--no-keep-tagged] [--json]
 skillink history [--json]
 skillink rollback <snapshot-id> [--apply] [--json]
+
+skillink locale list [--json]
+skillink locale install <file> [--use] [--force] [--json]
+skillink locale use <locale> [--json]
+skillink locale remove <locale> [--json]
 ```
 
 所有写命令（包括 `init` / `migrate`）都支持 `--json`；失败时会向 stderr 输出结构化错误。
@@ -155,7 +164,21 @@ GUI 页面：
 - **Skills**：导入 skill（必须 `SKILL.md`）、标签、删除、GC；
 - **Packages**：创建/复制 package、查看组合、标签、删除；
 - **History**：查看三文件快照并回滚；
-- **Doctor**：健康问题与重新 apply。
+- **Doctor**：健康问题与重新 apply；
+- **Language**：安装、切换、删除语言包，显示当前语言和翻译覆盖率。
+
+## 语言包
+
+Skillink 的 GUI 文案、错误提示和 Doctor 诊断可以通过本地 JSON 语言包切换语言。仓库自带完整的简体中文语言包 `locales/zh-CN.json`：
+
+```bash
+skillink locale install ./locales/zh-CN.json --use
+skillink locale list
+skillink locale use en
+skillink locale remove zh-CN
+```
+
+语言包格式、key 规则、覆盖率、回退和安全限制见 [docs/language-packs.md](./docs/language-packs.md)。CLI 的普通帮助和命令输出仍为英文。
 
 ## 开发
 
@@ -212,7 +235,7 @@ GUI 和 CLI 共用同一个控制面：
 %USERPROFILE%\.agents\skillink\     # 或 SKILLINK_HOME
 ```
 
-两者读取和写入完全相同的 `route.json`、`package.json`、`skill.json` 与 `skills/` 内容。
+两者读取和写入完全相同的 `route.json`、`package.json`、`skill.json` 与 `skills/` 内容；UI 语言偏好保存在 `settings.json`，已安装语言包位于 `locales/`。
 
 安装后如果当前终端找不到 `skillink`，重新打开一个终端，或直接运行：
 
@@ -224,8 +247,9 @@ GUI 和 CLI 共用同一个控制面：
 
 ```text
 apps/cli          CLI
-apps/desktop      Electron GUI（Overview / Targets / Skills / Packages / History / Doctor）
-packages/core     领域逻辑、package 图、skill 库、route、apply、history、GC、迁移
-packages/shared   类型、zod schema、错误码
+apps/desktop      Electron GUI（Overview / Targets / Skills / Packages / History / Doctor / Language）
+packages/core     领域逻辑、package 图、skill 库、route、apply、history、GC、迁移、语言包存储
+packages/shared   类型、zod schema、错误码、i18n 翻译器与英文目录
+locales/          语言包示例（zh-CN）
 docs/             计划与文档
 ```

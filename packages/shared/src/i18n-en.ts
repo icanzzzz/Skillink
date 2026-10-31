@@ -278,6 +278,7 @@ export const EN_MESSAGES = {
   'language.installHint': 'Choose a Skillink language pack (.json).',
   'language.close': 'Close',
   'language.empty': 'No language packs installed.',
+  'language.unavailable': 'Language packs are unavailable.',
   'language.removeActiveHint':
     'Removing the current language switches back to English.',
 
