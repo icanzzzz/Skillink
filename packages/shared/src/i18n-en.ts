@@ -119,8 +119,6 @@ export const EN_MESSAGES = {
   'targets.table.packages': 'Packages',
   'targets.table.status': 'Status',
   'targets.table.actions': 'Actions',
-  'targets.table.package': 'Package',
-  'targets.table.version': 'Version',
   'targets.counts.packages': {
     one: '{count} package',
     other: '{count} packages',
@@ -141,8 +139,6 @@ export const EN_MESSAGES = {
     'Remove target "{name}" from route.json?',
   'targets.confirm.removeRoute':
     'Remove package "{name}" from target "{target}"?',
-  'targets.packages.eyebrow': 'PACKAGES',
-  'targets.packages.title': 'Package assignments',
   'targets.packages.empty': 'No packages assigned yet.',
   'targets.apply.eyebrow': 'APPLY',
   'targets.apply.preview': 'Apply preview',
@@ -169,10 +165,7 @@ export const EN_MESSAGES = {
   'targets.form.label': 'Label',
   'targets.form.labelPlaceholder': 'Project A',
   'targets.form.mode': 'Mode',
-  'targets.form.routeEyebrow': 'ROUTE',
   'targets.form.assignPackage': 'Assign package',
-  'targets.form.target': 'Target',
-  'targets.form.noTargets': 'No targets',
   'targets.form.package': 'Package',
   'targets.form.packagePlaceholder': 'frontend',
   'targets.form.versionOrTag': 'Version or tag',

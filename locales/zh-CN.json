@@ -110,8 +110,6 @@
     "targets.table.packages": "包",
     "targets.table.status": "状态",
     "targets.table.actions": "操作",
-    "targets.table.package": "包",
-    "targets.table.version": "版本",
     "targets.counts.packages": {
       "one": "{count} 个包",
       "other": "{count} 个包"
@@ -130,8 +128,6 @@
     "targets.actions.removeRoute": "移除路由",
     "targets.confirm.removeTarget": "从 route.json 中移除目标“{name}”？",
     "targets.confirm.removeRoute": "从目标“{target}”中移除包“{name}”？",
-    "targets.packages.eyebrow": "包",
-    "targets.packages.title": "包分配",
     "targets.packages.empty": "尚未分配包。",
     "targets.apply.eyebrow": "应用",
     "targets.apply.preview": "应用预览",
@@ -158,10 +154,7 @@
     "targets.form.label": "标签",
     "targets.form.labelPlaceholder": "项目 A",
     "targets.form.mode": "模式",
-    "targets.form.routeEyebrow": "路由",
     "targets.form.assignPackage": "分配包",
-    "targets.form.target": "目标",
-    "targets.form.noTargets": "没有目标",
     "targets.form.package": "包",
     "targets.form.packagePlaceholder": "frontend",
     "targets.form.versionOrTag": "版本或标签",
