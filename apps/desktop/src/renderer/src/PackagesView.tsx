@@ -1,6 +1,11 @@
 import { useState, type FormEvent } from 'react';
-import type { PackageFile, SkillFile, Translator } from '@skillink/shared';
+import {
+  parseNameVersionSpec,
+  type PackageFile,
+  type SkillFile,
+} from '@skillink/shared';
 import { useI18n } from './i18n.js';
+import { compositionText } from './format.js';
 
 export interface CreatePackageFormInput {
   name: string;
@@ -51,11 +56,11 @@ function parseDependencies(value: string): Record<string, string> {
     if (!spec) {
       continue;
     }
-    const separator = spec.lastIndexOf('@');
-    if (separator <= 0 || separator === spec.length - 1) {
+    const parsed = parseNameVersionSpec(spec);
+    if (!parsed) {
       continue;
     }
-    result[spec.slice(0, separator)] = spec.slice(separator + 1);
+    result[parsed.name] = parsed.version;
   }
 
   return result;
@@ -66,31 +71,6 @@ function parseNames(value: string): string[] {
     .split(/[\s,]+/)
     .map((name) => name.trim())
     .filter(Boolean);
-}
-
-function compositionText(
-  value: {
-    skills: Record<string, string>;
-    packages: Record<string, string>;
-  },
-  t: Translator['t'],
-): string {
-  const parts: string[] = [];
-  if (Object.keys(value.skills).length > 0) {
-    parts.push(
-      `${t('packages.composition.skills')}: ${Object.entries(value.skills)
-        .map(([name, version]) => `${name}@${version}`)
-        .join(', ')}`,
-    );
-  }
-  if (Object.keys(value.packages).length > 0) {
-    parts.push(
-      `${t('packages.composition.packages')}: ${Object.entries(value.packages)
-        .map(([name, version]) => `${name}@${version}`)
-        .join(', ')}`,
-    );
-  }
-  return parts.join('; ');
 }
 
 export function PackagesView({
@@ -405,7 +385,12 @@ export function PackagesView({
                         <div className="version-block" key={packageVersion}>
                           <div className="version-row">
                             <code>{packageVersion}</code>
-                            <span>{compositionText(value, t)}</span>
+                            <span>
+                              {compositionText(value, t, {
+                                skills: 'packages.composition.skills',
+                                packages: 'packages.composition.packages',
+                              })}
+                            </span>
                           </div>
                           <div className="version-actions">
                             <input

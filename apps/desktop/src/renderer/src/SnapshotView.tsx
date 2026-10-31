@@ -1,41 +1,7 @@
-import { formatDoctorIssue, type Translator } from '@skillink/shared';
+import { formatDoctorIssue } from '@skillink/shared';
 import type { DesktopSnapshot } from '../../shared.js';
 import { useI18n } from './i18n.js';
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function compositionText(
-  value: {
-    skills: Record<string, string>;
-    packages: Record<string, string>;
-  },
-  t: Translator['t'],
-): string {
-  const parts: string[] = [];
-  if (Object.keys(value.skills).length > 0) {
-    parts.push(
-      `${t('overview.composition.skills')}: ${Object.entries(value.skills)
-        .map(([name, version]) => `${name}@${version}`)
-        .join(', ')}`,
-    );
-  }
-  if (Object.keys(value.packages).length > 0) {
-    parts.push(
-      `${t('overview.composition.packages')}: ${Object.entries(value.packages)
-        .map(([name, version]) => `${name}@${version}`)
-        .join(', ')}`,
-    );
-  }
-  return parts.join('; ');
-}
+import { compositionText, formatBytes } from './format.js';
 
 export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
   const { t, translator } = useI18n();
@@ -185,7 +151,12 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
                   {Object.entries(entry.versions).map(([version, value]) => (
                     <div className="version-row" key={version}>
                       <code>{version}</code>
-                      <span>{compositionText(value, t)}</span>
+                      <span>
+                        {compositionText(value, t, {
+                          skills: 'overview.composition.skills',
+                          packages: 'overview.composition.packages',
+                        })}
+                      </span>
                     </div>
                   ))}
                 </div>

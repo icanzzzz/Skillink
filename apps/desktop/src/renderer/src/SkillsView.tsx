@@ -8,6 +8,7 @@ import type {
   SkillPackageScanReport,
 } from '@skillink/shared';
 import { useI18n } from './i18n.js';
+import { errorMessage, formatBytes } from './format.js';
 
 export interface ImportSkillFormInput {
   sourceDir: string;
@@ -72,22 +73,8 @@ export interface SkillBatchCardProps {
   onConfirm?: () => void;
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function folderName(sourceDir: string): string {
   return sourceDir.split(/[\\/]+/u).filter(Boolean).at(-1) ?? sourceDir;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function toBatchItem(candidate: SkillPackageCandidate): SkillBatchItem {

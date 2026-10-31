@@ -1,19 +1,15 @@
-import { SkillinkError } from '@skillink/shared';
+import { SkillinkError, parseNameVersionSpec } from '@skillink/shared';
 
 export function parseSpec(spec: string): { name: string; version: string } {
-  const separator = spec.lastIndexOf('@');
-  if (separator <= 0 || separator === spec.length - 1) {
+  const parsed = parseNameVersionSpec(spec);
+  if (!parsed) {
     throw new SkillinkError(
       'ROUTE_INVALID',
       'Invalid spec; expected name@version.',
       { spec },
     );
   }
-
-  return {
-    name: spec.slice(0, separator),
-    version: spec.slice(separator + 1),
-  };
+  return parsed;
 }
 
 export function asArray(value: string[] | string | undefined): string[] {
