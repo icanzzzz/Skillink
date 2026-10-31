@@ -9,6 +9,7 @@ import {
 import { withFsRetry } from './fs-retry.js';
 import { removeLink } from './links.js';
 import { resolvePackageGraph } from './package-graph.js';
+import { resolveTargetGraph } from './target-graph.js';
 import { readPackageFile } from './package-store.js';
 import { readSkillFile } from './skill-store.js';
 import { assertSafeRealTargetPath } from './path-policy.js';
@@ -43,7 +44,11 @@ export async function resolveTargetSkillNames(
     readSkillFile(input.paths),
   ]);
 
-  return [...resolvePackageGraph(packageFile, skillFile, roots).skills.keys()].sort();
+  return [
+    ...resolveTargetGraph(packageFile, skillFile, input.target, {
+      includeDisabledPackages: true,
+    }).skills.keys(),
+  ].sort();
 }
 
 export interface PackageSkillNamesInput {
@@ -84,7 +89,7 @@ export async function resolveTargetActiveSkillNames(
     readSkillFile(input.paths),
   ]);
 
-  return [...resolvePackageGraph(packageFile, skillFile, roots).skills.keys()].sort();
+  return [...resolveTargetGraph(packageFile, skillFile, input.target).skills.keys()].sort();
 }
 
 export function subtractSkillNames(

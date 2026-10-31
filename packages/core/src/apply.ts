@@ -23,10 +23,7 @@ import { readRouteFile } from './route.js';
 import { readPackageFile } from './package-store.js';
 import { assertSkillContent, readSkillFile } from './skill-store.js';
 import { assertSkillIntegrity } from './skill-integrity.js';
-import {
-  computePackageIntegrity,
-  resolvePackageGraph,
-} from './package-graph.js';
+import { resolveTarget } from './target-graph.js';
 import { isNodeError } from './node-error.js';
 
 export interface ApplyInput {
@@ -83,28 +80,6 @@ async function inspectTargetDirectory(
   return info !== undefined;
 }
 
-async function validatePackageLocks(
-  packageFile: PackageFile,
-  target: TargetRoute,
-): Promise<void> {
-  for (const [name, lock] of Object.entries(target.packages)) {
-    if (lock.enabled === false) {
-      continue;
-    }
-
-    const expected = computePackageIntegrity(packageFile, [
-      { name, version: lock.resolved },
-    ]);
-    if (expected !== lock.integrity) {
-      throw new SkillinkError(
-        'PACKAGE_INTEGRITY_MISMATCH',
-        `Route lock for ${name}@${lock.resolved} does not match package.json.`,
-        { name, version: lock.resolved, expected, actual: lock.integrity },
-      );
-    }
-  }
-}
-
 async function planTarget(
   paths: SkillinkPaths,
   packageFile: PackageFile,
@@ -128,12 +103,7 @@ async function planTarget(
     });
   }
 
-  await validatePackageLocks(packageFile, target);
-
-  const roots = Object.entries(target.packages)
-    .filter(([, lock]) => lock.enabled !== false)
-    .map(([name, lock]) => ({ name, version: lock.resolved }));
-  const resolution = resolvePackageGraph(packageFile, skillFile, roots);
+  const resolution = resolveTarget(packageFile, skillFile, target);
   const desired = new Map(
     [...resolution.skills.values()].map((skill) => [skill.name, skill]),
   );

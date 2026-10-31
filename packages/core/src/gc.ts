@@ -14,7 +14,7 @@ import {
 } from './skill-store.js';
 import { readPackageFile } from './package-store.js';
 import { readRouteFile } from './route.js';
-import { resolvePackageGraph } from './package-graph.js';
+import { resolveTargetGraph } from './target-graph.js';
 import { isPathInside } from './path-policy.js';
 import { withFsRetry } from './fs-retry.js';
 import { isNodeError } from './node-error.js';
@@ -50,16 +50,9 @@ async function collectCandidates(
   const referenced = new Set<string>();
 
   for (const target of route.targets) {
-    const roots = Object.entries(target.packages).map(([name, lock]) => ({
-      name,
-      version: lock.resolved,
-    }));
-
-    if (roots.length === 0) {
-      continue;
-    }
-
-    const resolution = resolvePackageGraph(packageFile, skillFile, roots);
+    const resolution = resolveTargetGraph(packageFile, skillFile, target, {
+      includeDisabledPackages: true,
+    });
     for (const skill of resolution.skills.values()) {
       referenced.add(`${skill.name}@${skill.version}`);
     }

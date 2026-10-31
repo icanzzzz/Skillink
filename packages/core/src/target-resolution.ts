@@ -5,9 +5,9 @@ import {
   type TargetSkillSummary,
 } from '@skillink/shared';
 import {
-  computePackageIntegrity,
-  resolvePackageGraph,
-} from './package-graph.js';
+  checkTargetPackageLocks,
+  resolveTargetGraph,
+} from './target-graph.js';
 import { readPackageFile } from './package-store.js';
 import { readRouteFile } from './route.js';
 import { readSkillFile } from './skill-store.js';
@@ -28,28 +28,15 @@ export async function summarizeTargetSkills(
   ]);
 
   return route.targets.map((target) => {
-    const roots = Object.entries(target.packages)
-      .filter(([, lock]) => lock.enabled !== false)
-      .map(([name, lock]) => ({ name, version: lock.resolved }));
-
     try {
-      for (const [name, lock] of Object.entries(target.packages)) {
-        if (lock.enabled === false) {
-          continue;
-        }
-        const expected = computePackageIntegrity(packageFile, [
-          { name, version: lock.resolved },
-        ]);
-        if (expected !== lock.integrity) {
-          throw new SkillinkError(
-            'PACKAGE_INTEGRITY_MISMATCH',
-            `Route lock for ${name}@${lock.resolved} does not match package.json.`,
-            { name, version: lock.resolved, expected, actual: lock.integrity },
-          );
-        }
+      const failed = checkTargetPackageLocks(packageFile, target).find(
+        (check) => check.error !== undefined,
+      );
+      if (failed?.error) {
+        throw failed.error;
       }
 
-      const resolution = resolvePackageGraph(packageFile, skillFile, roots);
+      const resolution = resolveTargetGraph(packageFile, skillFile, target);
       return {
         targetId: target.id,
         skills: [...resolution.skills.values()]

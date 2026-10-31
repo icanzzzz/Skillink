@@ -17,10 +17,12 @@ import { readPackageFile } from './package-store.js';
 import { readSkillFile } from './skill-store.js';
 import { verifySkillIntegrity } from './skill-integrity.js';
 import {
-  computePackageIntegrity,
-  resolvePackageGraph,
   validateAllPackages,
 } from './package-graph.js';
+import {
+  checkTargetPackageLocks,
+  resolveTargetGraph,
+} from './target-graph.js';
 import {
   assertSafeRealTargetPath,
   isPathInside,
@@ -411,6 +413,14 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
   const referencedPackages = new Set<string>();
 
   for (const target of route.targets) {
+    const lockErrors = new Map(
+      checkTargetPackageLocks(packageFile, target, {
+        includeDisabled: true,
+      })
+        .filter((check) => check.error !== undefined)
+        .map((check) => [check.name, check.error!] as const),
+    );
+
     for (const [name, lock] of Object.entries(target.packages)) {
       referencedPackages.add(`${name}@${lock.resolved}`);
 
@@ -428,38 +438,33 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
         continue;
       }
 
-      try {
-        const expected = computePackageIntegrity(packageFile, [
-          { name, version: lock.resolved },
-        ]);
-        if (expected !== lock.integrity) {
-          issues.push({
-            code: 'PACKAGE_INTEGRITY_MISMATCH',
-            message: `Route lock does not match package.json: ${name}@${lock.resolved}`,
-            name,
-            version: lock.resolved,
-            targetId: target.id,
-          });
-        }
-      } catch (error) {
+      const error = lockErrors.get(name);
+      if (!error) {
+        continue;
+      }
+
+      if (error.code === 'PACKAGE_INTEGRITY_MISMATCH') {
+        issues.push({
+          code: 'PACKAGE_INTEGRITY_MISMATCH',
+          message: `Route lock does not match package.json: ${name}@${lock.resolved}`,
+          name,
+          version: lock.resolved,
+          targetId: target.id,
+        });
+      } else {
         issues.push(issueFromGraphError(error, target.id));
       }
     }
 
     try {
-      const allRoots = Object.entries(target.packages).map(([name, lock]) => ({
-        name,
-        version: lock.resolved,
-      }));
-      if (allRoots.length > 0) {
-        const allResolution = resolvePackageGraph(
-          packageFile,
-          skillFile,
-          allRoots,
-        );
-        for (const id of allResolution.packages.keys()) {
-          referencedPackages.add(id);
-        }
+      const allResolution = resolveTargetGraph(
+        packageFile,
+        skillFile,
+        target,
+        { includeDisabledPackages: true },
+      );
+      for (const id of allResolution.packages.keys()) {
+        referencedPackages.add(id);
       }
     } catch {
       // Broken or conflicting disabled locks are reported by the route checks
@@ -467,16 +472,7 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
     }
 
     try {
-      const resolution = resolvePackageGraph(
-        packageFile,
-        skillFile,
-        Object.entries(target.packages)
-          .filter(([, lock]) => lock.enabled !== false)
-          .map(([name, lock]) => ({
-            name,
-            version: lock.resolved,
-          })),
-      );
+      const resolution = resolveTargetGraph(packageFile, skillFile, target);
       for (const id of resolution.packages.keys()) {
         referencedPackages.add(id);
       }

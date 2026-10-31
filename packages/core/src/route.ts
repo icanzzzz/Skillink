@@ -21,6 +21,10 @@ import {
   resolveTargetActiveSkillNames,
   subtractSkillNames,
 } from './target-gc.js';
+import {
+  assertTargetPackageLocks,
+  resolveTargetGraph,
+} from './target-graph.js';
 
 export async function readRouteFile(paths: SkillinkPaths): Promise<RouteFile> {
   return readJsonFile(paths.routeFile, RouteFileSchema, createEmptyRouteFile());
@@ -137,27 +141,9 @@ export async function validateTargetRoute(
 ): Promise<void> {
   const packageFile = await readPackageFile(paths);
   const skillFile = await readSkillFile(paths);
-  const roots = Object.entries(target.packages)
-    .filter(([, lock]) => lock.enabled !== false)
-    .map(([name, lock]) => ({ name, version: lock.resolved }));
 
-  for (const [name, lock] of Object.entries(target.packages)) {
-    if (lock.enabled === false) {
-      continue;
-    }
-    const expected = computePackageIntegrity(packageFile, [
-      { name, version: lock.resolved },
-    ]);
-    if (expected !== lock.integrity) {
-      throw new SkillinkError(
-        'PACKAGE_INTEGRITY_MISMATCH',
-        `Route lock for ${name}@${lock.resolved} does not match package.json.`,
-        { name, version: lock.resolved, expected, actual: lock.integrity },
-      );
-    }
-  }
-
-  resolvePackageGraph(packageFile, skillFile, roots);
+  assertTargetPackageLocks(packageFile, target);
+  resolveTargetGraph(packageFile, skillFile, target);
 }
 
 export async function setPackageEnabled(
