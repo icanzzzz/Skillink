@@ -145,7 +145,6 @@ describe('TargetsView', () => {
               path: 'C:/Projects/ProjectA/skills/pdf',
             },
           ],
-          conflicts: [],
         }}
       />,
     );

@@ -134,15 +134,10 @@
       "one": "{count} 个操作",
       "other": "{count} 个操作"
     },
-    "targets.apply.conflicts": {
-      "one": "{count} 个冲突",
-      "other": "{count} 个冲突"
-    },
     "targets.apply.dryRun": "试运行",
     "targets.apply.applied": "已应用",
     "targets.apply.ok": "正常",
     "targets.apply.needsAttention": "需要关注",
-    "targets.apply.conflict": "冲突",
     "targets.form.targetEyebrow": "目标",
     "targets.form.addTarget": "添加目标",
     "targets.form.directoryPath": "目录路径",
@@ -292,7 +287,6 @@
     "errors.TARGET_EXISTS": "目标已存在。",
     "errors.TARGET_NOT_FOUND": "未找到目标。",
     "errors.VERSION_IN_USE": "版本正在使用中。",
-    "errors.UNMANAGED_CONFLICT": "未托管文件与目标冲突。",
     "errors.LINK_FAILED": "无法创建链接。",
     "errors.IO_ERROR": "文件操作失败。",
     "errors.IPC_FORBIDDEN": "IPC 请求被拒绝。",

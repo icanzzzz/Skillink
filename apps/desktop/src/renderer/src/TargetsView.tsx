@@ -520,10 +520,6 @@ export function TargetsView({
             <span className="count">
               {t('targets.apply.operations', {
                 count: applyReport.operations.length,
-              })}{' '}
-              ·{' '}
-              {t('targets.apply.conflicts', {
-                count: applyReport.conflicts.length,
               })}
             </span>
           </div>
@@ -543,13 +539,6 @@ export function TargetsView({
               <code>{operationKindLabel(operation.kind, t)}</code>
               <span>{operation.name ?? operation.targetId}</span>
               <span className="path-value">{operation.path}</span>
-            </div>
-          ))}
-          {applyReport.conflicts.map((conflict, index) => (
-            <div className="issue-row" key={`conflict-${index}`}>
-              <code>{t('targets.apply.conflict')}</code>
-              <span>{conflict.name}</span>
-              <span>{conflict.reason}</span>
             </div>
           ))}
         </section>

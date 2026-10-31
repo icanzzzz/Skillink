@@ -363,6 +363,5 @@ export async function apply(input: ApplyInput = {}): Promise<ApplyReport> {
     dryRun,
     ok: true,
     operations,
-    conflicts: [],
   };
 }

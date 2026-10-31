@@ -16,18 +16,10 @@ export interface ApplyOperation {
   sourcePath?: string;
 }
 
-export interface ApplyConflict {
-  targetId: string;
-  name: string;
-  path: string;
-  reason: string;
-}
-
 export interface ApplyReport {
   dryRun: boolean;
   ok: boolean;
   operations: ApplyOperation[];
-  conflicts: ApplyConflict[];
 }
 
 export type StatusState =

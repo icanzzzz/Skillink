@@ -80,19 +80,6 @@ describe('CLI adapter', () => {
     });
   });
 
-  it('returns apply conflict reports when the CLI exits 3', async () => {
-    const { runner } = runnerReturning({
-      code: 3,
-      stdout:
-        '{"dryRun":false,"ok":false,"operations":[],"conflicts":[{"name":"pdf"}]}',
-    });
-    const adapter = createCliAdapter(runner);
-
-    await expect(adapter.invoke(['apply'])).resolves.toMatchObject({
-      ok: false,
-    });
-  });
-
   it('throws a structured error when no JSON result exists', async () => {
     const { runner } = runnerReturning({
       code: 1,
@@ -319,7 +306,7 @@ describe('CLI adapter', () => {
       const report = await adapter.invoke<ApplyReport>(['apply']);
 
       expect(report.ok).toBe(true);
-      expect(report.conflicts).toEqual([]);
+      expect(report).not.toHaveProperty('conflicts');
       expect(
         (await lstat(path.join(targetPath, 'pdf'))).isSymbolicLink(),
       ).toBe(true);

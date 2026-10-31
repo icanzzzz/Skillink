@@ -72,7 +72,7 @@ export async function runCli(
       } else {
         context.stderr(`error [${error.code}]: ${error.message}`);
       }
-      return error.code === 'UNMANAGED_CONFLICT' ? 3 : 1;
+      return 1;
     }
 
     if (jsonMode) {

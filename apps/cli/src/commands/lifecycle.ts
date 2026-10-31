@@ -185,7 +185,7 @@ export function registerLifecycleCommands(
         if (options.json) {
           printJson(context, report);
         } else {
-          if (report.operations.length === 0 && report.conflicts.length === 0) {
+          if (report.operations.length === 0) {
             context.stdout('Nothing to do.');
           }
           for (const operation of report.operations) {
@@ -195,13 +195,6 @@ export function registerLifecycleCommands(
               }  ${operation.path}`,
             );
           }
-          for (const conflict of report.conflicts) {
-            context.stderr(`conflict  ${conflict.name}  ${conflict.reason}`);
-          }
-        }
-
-        if (report.conflicts.length > 0) {
-          runtime.setExitCode(3);
         }
       },
     );

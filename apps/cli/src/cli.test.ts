@@ -980,10 +980,9 @@ describe.skipIf(!gitReady)('CLI', () => {
     expect(await runCli(['apply', '--json'], ctx)).toBe(0);
     const report = JSON.parse(ctx.out.join('\n')) as {
       ok: boolean;
-      conflicts: unknown[];
     };
     expect(report.ok).toBe(true);
-    expect(report.conflicts).toEqual([]);
+    expect(report).not.toHaveProperty('conflicts');
     expect(ctx.err.join('\n')).toBe('');
     expect((await lstat(path.join(targetPath, 'pdf'))).isSymbolicLink()).toBe(
       true,

@@ -141,6 +141,14 @@ CLI ------------------------> @skillink/core -> @skillink/shared
 - `@skillink/cli` 是唯一业务命令层；桌面端主进程通过 `main/cli-adapter.ts` 把 IPC 请求翻译成 CLI argv 并调用 `runCli`，不直接 import core；
 - 语言包解析位于 `shared/src/i18n.ts`，语言包安装/选择位于 `core/src/language-store.ts`；Renderer 只消费 preload 返回的 `LanguageState`。
 
+导入方向规则（由 `core/src/module-boundaries.test.ts` 强制）：
+
+- `@skillink/shared` 不依赖 `@skillink/core` / `@skillink/cli` / `@skillink/desktop`；
+- `@skillink/core` 不依赖 CLI、Electron 或 React；
+- `apps/desktop/src/main` 与 `preload` 不依赖 `@skillink/core`；
+- `renderer` 不依赖 Node 内置模块、Electron 或 `@skillink/core`；
+- 每个 workspace 包必须在 `package.json` 中声明自己 import 的 `@skillink/*` 包。
+
 关键模块：
 
 | 模块 | 职责 |
@@ -148,15 +156,27 @@ CLI ------------------------> @skillink/core -> @skillink/shared
 | `shared/src/schemas.ts` | route/package/skill 三配置、settings 与语言包 schema |
 | `shared/src/reports.ts` | CLI/GUI 共用的报告、快照和错误类型 |
 | `shared/src/skill-directory.ts` | 解析 `<name>@<version>` 目录名 |
+| `shared/src/spec.ts` | 共享 `name@version` 解析 |
+| `core/src/config-store.ts` | 三份配置的唯一只读加载入口 |
+| `core/src/initialize.ts` | home/目录/初始配置/settings 初始化 |
 | `core/src/package-graph.ts` | package DFS、环检测、skill 冲突、传递闭包哈希 |
+| `core/src/package-name.ts` | 大小写冲突检测与 package 名称校验 |
+| `core/src/target-graph.ts` | target lock 校验与 package 图解析的唯一入口 |
 | `core/src/target-entry.ts` | 同名目标条目的形态/内容比对，apply 与 status 共用 |
 | `core/src/target-gc.ts` | target 移除/禁用、package 禁用、route 移除/覆盖时按 route 解析结果清理目标目录 skill 目录/链接 |
-| `core/src/apply.ts` / `status.ts` / `doctor.ts` / `gc.ts` | 核心生命周期 |
+| `core/src/target-resolution.ts` | target skill 摘要 |
+| `core/src/apply.ts` / `status.ts` / `gc.ts` | 核心生命周期 |
+| `core/src/doctor/*` | 按配置、package 图、package 使用、skill 内容、链接拆分的 doctor 检查 |
+| `core/src/settings-store.ts` | `settings.json` 读写 |
+| `core/src/json-store.ts` / `fs-retry.ts` | 原子 JSON 存储与 Windows 文件重试 |
+| `core/src/links.ts` / `path-policy.ts` | 链接原语与路径安全策略 |
+| `core/src/skill-md.ts` / `skill-integrity.ts` | SKILL.md 解析与内容完整性 |
 | `core/src/git.ts` | 控制面/skills 仓库初始化、status/add/commit/log/show/checkout |
 | `core/src/git-lock.ts` | `<home>/.skillink.lock` 跨进程写锁、stale 清理、超时 |
-| `core/src/git-commit.ts` | commit message 生成、scope 推导、自动提交、干净工作区检查 |
+| `core/src/git-commit.ts` | 通用 commit message 与仓库提交原语 |
 | `core/src/rollback.ts` | 回退规划、target 清理、配置/skill 内容恢复、单次提交 |
 | `core/src/import-skill.ts` / `skill-scan.ts` | 单包导入与批量扫描 |
+| `apps/cli/src/mutation.ts` | CLI 写命令加锁与自动提交编排；`init` 使用 `bootstrap.ts`，`rollback` 由 core 自带锁 |
 | `desktop/src/main/ipc.ts` | IPC 白名单、Zod 输入校验、sender 校验 |
 | `desktop/src/main/bundled-language.ts` | 启动时刷新版本过旧或缺 key 的内置 `zh-CN` 语言包，保护自定义包 |
 | `desktop/src/main/cli-commands.ts` | IPC 请求 -> CLI argv |
@@ -763,7 +783,7 @@ env
 {"ok":false,"error":{"code":"SKILL_MD_REQUIRED","message":"...","details":{}}}
 ```
 
-退出码保持不变；`status` / `doctor` 在 unhealthy 时仍返回 1，`apply` 冲突仍返回 3，调用方应先尝试解析 stdout 的 JSON 结果。
+退出码保持不变；`status` / `doctor` 在 unhealthy 时仍返回 1，所有 `SkillinkError` 也返回 1，调用方应先尝试解析 stdout 的 JSON 结果。
 
 **AI 调用闭环**
 
@@ -793,7 +813,6 @@ drift / missing       -> apply
 
 - `0` 成功；
 - `1` 一般错误 / unhealthy / 参数解析错误；
-- `3` apply 冲突（保留；route-authoritative apply 当前不产生冲突）；
 - `route add` 的 `SKILL_VERSION_CONFLICT` 当前返回 `1`，stderr 包含 `error [SKILL_VERSION_CONFLICT]`。
 
 ### 7.2 GUI

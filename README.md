@@ -181,7 +181,7 @@ skillink <command> [subcommand] [arguments] [options]
 - 所有命令都支持 `--json`，用于输出机器可读 JSON；失败时向 stderr 输出结构化错误；
 - 所有命令都支持 `-h` / `--help`，例如 `skillink skill add --help`；也可以用 `skillink help <command>`；
 - 所有命令默认操作 `%USERPROFILE%\.agents\skillink`，可用环境变量 `SKILLINK_HOME` 覆盖；
-- 退出码：`0` 成功；`1` 用法错误、运行失败，或 `status` / `doctor` 报告不健康；`3` 表示 `apply` 报告冲突，或操作遇到 `UNMANAGED_CONFLICT`；
+- 退出码：`0` 成功；`1` 用法错误、运行失败，或 `status` / `doctor` 报告不健康；
 - 写命令成功后会按需自动提交；读命令和 dry-run 不提交。
 
 ### 初始化、迁移与快照
