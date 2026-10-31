@@ -1,4 +1,6 @@
+import { formatDoctorIssue, type Translator } from '@skillink/shared';
 import type { DesktopSnapshot } from '../../shared.js';
+import { useI18n } from './i18n.js';
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) {
@@ -10,21 +12,24 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function compositionText(value: {
-  skills: Record<string, string>;
-  packages: Record<string, string>;
-}): string {
+function compositionText(
+  value: {
+    skills: Record<string, string>;
+    packages: Record<string, string>;
+  },
+  t: Translator['t'],
+): string {
   const parts: string[] = [];
   if (Object.keys(value.skills).length > 0) {
     parts.push(
-      `skills: ${Object.entries(value.skills)
+      `${t('overview.composition.skills')}: ${Object.entries(value.skills)
         .map(([name, version]) => `${name}@${version}`)
         .join(', ')}`,
     );
   }
   if (Object.keys(value.packages).length > 0) {
     parts.push(
-      `packages: ${Object.entries(value.packages)
+      `${t('overview.composition.packages')}: ${Object.entries(value.packages)
         .map(([name, version]) => `${name}@${version}`)
         .join(', ')}`,
     );
@@ -33,6 +38,7 @@ function compositionText(value: {
 }
 
 export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
+  const { t, translator } = useI18n();
   const skillEntries = Object.entries(snapshot.skills.skills);
   const skillVersionCount = skillEntries.reduce(
     (total, [, entry]) => total + Object.keys(entry.versions).length,
@@ -59,67 +65,78 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
     <main className="snapshot">
       <section className="hero">
         <div>
-          <p className="eyebrow">LOCAL-FIRST SKILL CONTROL</p>
-          <h1>Skillink</h1>
-          <p className="lede">
-            Version skills once, compose them into packages, and project the
-            resolved skills into the target directories you choose.
-          </p>
+          <p className="eyebrow">{t('overview.hero.eyebrow')}</p>
+          <h1>{t('overview.hero.title')}</h1>
+          <p className="lede">{t('overview.hero.lede')}</p>
         </div>
         <div className={snapshot.doctor.ok ? 'health ok' : 'health warn'}>
-          {snapshot.doctor.ok ? 'healthy' : `${issueCount} issues`}
+          {snapshot.doctor.ok
+            ? t('overview.health.healthy')
+            : t('overview.health.issues', { count: issueCount })}
         </div>
       </section>
 
       <section className="stats">
         <article className="stat">
-          <span className="stat-label">Skills</span>
-          <strong>{skillEntries.length} skills</strong>
-          <span>{skillVersionCount} versions</span>
-        </article>
-        <article className="stat">
-          <span className="stat-label">Packages</span>
-          <strong>{packageEntries.length} packages</strong>
-          <span>{packageVersionCount} versions</span>
-        </article>
-        <article className="stat">
-          <span className="stat-label">Targets</span>
-          <strong>{targetCount} targets</strong>
+          <span className="stat-label">{t('overview.stats.skills.label')}</span>
+          <strong>
+            {t('overview.stats.skills', { count: skillEntries.length })}
+          </strong>
           <span>
-            {
-              snapshot.route.targets.filter((target) => target.enabled).length
-            }{' '}
-            enabled
+            {t('overview.stats.versions', { count: skillVersionCount })}
           </span>
         </article>
         <article className="stat">
-          <span className="stat-label">Links</span>
-          <strong>{okLinks} healthy</strong>
-          <span>{snapshot.status.entries.length} checked</span>
+          <span className="stat-label">
+            {t('overview.stats.packages.label')}
+          </span>
+          <strong>
+            {t('overview.stats.packages', { count: packageEntries.length })}
+          </strong>
+          <span>
+            {t('overview.stats.versions', { count: packageVersionCount })}
+          </span>
+        </article>
+        <article className="stat">
+          <span className="stat-label">{t('overview.stats.targets.label')}</span>
+          <strong>{t('overview.stats.targets', { count: targetCount })}</strong>
+          <span>
+            {t('overview.stats.enabled', {
+              count: snapshot.route.targets.filter((target) => target.enabled)
+                .length,
+            })}
+          </span>
+        </article>
+        <article className="stat">
+          <span className="stat-label">{t('overview.stats.links.label')}</span>
+          <strong>{t('overview.stats.links', { count: okLinks })}</strong>
+          <span>
+            {t('overview.stats.checked', {
+              count: snapshot.status.entries.length,
+            })}
+          </span>
         </article>
       </section>
 
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">ROUTES</p>
-            <h2>Target directories</h2>
+            <p className="eyebrow">{t('overview.routes.eyebrow')}</p>
+            <h2>{t('overview.routes.title')}</h2>
           </div>
           <span className="count">{targetCount}</span>
         </div>
 
         {targetCount === 0 ? (
-          <p className="empty">
-            No targets yet. Add a directory from the CLI or the target form.
-          </p>
+          <p className="empty">{t('overview.routes.empty')}</p>
         ) : (
           <div className="table">
             <div className="table-row table-head">
-              <span>Target</span>
-              <span>Path</span>
-              <span>Mode</span>
-              <span>Packages</span>
-              <span>Skills</span>
+              <span>{t('overview.table.target')}</span>
+              <span>{t('overview.table.path')}</span>
+              <span>{t('overview.table.mode')}</span>
+              <span>{t('overview.table.packages')}</span>
+              <span>{t('overview.table.skills')}</span>
             </div>
             {snapshot.route.targets.map((target) => {
               const summary = targetSkills.get(target.id);
@@ -134,7 +151,7 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
                   <span>{Object.keys(target.packages).length}</span>
                   <span>
                     {summary?.error
-                      ? 'unresolved'
+                      ? t('status.unresolved')
                       : (summary?.skills.length ?? 0)}
                   </span>
                 </div>
@@ -147,30 +164,28 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">PACKAGES</p>
-            <h2>Compositions</h2>
+            <p className="eyebrow">{t('overview.packages.eyebrow')}</p>
+            <h2>{t('overview.packages.title')}</h2>
           </div>
           <span className="count">{packageEntries.length}</span>
         </div>
 
         {packageEntries.length === 0 ? (
-          <p className="empty">
-            No packages yet. Create a package from installed skills.
-          </p>
+          <p className="empty">{t('overview.packages.empty')}</p>
         ) : (
           <div className="package-grid">
             {packageEntries.map(([name, entry]) => (
               <article className="package-card" key={name}>
                 <div className="package-title">
                   <strong>{name}</strong>
-                  <span>package</span>
+                  <span>{t('overview.badge.package')}</span>
                 </div>
                 {entry.description ? <p>{entry.description}</p> : null}
                 <div className="version-list">
                   {Object.entries(entry.versions).map(([version, value]) => (
                     <div className="version-row" key={version}>
                       <code>{version}</code>
-                      <span>{compositionText(value)}</span>
+                      <span>{compositionText(value, t)}</span>
                     </div>
                   ))}
                 </div>
@@ -183,30 +198,30 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">SKILLS</p>
-            <h2>Installed skills</h2>
+            <p className="eyebrow">{t('overview.skills.eyebrow')}</p>
+            <h2>{t('overview.skills.title')}</h2>
           </div>
           <span className="count">{skillEntries.length}</span>
         </div>
 
         {skillEntries.length === 0 ? (
-          <p className="empty">
-            No skills yet. Import a folder containing <code>SKILL.md</code>.
-          </p>
+          <p className="empty">{t('overview.skills.empty')}</p>
         ) : (
           <div className="package-grid">
             {skillEntries.map(([name, entry]) => (
               <article className="package-card" key={name}>
                 <div className="package-title">
                   <strong>{name}</strong>
-                  <span>skill</span>
+                  <span>{t('overview.badge.skill')}</span>
                 </div>
                 {entry.description ? <p>{entry.description}</p> : null}
                 <div className="version-list">
                   {Object.entries(entry.versions).map(([version, info]) => (
                     <div className="version-row" key={version}>
                       <code>{version}</code>
-                      <span>{info.fileCount} files</span>
+                      <span>
+                        {t('overview.files', { count: info.fileCount })}
+                      </span>
                       <span>{formatBytes(info.size)}</span>
                     </div>
                   ))}
@@ -221,15 +236,15 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
         <section className="panel issues">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">DOCTOR</p>
-              <h2>Needs attention</h2>
+              <p className="eyebrow">{t('overview.issues.eyebrow')}</p>
+              <h2>{t('overview.issues.title')}</h2>
             </div>
             <span className="count warn">{issueCount}</span>
           </div>
           {snapshot.doctor.issues.map((issue, index) => (
             <div className="issue-row" key={`${issue.code}-${index}`}>
               <code>{issue.code}</code>
-              <span>{issue.message}</span>
+              <span>{formatDoctorIssue(issue, translator)}</span>
             </div>
           ))}
         </section>

@@ -33,6 +33,73 @@ export const EN_MESSAGES = {
     one: '{count} skill',
     other: '{count} skills',
   },
+  'overview.stats.skills.label': 'Skills',
+  'overview.stats.packages': {
+    one: '{count} package',
+    other: '{count} packages',
+  },
+  'overview.stats.packages.label': 'Packages',
+  'overview.stats.versions': {
+    one: '{count} version',
+    other: '{count} versions',
+  },
+  'overview.stats.targets': {
+    one: '{count} target',
+    other: '{count} targets',
+  },
+  'overview.stats.targets.label': 'Targets',
+  'overview.stats.enabled': '{count} enabled',
+  'overview.stats.links.label': 'Links',
+  'overview.stats.links': '{count} healthy',
+  'overview.stats.checked': '{count} checked',
+  'overview.hero.eyebrow': 'LOCAL-FIRST SKILL CONTROL',
+  'overview.hero.title': 'Skillink',
+  'overview.hero.lede':
+    'Version skills once, compose them into packages, and project the resolved skills into the target directories you choose.',
+  'overview.health.healthy': 'healthy',
+  'overview.health.issues': {
+    one: '{count} issue',
+    other: '{count} issues',
+  },
+  'overview.routes.eyebrow': 'ROUTES',
+  'overview.routes.title': 'Target directories',
+  'overview.routes.empty':
+    'No targets yet. Add a directory from the CLI or the target form.',
+  'overview.table.target': 'Target',
+  'overview.table.path': 'Path',
+  'overview.table.mode': 'Mode',
+  'overview.table.packages': 'Packages',
+  'overview.table.skills': 'Skills',
+  'overview.packages.eyebrow': 'PACKAGES',
+  'overview.packages.title': 'Compositions',
+  'overview.packages.empty':
+    'No packages yet. Create a package from installed skills.',
+  'overview.skills.eyebrow': 'SKILLS',
+  'overview.skills.title': 'Installed skills',
+  'overview.skills.empty': 'No skills yet. Import a folder containing SKILL.md.',
+  'overview.files': {
+    one: '{count} file',
+    other: '{count} files',
+  },
+  'overview.badge.skill': 'skill',
+  'overview.badge.package': 'package',
+  'overview.composition.skills': 'skills',
+  'overview.composition.packages': 'packages',
+  'overview.issues.eyebrow': 'DOCTOR',
+  'overview.issues.title': 'Needs attention',
+
+  'status.healthy': 'healthy',
+  'status.unresolved': 'unresolved',
+
+  'doctor.eyebrow': 'DIAGNOSTICS',
+  'doctor.heading': 'Doctor',
+  'doctor.issues': {
+    one: '{count} issue',
+    other: '{count} issues',
+  },
+  'doctor.refresh': 'Refresh',
+  'doctor.empty':
+    'No issues found. route.json, package.json, skill.json, the skill library, and links are consistent.',
 
   'errors.INVALID_NAME': 'The name is invalid.',
   'errors.INVALID_VERSION': 'The version is invalid.',

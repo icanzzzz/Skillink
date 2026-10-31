@@ -6,6 +6,7 @@ import {
   createEmptySkillFile,
 } from '@skillink/shared';
 import type { DesktopSnapshot } from '../../shared.js';
+import { renderWithMessages } from './i18n.test-utils.js';
 import { SnapshotView } from './SnapshotView.js';
 
 const emptySnapshot: DesktopSnapshot = {
@@ -109,14 +110,76 @@ describe('SnapshotView', () => {
 
     const html = renderToStaticMarkup(<SnapshotView snapshot={snapshot} />);
 
-    expect(html).toContain('1 skills');
-    expect(html).toContain('1 packages');
-    expect(html).toContain('1 targets');
+    expect(html).toContain('1 skill');
+    expect(html).toContain('1 package');
+    expect(html).toContain('1 target');
     expect(html).toContain('Project A');
     expect(html).toContain('demo-pack');
     expect(html).toContain('demo');
     expect(html).toContain('2.0 KB');
     expect(html).toContain('<span>Skills</span>');
     expect(html).toContain('<span>1</span>');
+  });
+
+  it('renders translated overview text and issue counts', () => {
+    const issueSnapshot: DesktopSnapshot = {
+      ...emptySnapshot,
+      doctor: {
+        ok: false,
+        issues: [
+          {
+            code: 'MISSING_CONTENT',
+            message: 'Skill content is missing: demo@1.0.0',
+            name: 'demo',
+            version: '1.0.0',
+          },
+          {
+            code: 'LINK_ISSUE',
+            message: 'target/other: wrong-version',
+            targetId: 'target',
+            name: 'other',
+            version: '2.0.0',
+          },
+        ],
+      },
+    };
+
+    const html = renderWithMessages(<SnapshotView snapshot={issueSnapshot} />, {
+      'overview.routes.title': '目标目录',
+      'overview.health.issues': '{count} 个问题',
+    });
+
+    expect(html).toContain('目标目录');
+    expect(html).toContain('2 个问题');
+  });
+
+  it('uses plural messages for skill counts', () => {
+    const snapshot: DesktopSnapshot = {
+      ...emptySnapshot,
+      skills: {
+        schemaVersion: 2,
+        skills: {
+          one: {
+            versions: {
+              '1.0.0': { integrity: 'a', fileCount: 1, size: 1, built: false },
+            },
+          },
+          two: {
+            versions: {
+              '1.0.0': { integrity: 'b', fileCount: 1, size: 1, built: false },
+            },
+          },
+          three: {
+            versions: {
+              '1.0.0': { integrity: 'c', fileCount: 1, size: 1, built: false },
+            },
+          },
+        },
+      },
+    };
+
+    const html = renderToStaticMarkup(<SnapshotView snapshot={snapshot} />);
+
+    expect(html).toContain('3 skills');
   });
 });
