@@ -5,6 +5,7 @@ import {
   LanguagePackSchema,
   createTranslator,
   formatDoctorIssue,
+  formatErrorMessage,
   matchLocale,
 } from './i18n.js';
 import { EN_MESSAGES } from './i18n-en.js';
@@ -113,5 +114,49 @@ describe('language packs', () => {
         }),
       ),
     ).toBe('技能内容缺失：demo@1.0.0');
+  });
+
+  it('ships an English message for every error and doctor code', () => {
+    for (const code of SKILLINK_ERROR_CODES) {
+      expect(
+        Object.prototype.hasOwnProperty.call(EN_MESSAGES, `errors.${code}`),
+      ).toBe(true);
+    }
+    for (const code of DOCTOR_ISSUE_CODES) {
+      expect(
+        Object.prototype.hasOwnProperty.call(
+          EN_MESSAGES,
+          `doctorIssues.${code}`,
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it('formats errors only when the current pack translates them', () => {
+    const fallback = 'Package "demo" is not defined.';
+
+    expect(
+      formatErrorMessage(
+        'PACKAGE_NOT_FOUND',
+        createTranslator('en', EN_MESSAGES),
+        fallback,
+      ),
+    ).toBe(fallback);
+    expect(
+      formatErrorMessage(
+        'LANGUAGE_PACK_INVALID',
+        createTranslator('zh-CN', {
+          'errors.LANGUAGE_PACK_INVALID': '语言包格式无效。',
+        }),
+        'Invalid language pack.',
+      ),
+    ).toBe('语言包格式无效。 (LANGUAGE_PACK_INVALID)');
+    expect(
+      formatErrorMessage(
+        'PACKAGE_NOT_FOUND',
+        createTranslator('zh-CN', {}),
+        fallback,
+      ),
+    ).toBe(fallback);
   });
 });

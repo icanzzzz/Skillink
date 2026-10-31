@@ -33,6 +33,7 @@ import {
   TargetRemoveRequestSchema,
 } from '../ipc-schemas.js';
 import { createCliAdapter } from './cli-adapter.js';
+import { localizeError } from './error-localization.js';
 import {
   buildAddTargetArgs,
   buildApplyArgs,
@@ -98,6 +99,12 @@ function senderPolicy(): SenderPolicy {
   };
 }
 
+async function localizeIpcError(error: unknown): Promise<Error> {
+  return localizeError(error, () =>
+    cli.invoke<LanguageState>(buildLanguageListArgs()),
+  );
+}
+
 export function registerIpcHandlers(
   getMainWindow: () => BrowserWindow | null,
 ): void {
@@ -108,9 +115,16 @@ export function registerIpcHandlers(
       ...args: unknown[]
     ) => unknown,
   ): void => {
-    ipcMain.handle(channel, (event, ...args) => {
+    ipcMain.handle(channel, async (event, ...args) => {
       assertTrustedSender(event, getMainWindow(), senderPolicy());
-      return listener(event, ...args);
+      try {
+        return await listener(event, ...args);
+      } catch (error) {
+        if (channel === 'skillink:language-state') {
+          throw error;
+        }
+        throw await localizeIpcError(error);
+      }
     });
   };
 
