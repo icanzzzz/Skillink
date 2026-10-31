@@ -14,7 +14,6 @@ import {
   computePackageIntegrity,
   resolvePackageGraph,
 } from './package-graph.js';
-import { withHistory } from './history.js';
 import { assertSafePackageName } from './package-name.js';
 import {
   gcTargetEntries,
@@ -120,16 +119,14 @@ export async function addRouteEntry(
 
   route.targets[targetIndex] = candidate;
 
-  await withHistory(input.paths, 'add-route-entry', async () => {
-    if (removedSkills.length > 0) {
-      await gcTargetEntries({
-        paths: input.paths,
-        target: candidate,
-        skillNames: removedSkills,
-      });
-    }
-    await writeRouteFile(input.paths, route);
-  });
+  if (removedSkills.length > 0) {
+    await gcTargetEntries({
+      paths: input.paths,
+      target: candidate,
+      skillNames: removedSkills,
+    });
+  }
+  await writeRouteFile(input.paths, route);
 
   return lock;
 }
@@ -217,16 +214,10 @@ export async function setPackageEnabled(
     }
   }
 
-  await withHistory(
-    paths,
-    enabled ? 'enable-route-package' : 'disable-route-package',
-    async () => {
-      if (removeSkills.length > 0) {
-        await gcTargetEntries({ paths, target, skillNames: removeSkills });
-      }
-      await writeRouteFile(paths, route);
-    },
-  );
+  if (removeSkills.length > 0) {
+    await gcTargetEntries({ paths, target, skillNames: removeSkills });
+  }
+  await writeRouteFile(paths, route);
 
   return lock;
 }
@@ -303,15 +294,13 @@ export async function removeRouteEntry(
     }
   }
 
-  await withHistory(input.paths, 'remove-route-entry', async () => {
-    if (removeSkills.length > 0) {
-      await gcTargetEntries({
-        paths: input.paths,
-        target,
-        skillNames: removeSkills,
-      });
-    }
-    await writeRouteFile(input.paths, route);
-  });
+  if (removeSkills.length > 0) {
+    await gcTargetEntries({
+      paths: input.paths,
+      target,
+      skillNames: removeSkills,
+    });
+  }
+  await writeRouteFile(input.paths, route);
   return true;
 }

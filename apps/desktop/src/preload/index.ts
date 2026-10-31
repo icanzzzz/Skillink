@@ -20,8 +20,8 @@ const api: DesktopApi = {
   routeRemove: (input) => ipcRenderer.invoke('skillink:route-remove', input),
   routeEnable: (input) => ipcRenderer.invoke('skillink:route-enable', input),
   gc: (input = {}) => ipcRenderer.invoke('skillink:gc', input),
-  rollback: (input) => ipcRenderer.invoke('skillink:rollback', input),
   getLanguageState: () => ipcRenderer.invoke('skillink:language-state'),
+  getRuntimeStatus: () => ipcRenderer.invoke('skillink:runtime-status'),
   chooseLanguagePack: () => ipcRenderer.invoke('skillink:choose-language-pack'),
   installLanguagePack: (input) =>
     ipcRenderer.invoke('skillink:language-install', input),

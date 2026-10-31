@@ -465,4 +465,23 @@ describe('doctor', () => {
       ]),
     );
   });
+
+  it('ignores the skills repository metadata', async () => {
+    const { paths } = await setup();
+    await mkdir(path.join(paths.libraryDir, '.git', 'objects'), {
+      recursive: true,
+    });
+    await writeFile(
+      path.join(paths.libraryDir, '.gitattributes'),
+      '* -text\n',
+      'utf8',
+    );
+
+    const report = await doctor({ paths });
+
+    expect(report.issues.some((issue) => issue.name === '.git')).toBe(false);
+    expect(report.issues.some((issue) => issue.code === 'ORPHAN_CONTENT')).toBe(
+      false,
+    );
+  });
 });

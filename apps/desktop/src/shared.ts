@@ -20,7 +20,6 @@ import type {
   LanguageInstallRequest,
   PackageRemoveRequest,
   PackageTagRequest,
-  RollbackRequest,
   RouteAddRequest,
   RouteEnableRequest,
   RouteRemoveRequest,
@@ -32,6 +31,10 @@ import type {
 } from './ipc-schemas.js';
 
 export type DesktopSnapshot = SnapshotReport;
+
+export interface RuntimeStatus {
+  gitAvailable: boolean;
+}
 
 export interface DesktopApi {
   getSnapshot(): Promise<DesktopSnapshot>;
@@ -52,8 +55,8 @@ export interface DesktopApi {
   routeRemove(input: RouteRemoveRequest): Promise<boolean>;
   routeEnable(input: RouteEnableRequest): Promise<PackageLock>;
   gc(input?: GcRequest): Promise<GcReport>;
-  rollback(input: RollbackRequest): Promise<void>;
   getLanguageState(): Promise<LanguageState>;
+  getRuntimeStatus(): Promise<RuntimeStatus>;
   chooseLanguagePack(): Promise<string | null>;
   installLanguagePack(
     input: LanguageInstallRequest,

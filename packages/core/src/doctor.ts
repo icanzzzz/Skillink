@@ -364,7 +364,10 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
   });
 
   for (const skillDirectory of skillDirectories) {
-    if (!skillDirectory.isDirectory()) {
+    if (
+      !skillDirectory.isDirectory() ||
+      skillDirectory.name.toLowerCase() === '.git'
+    ) {
       continue;
     }
 

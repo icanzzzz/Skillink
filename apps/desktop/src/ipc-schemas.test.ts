@@ -11,7 +11,6 @@ import {
   LanguageUseRequestSchema,
   PackageRemoveRequestSchema,
   PackageTagRequestSchema,
-  RollbackRequestSchema,
   RouteAddRequestSchema,
   RouteEnableRequestSchema,
   RouteRemoveRequestSchema,
@@ -207,14 +206,6 @@ describe('IPC request schemas', () => {
     expect(
       PackageRemoveRequestSchema.safeParse({ name: 'frontend' }).success,
     ).toBe(false);
-  });
-
-  it('rejects a rollback request without an id', () => {
-    expect(RollbackRequestSchema.safeParse({}).success).toBe(false);
-    expect(RollbackRequestSchema.safeParse({ id: '' }).success).toBe(false);
-    expect(
-      RollbackRequestSchema.parse({ id: '2026-10-30T12-00-00-000Z' }),
-    ).toEqual({ id: '2026-10-30T12-00-00-000Z' });
   });
 
   it('accepts optional booleans and numbers for gc', () => {

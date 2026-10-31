@@ -1,9 +1,9 @@
 # Skillink 项目架构（v2.0）
 
-> 日期：2026-10-31  
-> 状态：v2.0 MVP + hardening + i18n + batch import + language pack refresh + installed skill version grouping（2026-10-31）  
-> 文档基线：`2012023 feat: add batch skill installation` + 2026-10-31 语言包刷新、安装卡片 placeholder 与已安装技能版本聚合修订  
-> 取代：v1.2 的 `skills.json` 公用库模型  
+> 日期：2026-11-01
+> 状态：v2.0 MVP + hardening + i18n + batch import + language pack refresh + installed skill version grouping + git-first control plane（2026-11-01）
+> 文档基线：`013c5e2 feat(core): make route the sole source for target projection` + 2026-11-01 git 控制面、自动提交与回退修订
+> 取代：v1.2 的 `skills.json` 公用库模型
 > 路径约定：`<user>`、`<repo>` 为占位符；Windows 使用 `%USERPROFILE%`，Linux/macOS 使用 `~`。
 
 ---
@@ -32,7 +32,8 @@ target -> package -> skill -> 实体内容
 5. apply 可复现，支持离线使用；
 6. 不覆盖、不删除未托管内容；
 7. Windows 优先，无需管理员权限；
-8. GUI 能清楚展示 skill、package、route、链接和健康状态。
+8. GUI 能清楚展示 skill、package、route、链接和健康状态；
+9. 控制面与 skill 内容可审计、可回退：控制面使用 git，skills 使用独立 git，写命令自动提交。
 
 ### 1.2 非目标
 
@@ -93,20 +94,25 @@ route.json
 
 ```text
 %USERPROFILE%\.agents\skillink\          # 或 ~/.agents/skillink
-├─ route.json      # target -> package
-├─ package.json    # package -> skill/package 组合
-├─ skill.json      # skill -> 版本、完整性、标签
-├─ settings.json   # 用户偏好（UI 语言），不进入历史快照
-├─ locales\        # 已安装语言包（纯 JSON 数据）
-├─ skills\         # 唯一实体内容
-├─ history\        # 三文件快照
-├─ trash\          # 删除/GC 的内容
-├─ cache\
-├─ logs\
-└─ tmp\
+├─ .git\            # 控制面 git
+├─ .gitignore
+├─ .gitattributes
+├─ route.json       # target -> package
+├─ package.json     # package -> skill/package 组合
+├─ skill.json       # skill -> 版本、完整性、标签
+├─ locales\         # 已安装语言包（纯 JSON 数据）
+├─ skills\          # 唯一实体内容；独立 git 仓库，控制面 git 忽略
+│  ├─ .git\
+│  ├─ .gitattributes
+│  └─ <name>\<version>\
+├─ settings.json    # 用户偏好（UI 语言）；git 忽略
+├─ cache\           # git 忽略
+├─ logs\            # git 忽略
+├─ tmp\             # git 忽略
+└─ .skillink.lock   # 写命令跨进程锁；git 忽略
 ```
 
-`skill.json` 取代 v1 的 `skills.json`。`route.json`、`package.json`、`skill.json` 是三个数据配置，不是每个包目录里的文件。`settings.json` 和 `locales/` 只服务 UI，不参与 route/package/skill 图，也不写入 history 快照。
+`skill.json` 取代 v1 的 `skills.json`。`route.json`、`package.json`、`skill.json` 和 `locales/` 是控制面 git 跟踪的数据；`settings.json`、`cache/`、`logs/`、`tmp/` 和锁文件被忽略；`skills/` 是独立仓库。旧版本的 `history/` / `trash/` 如果存在会被忽略，不再使用。
 
 ### 3.4 代码模块边界
 
@@ -120,7 +126,7 @@ apps/
 │  └─ src/renderer/          # React 页面与 i18n Provider
 packages/
 ├─ shared/                   # Zod schema、报告类型、错误、路径/语言/skill 目录名工具
-└─ core/                     # 业务实现：配置存储、package 图、apply/status/doctor/gc/history、导入/扫描、语言包存储
+└─ core/                     # 业务实现：配置存储、package 图、apply/status/doctor/gc、导入/扫描、git、回退、语言包存储
 ```
 
 依赖方向：
@@ -145,7 +151,11 @@ CLI ------------------------> @skillink/core -> @skillink/shared
 | `core/src/package-graph.ts` | package DFS、环检测、skill 冲突、传递闭包哈希 |
 | `core/src/target-entry.ts` | 同名目标条目的形态/内容比对，apply 与 status 共用 |
 | `core/src/target-gc.ts` | target 移除/禁用、package 禁用、route 移除/覆盖时按 route 解析结果清理目标目录 skill 目录/链接 |
-| `core/src/apply.ts` / `status.ts` / `doctor.ts` / `gc.ts` / `history.ts` | 核心生命周期 |
+| `core/src/apply.ts` / `status.ts` / `doctor.ts` / `gc.ts` | 核心生命周期 |
+| `core/src/git.ts` | 控制面/skills 仓库初始化、status/add/commit/log/show/checkout |
+| `core/src/git-lock.ts` | `<home>/.skillink.lock` 跨进程写锁、stale 清理、超时 |
+| `core/src/git-commit.ts` | commit message 生成、scope 推导、自动提交、干净工作区检查 |
+| `core/src/rollback.ts` | 回退规划、target 清理、配置/skill 内容恢复、单次提交 |
 | `core/src/import-skill.ts` / `skill-scan.ts` | 单包导入与批量扫描 |
 | `desktop/src/main/ipc.ts` | IPC 白名单、Zod 输入校验、sender 校验 |
 | `desktop/src/main/bundled-language.ts` | 启动时刷新版本过旧或缺 key 的内置 `zh-CN` 语言包，保护自定义包 |
@@ -203,7 +213,7 @@ CLI ------------------------> @skillink/core -> @skillink/shared
 - `targets[].path` 唯一且不能互相嵌套；
 - route 中不出现 skill 版本、source、skill 内容 integrity；
 - `integrity` 是 package 配置的传递闭包哈希，不是 skill 内容哈希；
-- 写入采用临时文件 + rename，并保留历史快照。
+- 写入采用临时文件 + rename；写命令成功后自动提交到控制面 git。
 
 ### 4.2 package.json
 
@@ -319,7 +329,7 @@ CLI ------------------------> @skillink/core -> @skillink/shared
 - 不存 `source`；路径固定为 `skills/<name>/<version>/`；
 - 不存 `kind`；所有条目都是 skill；
 - 每个版本的内容目录必须存在，根目录必须有 `SKILL.md`；
-- `integrity` 与目录内容一致；`apply`、`doctor`、`history` 回滚会重新计算并校验；
+- `integrity` 与目录内容一致；`apply`、`doctor` 会重新计算并校验；
 - `fileCount`、`size` 与目录内容一致；
 - tags 必须指向已存在版本；
 - 写入采用临时文件 + rename。
@@ -344,7 +354,7 @@ CLI ------------------------> @skillink/core -> @skillink/shared
 3. 系统语言与已安装语言包的匹配结果；
 4. `en`。
 
-缺失、损坏或已删除的语言包不会阻止应用启动，解析时回退 `en`。删除当前语言包会把 `settings.json` 的 locale 重置为 `en`。`settings.json` 和语言包不进入 route/package/skill 的历史快照。
+缺失、损坏或已删除的语言包不会阻止应用启动，解析时回退 `en`。删除当前语言包会把 `settings.json` 的 locale 重置为 `en`。
 
 CLI 通过 `skillink locale list|install|use|remove` 管理语言包；GUI 主进程通过同一套 CLI 命令层执行，Renderer 只消费 preload API 返回的 `LanguageState`。
 
@@ -405,11 +415,11 @@ resolve(node):
 | `package copy` | 复制 + override/drop 后的传递闭包 |
 | `package tag` | 目标版本传递闭包 |
 | `package remove` | 不能被 route/其他 package 引用；剩余图仍可解析 |
+| `package check` | 所有 package 版本 skill 引用存在；仅对受影响 target 清理投影，不改配置 |
 | `route add` | 新 target 的全部 package 根：环、skill 冲突、缺失 skill |
 | `route remove` | 剩余 target 仍可解析；`--force` 用于修复已损坏配置 |
 | `apply` | 所有启用 target：package 完整性、skill 内容完整性、环、skill 冲突、内容存在；全部预检通过后才写文件系统 |
 | `doctor` | 所有 package 版本、所有 target |
-| `history rollback` | 恢复前三文件图必须可解析 |
 
 ### 5.4 传递闭包哈希
 
@@ -596,7 +606,7 @@ ok | missing | wrong-mode | wrong-version | broken-link | conflict | disabled
 - 未被 route 引用的 package 版本不保护 skill；
 - GC 后这些 package 可能悬空，doctor 报 `SKILL_NOT_FOUND`；
 - 候选 = 未被引用、未被 tag 保留、超过保留期的 skill 版本；
-- 删除时先移入 `trash/`，再更新 skill.json；失败回滚；
+- 删除时先直接删除内容，再更新 skill.json；内容删除失败时 catalog 不变，更新失败时 catalog 仍引用已删除内容，由 `package check` 清理受影响 target 投影；
 - package 配置不参与 GC；
 - `target remove` 的清理是独立的投影 GC：先解析 target 的全部 package lock（含 `enabled: false` 和 disabled target）得到 skill 名称集合，再删除目标目录顶层同名链接/junction 和真实目录；
 - `target disable` 使用与 `target remove` 相同的全部 lock 集合清理整个 target 投影；
@@ -616,21 +626,10 @@ ok | missing | wrong-mode | wrong-version | broken-link | conflict | disabled
 - `package tag` / `skill tag`：只允许指向已存在版本；
 - `target remove`：解析 target 的全部 package lock（含 disabled）得到 skill 名称集合，删除目标目录中同名链接/真实目录（普通文件和其他类型跳过），成功后删除 route target；GC 失败或 route 写入失败时 route 不变并立即报错；目标目录本身和 skill 库内容保留；
 - `target disable` / `package disable`：更新 enabled 前先清理不再需要的 target 投影，失败时不写 route；
-- `skill` 内容删除先进入 `trash/`；target 投影的链接/目录直接删除，不进入 `trash/`。
+- `skill` 内容先直接删除，再更新 skill.json；target 投影的链接/目录也直接删除；
+- `package check`：扫描 package 版本中 catalog 或内容缺失的 skill 引用，找到 route 中引用这些 package 的目标，调用 `target-gc` 删除对应受管 skill 投影；只清理 target 目录，不修改 package/route 配置。
 
-### 6.9 History
-
-- 每次修改配置前，把 `route.json`、`package.json`、`skill.json` 一起快照；
-- 快照目录：`history/<timestamp>/{route.json,package.json,skill.json,meta.json}`；
-- `meta.json` 包含 `format: 2`；
-- 回滚前校验 package 图、route lock 和 skill 内容完整性；
-- skill 内容目录必须存在且与快照 integrity 一致；缺失或不匹配时优先从 `trash/` 恢复有效副本，找不到则拒绝回滚；
-- 写入顺序：`skill.json` -> `package.json` -> `route.json`；
-- 普通写入失败会尝试恢复三文件；如果恢复写入本身失败，报 `IO_ERROR` 并列出 `restoreFailures`，此时可能需要人工修复；
-- 进程崩溃/断电仍可能留下混合状态；
-- 旧 v1 快照不列出、不可回滚。
-
-### 6.10 迁移
+### 6.9 迁移
 
 `skillink migrate` 是全有或全无：
 
@@ -644,9 +643,73 @@ ok | missing | wrong-mode | wrong-version | broken-link | conflict | disabled
 3. 旧 package -> 新 skill + 同名 package；
 4. 旧 description/tags 同时复制到 skill 和 package；
 5. 旧 route `requested` 原样保留，`resolved` 取旧 lock；
-6. 旧 `skills.json` 备份到 `trash/<timestamp>/skills.json`；
-7. 写入三个新文件；失败时删除新文件并恢复旧 route；
-8. 成功后移除旧 `skills.json`。
+6. 写入三个新文件；失败时删除新文件并恢复旧 route；
+7. 成功后直接删除旧 `skills.json`。
+
+### 6.10 Git 控制面与自动提交
+
+`init` 在 `git --version` 可用后：
+
+1. 创建目录与三个配置；
+2. 初始化控制面 `.git`（不存在时），补全 `.gitignore` / `.gitattributes`，不覆盖已有内容；
+3. 初始化 `skills/.git`，写入 `skills/.gitattributes`；
+4. 提交 baseline：控制面 `skillink(init): initialize control plane`，skills `skillink(skills): initialize skills`。
+
+控制面 `.gitignore` 至少包含 `/skills/`、`/trash/`、`/history/`、`/cache/`、`/logs/`、`/tmp/`、`/settings.json`、`.skillink.lock`。两个仓库都写 `* -text`，避免 Windows `core.autocrlf` 改写内容。
+
+写命令的提交规则：
+
+| 命令 | 控制面 | skills |
+|---|---|---|
+| `init` / `migrate` | 是 | 是（如有内容变化） |
+| `skill add` / `skill remove` | 是 | 是 |
+| `skill tag` | 是 | 否 |
+| `package create/copy/tag/remove` | 是 | 否 |
+| `target add/remove/enable/disable` | 是 | 否 |
+| `route add/remove/enable/disable` | 是 | 否 |
+| `gc --apply` | 是 | 是 |
+| `locale install/remove` | 是（locales） | 否 |
+| `locale use` | 否（settings 被忽略） | 否 |
+| `apply` / `package check` | 否 | 否 |
+| `rollback` | 是（一次） | 是（如有内容恢复） |
+| 只读命令 / dry-run | 否 | 否 |
+
+- 命令成功后才提交；`git status --porcelain` 无变化时跳过，不创建空提交；
+- 控制面只 stage 受管路径（三个配置、`locales/`、`.gitignore`、`.gitattributes`）；home 中其他未跟踪文件不提交，也不参与干净检查；
+- 内容变更时先提交 skills，再提交控制面；skills 提交失败则不提交控制面；
+- 写命令开始前要求控制面受管路径干净，否则返回 `GIT_DIRTY`，错误包含 home、路径和 `git -C` 提示；
+- 所有写命令在 home 级锁 `<home>/.skillink.lock` 内执行，锁覆盖命令与提交；
+- 提交使用 `git -c user.name=Skillink -c user.email=skillink@local commit --no-verify`，不依赖用户全局身份，不触发 hooks。
+
+commit message：
+
+```text
+skillink(<scope>): <action> <summary>
+
+Command: skillink <argv...>
+Changed:
+- route.json
+- package.json
+```
+
+scope 优先取命令路径（`skill`、`package`、`target`、`route`、`gc`、`locale`、`rollback`、`init`、`migrate`）；无法判断时按变更文件推导，多个配置合并为 `config`。subject 限制在 72 字符左右，body 最多列出 20 个变更路径，超出写 `... and N more`。skills 仓库始终使用 `skills` scope。
+
+### 6.11 History 与 Rollback
+
+`history` 只读控制面 `git log`，映射为 `{ id, createdAt, reason }`；`--json` 输出数组。
+
+`rollback <revision>` 是单个 git batch：
+
+1. 解析 revision，校验该提交包含 `route.json` / `package.json` / `skill.json`，读取目标提交的 `skill.json`；
+2. 规划缺失的 skill 内容；缺失项需能在 skills git 中找到历史版本，否则报 `SKILL_CONTENT_NOT_IN_GIT`；
+3. 读取当前 route，对每个 target 调用 core 的 `removeTarget`，由 `target-gc` 删除受管投影；
+4. `git checkout <revision> -- route.json package.json skill.json`；
+5. 从 skills git 恢复缺失内容；
+6. 删除当前 `skill.json` 记录、但目标 catalog 不再包含的受管 skill 版本，避免回退后 `doctor` 报 `ORPHAN_CONTENT`；
+7. 重新 `apply`（`--no-apply` 时跳过）；
+8. 先提交 skills（如有恢复或删除），再提交控制面，只产生一次 rollback 提交。
+
+失败时控制面三个配置恢复到 rollback 开始前的 HEAD；已经删除的 target 投影可由下一次 `apply` 重建；错误保留原始错误码。回退不处理未受管条目，也不保证空目录、权限位和 CRLF 的字节级恢复。
 
 ---
 
@@ -658,11 +721,14 @@ ok | missing | wrong-mode | wrong-version | broken-link | conflict | disabled
 skillink init
 skillink migrate
 skillink skill add|scan|list|tag|remove
-skillink package create|copy|list|tag|remove
+skillink package create|copy|list|tag|remove|check
 skillink target add|list|remove|enable|disable
 skillink route add|remove|list|enable|disable
 skillink snapshot
-skillink apply|status|doctor|gc|history|rollback
+skillink apply|status|doctor|gc
+skillink history
+skillink rollback
+skillink env
 skillink locale list|install|use|remove
 ```
 
@@ -678,7 +744,7 @@ skillink locale list|install|use|remove
 init
 migrate
 skill list|add|scan|tag|remove
-package list|create|copy|tag|remove
+package list|create|copy|tag|remove|check
 target list|add|remove|enable|disable
 route list|add|remove|enable|disable
 snapshot
@@ -688,6 +754,7 @@ doctor
 gc
 history
 rollback
+env
 ```
 
 默认仍是人类可读文本。成功时 stdout 输出该命令的结果对象；失败时如果带 `--json`，stderr 输出单个结构化错误：
@@ -717,7 +784,6 @@ init / migrate
 ```text
 SKILL_VERSION_CONFLICT -> package copy -> route add -> apply
 drift / missing       -> apply
-需要回退               -> history --json -> rollback <id> --apply
 清理                   -> package remove / skill remove / gc --json -> gc --apply
 ```
 
@@ -736,11 +802,14 @@ drift / missing       -> apply
 - **Targets**：target 列表、package 数、解析后的 skill 数、分配 package、target/package enable/disable（禁用时清理不再需要的投影）、删除 target/route（按 route 清理目标目录条目）、apply 预览（dry-run）、apply 结果；
 - **Skills**：选择目录批量扫描 `SKILL.md`，逐个确认安装；扫描名称只作为名称输入框 placeholder，留空确认时作为默认名称；版本输入框显示自动生成版本的 semver 主体 `1.0.0`，不显示 `+<hash8>` 构建元数据；确认时检测包内目录链接，命中则提示绝对路径并取消该包安装；已安装技能按技能名聚合为一张卡片，通过版本切换标签选择版本，再对当前版本执行标记/移除，标签可直接切换到对应版本；GC；
 - **Packages**：创建/复制 package、组合列表、标签、删除；
-- **History**：三文件快照与回滚；
 - **Doctor**：健康检查；
 - **Language**：安装/切换/删除语言包，显示 nativeName、版本和翻译覆盖率；切换后立即刷新界面，删除当前语言回到英文。
 
-GUI 的刷新通过一次只读 `skillink snapshot --json` 获取 skills、packages、route、status、doctor、target 解析结果和 history。Renderer 只调用 preload API；Electron 主进程负责 IPC 校验、argv 映射和串行队列，不直接调用 Core。语言包操作同样走 `locale ... --json` 命令层。
+GUI 的刷新通过一次只读 `skillink snapshot --json` 获取 skills、packages、route、status、doctor 和 target 解析结果。Renderer 只调用 preload API；Electron 主进程负责 IPC 校验、argv 映射和串行队列，不直接调用 Core。语言包操作同样走 `locale ... --json` 命令层。
+
+本阶段 GUI 不提供 History 页面；`history` / `rollback` 只在 CLI 提供，GUI 后续可按需接入 `history --json`。
+
+GUI 启动时通过 `skillink env --json` 检测 git；不可用时在侧栏语言切换上方显示提示，说明控制面版本历史、自动提交与回退不可用。
 
 ### 7.3 双入口与安装包
 
@@ -802,7 +871,7 @@ NSIS 安装细节：
 - 安装时执行 `skillink-path.ps1 add`，把 `$INSTDIR\resources\cli` 放到当前用户 PATH 前面；
 - 安装时把 `resources\locales\zh-CN.json` 复制到 `%USERPROFILE%\.agents\skillink\locales\zh-cn.json`，目标已存在则不覆盖；应用启动时若内置 `zh-CN` 包版本更新或缺少新版本文案，且已安装文件仍匹配内置包身份，会自动刷新；应用仍按 `settings.json` / 系统语言决定是否启用；
 - 卸载时执行 `skillink-path.ps1 remove`，只移除该条目；
-- 卸载向导提供“Delete Skillink data and configuration”复选框，默认不勾选；勾选后删除 `%USERPROFILE%\.agents\skillink\`（包括 `skills/`、三个数据配置、`history/`、`settings.json` 和语言包）；
+- 卸载向导提供“Delete Skillink data and configuration”复选框，默认不勾选；勾选后删除 `%USERPROFILE%\.agents\skillink\`（包括 `skills/`、三个数据配置、`settings.json` 和语言包）；
 - 静默卸载可传 `--delete-app-data`（兼容 electron-builder）或 `--delete-skillink-data`，效果等同勾选；覆盖安装/升级时即使带参数也不会删除用户数据；
 - 卸载程序只处理默认路径；使用 `SKILLINK_HOME` 自定义控制面时，需要手动删除自定义目录；
 - 安装/卸载后广播 `WM_WININICHANGE`，新终端可直接识别 `skillink`。
@@ -846,8 +915,8 @@ $env:SKILLINK_HOME = "$PSScriptRoot\skillink-data"
 | route 手工篡改 | 严格 schema、传递闭包哈希、apply/doctor 校验 |
 | package/skill 内容缺失 | `assertSkillContent`：目录存在且根目录有 `SKILL.md` |
 | 删除目标内容 | route 期望集合中的同名条目视为受管；形态或内容不同时删除重建；集合外条目不动 |
-| 版本库被篡改 | `apply`/`doctor`/history 重新计算 skill manifest；检测 `SKILL_INTEGRITY_MISMATCH` |
-| 配置损坏 | schema 校验、原子写、历史快照、交叉校验 |
+| 版本库被篡改 | `apply`/`doctor` 重新计算 skill manifest；检测 `SKILL_INTEGRITY_MISMATCH` |
+| 配置损坏 | schema 校验、原子写、交叉校验 |
 | Renderer XSS | contextIsolation、sandbox、nodeIntegration false、CSP |
 | IPC 滥用 | 白名单 API、zod、sender/主窗口/顶层 frame 校验（`IPC_FORBIDDEN`） |
 | Windows 文件占用 | 临时文件 + rename；`EBUSY`/`EPERM`/`EACCES`/`ENOTEMPTY` 指数退避重试 |
@@ -867,24 +936,25 @@ $env:SKILLINK_HOME = "$PSScriptRoot\skillink-data"
 
 MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和 target 扫描得出。
 
-- `settings.json`、`locales/`：UI 语言偏好与语言包，不参与业务图；
-- `history/`：配置快照；
-- `trash/`：删除/GC 的内容；
+- 控制面 `.git`：跟踪 `route.json`、`package.json`、`skill.json`、`locales/` 和 ignore/attribute 文件；
+- `skills/.git`：跟踪 skill 内容，控制面 git 通过 `/skills/` 忽略；
+- `.skillink.lock`：写命令跨进程锁，内容为 `{ pid, startedAt }`；
+- `settings.json`、`locales/`：UI 语言偏好与语言包；`locales/` 受版本控制，`settings.json` 不受控制；
 - `cache/`、`logs/`、`tmp/`：运行时辅助目录；
-- 所有配置写入使用临时文件 + rename；
-- 历史快照用于回滚和审计。
+- 所有配置写入使用临时文件 + rename。
 
 ---
 
 ## 10. 测试策略
 
-当前验证（2026-10-31）：50 个测试文件、430 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
+当前验证（2026-11-01）：56 个测试文件、507 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
 
 | 层级 | 内容 |
 |---|---|
-| 单元测试 | schema、package 图、环检测、skill 冲突、路径策略、链接计划、历史、GC、迁移 |
+| 单元测试 | schema、package 图、环检测、skill 冲突、路径策略、链接计划、git、锁、回退、GC、迁移 |
 | 集成测试 | 临时目录、真实 junction/symlink、冲突、崩溃恢复 |
 | CLI 测试 | 完整 skill -> package -> route -> apply 闭环、迁移、回滚、批量扫描 |
+| Git 测试 | 控制面/skills 初始化、ignore/attributes、自动提交顺序、无空提交、锁、history、rollback 内容恢复与失败恢复 |
 | GUI 测试 | IPC schema、页面渲染、空状态、组合展示、target/route 生命周期、apply 预览、批量安装、已安装技能版本聚合与目录链接警告 |
 | 桌面/i18n 测试 | 语言包 schema/覆盖率、内置包启动刷新、安装卡片 placeholder 与默认名称、已安装技能版本切换 |
 | 安全测试 | 恶意源文件夹、路径穿越、断链、只读文件、同名冲突、内容篡改、非受信 IPC |
@@ -915,8 +985,6 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 
 - `mode: copy` 投影尚未实现；v2.0 在 `target add` 时返回 `COPY_MODE_UNSUPPORTED`，迁移遗留 copy target 由 doctor 报 `UNSUPPORTED_MODE`，计划 v2.1 实现；
 - apply 的预检和回滚覆盖普通失败与进程内异常，但不能防止进程崩溃/断电留下半完成 target；
-- history restore 在普通写入失败时会尝试回滚三文件；若恢复写入本身失败，会报 `IO_ERROR` 并列出 `restoreFailures`，此时可能需要人工修复；进程崩溃窗口仍存在；
-- 当前配置已经损坏到无法通过 schema 时，`rollback` 不能作为修复入口（创建回滚前快照会先失败）；需要手工修复或直接从 `history/<id>/` 复制文件；
 - Windows 长路径、OneDrive 同步冲突尚未做专项自动化验证；
 - Linux/macOS 已加入 CI 矩阵，但尚未在真实设备上手工验证；
 - apply 回滚只清理本次创建的 target 目录本身，不追踪 `mkdir({ recursive: true })` 创建的父目录；
@@ -929,7 +997,12 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 - `direction: rtl` 会应用到 `document.documentElement.dir`，但 Arabic/Hebrew 的逐页视觉验收尚未完成；
 - `apply` 替换真实目录/文件时直接 `rm -rf`，进程内回滚只恢复链接，不恢复被删除的真实内容；
 - `target remove` / `target disable` / `package disable` / `route remove` / `route add` 覆盖版本时直接删除 route 解析出的目标目录条目；GC 中途失败或 route 写入失败时，已经删除的目标目录条目不会恢复，`route.json` 保持不变；
-- `history rollback` 只恢复配置，不执行 target 投影 GC。
+- 控制面 git 依赖系统 `git`；桌面端不内置 git。缺少 git 时 `init`、写命令自动提交和 `rollback` 返回 `GIT_UNAVAILABLE`；
+- skills git 作为粗粒度内容历史，不保存空目录，权限位只部分保存；恢复后可能触发 integrity 检查失败；
+- rollback 只处理当前 route 中存在的 target；旧 route 中存在但当前 route 中不存在的 target 不会被清理；
+- rollback 只删除原 `skill.json` 记录、但目标 catalog 不再包含的 skill 版本；`skills/` 中从未被 catalog 记录的未知目录不处理；
+- 损坏的 target package 图会使 rollback 中止（P4，后续可加 `--force` 或 fallback scan）；
+- GUI 本阶段没有 History 页面。
 
 ---
 
@@ -944,36 +1017,40 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 7. `status` 能报告链接状态和 package 解析错误；
 8. `doctor` 能报告缺失内容、孤儿目录、缺 `SKILL.md`、悬空 package、链接问题；
 9. `gc` 只回收未被 route/tag 引用的 skill 版本；
-10. `history` 快照包含三个文件，回滚同时恢复；
-11. `migrate` 能从 v1 迁移，失败时旧文件不变；
-12. `pnpm test`、`pnpm typecheck`、`pnpm build` 通过；
-13. 配置中的不安全 name/version 被拒绝，apply/GC 不越出库或 target；
-14. doctor 能报告不安全/重复/嵌套 target，嵌套 package 不被误报 unused；
-15. 删除最后一个 skill 版本和 GC 后不留下空 orphan 目录；
-16. package create/copy、apply、import 复用、history restore 都要求 `SKILL.md`；
-17. CLI 能完成 init -> skill add -> package create -> target add -> route add -> apply -> status/doctor -> package copy/rollback/gc 的调用闭环；
-18. 篡改 `skills/<name>/<version>/` 内容后，`apply` 拒绝、`doctor` 报 `SKILL_INTEGRITY_MISMATCH`；
-19. target/import 路径支持 `~`、`%USERPROFILE%`、`$HOME`；导入拒绝系统目录和超限目录；
-20. `target add --mode copy` 返回 `COPY_MODE_UNSUPPORTED`，doctor 能诊断遗留 copy target；
-21. `route remove` 默认校验剩余图，`--force` 可修复；target/package enable/disable 可用；
-22. GUI 能删除 target/route、切换 enable（禁用时清理投影）、预览/执行 apply，并显示解析后的 skill 数；
-23. `locale` 命令能安装、切换、列出、删除语言包；缺失/损坏语言包回退英文；`zh-CN` 覆盖全部英文 key；
-24. `skill scan` 能批量发现技能包；每个包独立确认安装；包含目录链接的包提示绝对路径并取消该包安装，其余包不受影响；
-25. 内置 `zh-CN` 包版本更新或缺 key 时，应用启动后自动刷新已安装副本；身份不同的自定义语言包不被覆盖；
-26. 安装卡片中的扫描名称只显示为输入框 placeholder，留空确认时使用扫描名称；版本输入框显示自动生成版本的 semver 主体 `1.0.0`，不显示 `+<hash8>` 构建元数据；
-27. 已安装技能按技能名聚合为一张卡片，版本切换控件选择版本后，标记/移除操作只作用于当前版本；
-28. `target remove` 解析 target 的全部 package lock（含 disabled）得到 skill 集合，删除目标目录中同名链接/真实目录，普通文件和其他类型保留；GC 失败或 route 写入失败时 route 不变并报错；目标目录和 `skills/` 内容保留；
-29. apply 对 route 期望集合中的同名条目按形态和内容接管：真实目录/文件直接删除并重建链接，链接内容不同则重建，集合外条目不动；`--prune` 不存在；
-30. `target disable`、`package disable`、`route remove`、`route add` 版本覆盖都会清理不再需要的 target 投影；解析失败时跳过清理并允许配置修复。
+10. `migrate` 能从 v1 迁移，失败时旧文件不变；
+11. `pnpm test`、`pnpm typecheck`、`pnpm build` 通过；
+12. 配置中的不安全 name/version 被拒绝，apply/GC 不越出库或 target；
+13. doctor 能报告不安全/重复/嵌套 target，嵌套 package 不被误报 unused；
+14. 删除最后一个 skill 版本和 GC 后不留下空 orphan 目录；
+15. package create/copy、apply、import 复用都要求 `SKILL.md`；
+16. CLI 能完成 init -> skill add -> package create -> target add -> route add -> apply -> status/doctor -> package copy/gc 的调用闭环；
+17. 篡改 `skills/<name>/<version>/` 内容后，`apply` 拒绝、`doctor` 报 `SKILL_INTEGRITY_MISMATCH`；
+18. target/import 路径支持 `~`、`%USERPROFILE%`、`$HOME`；导入拒绝系统目录和超限目录；
+19. `target add --mode copy` 返回 `COPY_MODE_UNSUPPORTED`，doctor 能诊断遗留 copy target；
+20. `route remove` 默认校验剩余图，`--force` 可修复；target/package enable/disable 可用；
+21. GUI 能删除 target/route、切换 enable（禁用时清理投影）、预览/执行 apply，并显示解析后的 skill 数；
+22. `locale` 命令能安装、切换、列出、删除语言包；缺失/损坏语言包回退英文；`zh-CN` 覆盖全部英文 key；
+23. `skill scan` 能批量发现技能包；每个包独立确认安装；包含目录链接的包提示绝对路径并取消该包安装，其余包不受影响；
+24. 内置 `zh-CN` 包版本更新或缺 key 时，应用启动后自动刷新已安装副本；身份不同的自定义语言包不被覆盖；
+25. 安装卡片中的扫描名称只显示为输入框 placeholder，留空确认时使用扫描名称；版本输入框显示自动生成版本的 semver 主体 `1.0.0`，不显示 `+<hash8>` 构建元数据；
+26. 已安装技能按技能名聚合为一张卡片，版本切换控件选择版本后，标记/移除操作只作用于当前版本；
+27. `target remove` 解析 target 的全部 package lock（含 disabled）得到 skill 集合，删除目标目录中同名链接/真实目录，普通文件和其他类型保留；GC 失败或 route 写入失败时 route 不变并报错；目标目录和 `skills/` 内容保留；
+28. apply 对 route 期望集合中的同名条目按形态和内容接管：真实目录/文件直接删除并重建链接，链接内容不同则重建，集合外条目不动；`--prune` 不存在；
+29. `target disable`、`package disable`、`route remove`、`route add` 版本覆盖都会清理不再需要的 target 投影；解析失败时跳过清理并允许配置修复；
+30. `init` 创建控制面 git 与 skills git，生成 `.gitignore` / `.gitattributes`，并产生 baseline commit；
+31. 所有成功且有数据变化的写命令自动提交；无变化、只读、dry-run 不提交，不产生空提交；
+32. `history --json` 输出 commit 列表；`rollback <revision>` 清理当前 target、恢复配置和缺失内容、删除旧 catalog 不包含的受管 skill 版本、重新 apply，并只产生一次 rollback 提交；
+33. rollback 后 target 中不存在旧 route 的受管投影，`skills/.git` 不被 doctor 报为 orphan；
+34. README / ARCHITECTURE 不再包含旧 history/trash 快照语义。
 
 ---
 
 ### 11.1 当前实现验证
 
-- `pnpm test`：50 个测试文件、430 个测试通过（2026-10-31）；
+- `pnpm test`：56 个测试文件、507 个测试通过（2026-11-01）；
 - `pnpm typecheck`：通过；
 - `pnpm build`：CLI 与 Electron 桌面端构建成功；
-- 真实 CLI E2E：skill 安装、package 创建/复制、target/route、apply、status/doctor、冲突修复、history/rollback、gc dry-run 均跑通；
+- 真实 CLI E2E：skill 安装、package 创建/复制、target/route、apply、status/doctor、冲突修复、gc dry-run 均跑通；
 - 桌面冒烟：旧版 `zh-CN` 语言包在启动后自动刷新到内置版本，版本输入框显示 `1.0.0`，不显示 hash；
 - hardening 验证：内容完整性篡改、apply 预检/回滚、导入限制、路径展开、文件锁重试、IPC sender、大小写冲突、frontmatter、GUI 生命周期均有测试覆盖。
 
@@ -990,7 +1067,6 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 | 无环检测 | 每个 package 生命周期和 apply/route 都做 DFS 环检测 |
 | 无传递闭包哈希 | route lock 使用 package 传递闭包哈希 |
 | 无 package copy | `package copy` 解决 skill 版本冲突 |
-| 历史快照两文件 | 历史快照三文件 |
 | 旧 `skills.json` | `skillink migrate` 全有或全无迁移 |
 | 配置 name/version 未做路径校验 | `SafeNameSchema`/`SafeVersionSchema` + apply/GC 包含检查 |
 | package/skill 内容存在性校验较弱 | `assertSkillContent` 强制目录 + `SKILL.md` |

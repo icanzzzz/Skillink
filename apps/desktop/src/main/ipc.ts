@@ -24,7 +24,6 @@ import {
   LanguageUseRequestSchema,
   PackageRemoveRequestSchema,
   PackageTagRequestSchema,
-  RollbackRequestSchema,
   RouteAddRequestSchema,
   RouteEnableRequestSchema,
   RouteRemoveRequestSchema,
@@ -50,7 +49,6 @@ import {
   buildPackageRemoveArgs,
   buildPackageTagArgs,
   buildRemoveTargetArgs,
-  buildRollbackArgs,
   buildRouteAddArgs,
   buildRouteEnableArgs,
   buildRouteRemoveArgs,
@@ -132,6 +130,7 @@ export function registerIpcHandlers(
   };
 
   handle('skillink:snapshot', () => cli.snapshot());
+  handle('skillink:runtime-status', () => cli.runtimeStatus());
   handle('skillink:choose-folder', (event) => chooseFolder(event));
   handle('skillink:language-state', () =>
     cli.invoke<LanguageState>(buildLanguageListArgs()),
@@ -235,10 +234,5 @@ export function registerIpcHandlers(
   handle('skillink:gc', async (_event, input: unknown) => {
     const request = GcRequestSchema.parse(input ?? {});
     return cli.invoke<GcReport>(buildGcArgs(request));
-  });
-
-  handle('skillink:rollback', async (_event, input: unknown) => {
-    const request = RollbackRequestSchema.parse(input);
-    await cli.invoke(buildRollbackArgs(request));
   });
 }

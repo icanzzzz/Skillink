@@ -350,7 +350,7 @@ describe('route entries', () => {
     ).toBeUndefined();
   });
 
-  it('enables and disables a package lock with history', async () => {
+  it('enables and disables a package lock', async () => {
     const { paths } = await setup();
     await addRouteEntry({
       paths,

@@ -17,7 +17,6 @@ const emptySnapshot: DesktopSnapshot = {
   status: { healthy: true, entries: [] },
   doctor: { ok: true, issues: [] },
   targetSkills: [],
-  history: [],
 };
 
 describe('SnapshotView', () => {

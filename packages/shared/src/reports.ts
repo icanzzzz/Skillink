@@ -110,13 +110,6 @@ export interface GcReport extends GcPlan {
   removed: GcCandidate[];
 }
 
-export interface HistoryEntry {
-  id: string;
-  path: string;
-  createdAt: string;
-  reason: string;
-}
-
 export interface ImportSkillResult {
   name: string;
   version: string;
@@ -154,7 +147,15 @@ export interface SnapshotReport {
   status: StatusReport;
   doctor: DoctorReport;
   targetSkills: TargetSkillSummary[];
-  history: HistoryEntry[];
+}
+
+export interface GitHistoryEntry {
+  /** commit hash */
+  id: string;
+  /** ISO date */
+  createdAt: string;
+  /** commit subject */
+  reason: string;
 }
 
 export interface CliErrorEnvelope {

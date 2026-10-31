@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import type {
   ApplyReport,
   GcReport,
-  HistoryEntry,
   ImportSkillResult,
   MessageKey,
   SkillPackageScanReport,
@@ -24,9 +23,9 @@ import type {
 } from '../../ipc-schemas.js';
 import type { DesktopApi, DesktopSnapshot } from '../../shared.js';
 import { DoctorView } from './DoctorView.js';
-import { HistoryView } from './HistoryView.js';
 import { useI18n } from './i18n.js';
 import { LanguageDialog, LanguageTrigger } from './LanguageDialog.js';
+import { GitUnavailableNotice } from './GitUnavailableNotice.js';
 import { PackagesView } from './PackagesView.js';
 import { SkillsView } from './SkillsView.js';
 import { SnapshotView } from './SnapshotView.js';
@@ -37,7 +36,6 @@ type ViewId =
   | 'targets'
   | 'skills'
   | 'packages'
-  | 'history'
   | 'doctor';
 
 const NAV_ITEMS: Array<{ id: ViewId; labelKey: MessageKey }> = [
@@ -45,7 +43,6 @@ const NAV_ITEMS: Array<{ id: ViewId; labelKey: MessageKey }> = [
   { id: 'targets', labelKey: 'app.nav.targets' },
   { id: 'skills', labelKey: 'app.nav.skills' },
   { id: 'packages', labelKey: 'app.nav.packages' },
-  { id: 'history', labelKey: 'app.nav.history' },
   { id: 'doctor', labelKey: 'app.nav.doctor' },
 ];
 
@@ -56,7 +53,6 @@ const VIEW_TITLES: Record<ViewId, MessageKey> = {
   targets: 'app.titles.targets',
   skills: 'app.titles.skills',
   packages: 'app.titles.packages',
-  history: 'app.titles.history',
   doctor: 'app.titles.doctor',
 };
 
@@ -104,13 +100,6 @@ function NavIcon({ view }: { view: ViewId }) {
           <path d="M3.7 8.5 12 13.8l8.3-5.3M12 20.4v-6.6" />
         </svg>
       );
-    case 'history':
-      return (
-        <svg {...props}>
-          <circle cx="12" cy="12" r="8" />
-          <path d="M12 7.5V12l3 2" />
-        </svg>
-      );
     case 'doctor':
       return (
         <svg {...props}>
@@ -132,12 +121,12 @@ export function App({ api }: AppProps) {
   const { t } = useI18n();
   const [view, setView] = useState<ViewId>('overview');
   const [snapshot, setSnapshot] = useState<DesktopSnapshot | null>(null);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [gcReport, setGcReport] = useState<GcReport | null>(null);
   const [applyReport, setApplyReport] = useState<ApplyReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
+  const [gitAvailable, setGitAvailable] = useState<boolean | null>(null);
 
   async function refresh(): Promise<void> {
     if (!client) {
@@ -148,7 +137,6 @@ export function App({ api }: AppProps) {
     try {
       const nextSnapshot = await client.getSnapshot();
       setSnapshot(nextSnapshot);
-      setHistory(nextSnapshot.history);
       setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -157,6 +145,15 @@ export function App({ api }: AppProps) {
 
   useEffect(() => {
     void refresh();
+
+    if (!client) {
+      return;
+    }
+
+    void client
+      .getRuntimeStatus()
+      .then((status) => setGitAvailable(status.gitAvailable))
+      .catch(() => setGitAvailable(null));
   }, []);
 
   async function runAction(action: () => Promise<void>): Promise<void> {
@@ -290,15 +287,6 @@ export function App({ api }: AppProps) {
     });
   }
 
-  function rollback(id: string, applyAfter: boolean): void {
-    void runAction(async () => {
-      await client!.rollback({ id });
-      if (applyAfter) {
-        await client!.apply({});
-      }
-    });
-  }
-
   function applyRoutes(): void {
     void runAction(async () => {
       const report = await client!.apply({});
@@ -341,6 +329,7 @@ export function App({ api }: AppProps) {
         </nav>
 
         <div className="sidebar-bottom">
+          <GitUnavailableNotice visible={gitAvailable === false} />
           <LanguageTrigger onClick={() => setLanguageOpen(true)} />
           <div className="sidebar-foot">
             <span>{t('app.controlPlane')}</span>
@@ -410,8 +399,6 @@ export function App({ api }: AppProps) {
               onTag={packageTag}
               onRemove={packageRemove}
             />
-          ) : view === 'history' ? (
-            <HistoryView entries={history} busy={busy} onRollback={rollback} />
           ) : (
             <DoctorView
               report={snapshot.doctor}

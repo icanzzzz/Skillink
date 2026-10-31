@@ -8,7 +8,6 @@ import type {
   LanguageInstallRequest,
   PackageRemoveRequest,
   PackageTagRequest,
-  RollbackRequest,
   RouteAddRequest,
   RouteEnableRequest,
   RouteRemoveRequest,
@@ -176,10 +175,6 @@ export function buildGcArgs(request: GcRequest = {}): string[] {
     ...(request.keepTagged === false ? ['--no-keep-tagged'] : []),
     '--json',
   ];
-}
-
-export function buildRollbackArgs(request: RollbackRequest): string[] {
-  return ['rollback', request.id, '--json'];
 }
 
 export function buildLanguageListArgs(): string[] {

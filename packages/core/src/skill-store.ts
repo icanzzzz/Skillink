@@ -1,4 +1,4 @@
-import { lstat, mkdir, rename, rmdir, stat } from 'node:fs/promises';
+import { rm, rmdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
   PackageFileSchema,
@@ -15,7 +15,6 @@ import {
   type SkillinkPaths,
 } from '@skillink/shared';
 import { readJsonFile, writeJsonAtomic } from './json-store.js';
-import { withHistory } from './history.js';
 import { collectPackageSkillRefs } from './package-graph.js';
 import { withFsRetry } from './fs-retry.js';
 import { assertSafePackageName } from './package-name.js';
@@ -152,9 +151,7 @@ export async function upsertSkillVersion(
       existing.metadata = nextMetadata;
     }
 
-    await withHistory(paths, 'refresh-skill-metadata', async () => {
-      await writeSkillFile(paths, file);
-    });
+    await writeSkillFile(paths, file);
     return { created: false };
   }
 
@@ -177,34 +174,8 @@ export async function upsertSkillVersion(
     },
   };
 
-  await withHistory(paths, 'upsert-skill-version', async () => {
-    await writeSkillFile(paths, file);
-  });
+  await writeSkillFile(paths, file);
   return { created: true };
-}
-
-export async function createTrashDirectory(
-  paths: SkillinkPaths,
-): Promise<string> {
-  await mkdir(paths.trashDir, { recursive: true });
-
-  let timestamp = Date.now();
-  let directory = path.join(paths.trashDir, safeTimestamp(timestamp));
-  while (
-    await stat(directory)
-      .then(() => true)
-      .catch(() => false)
-  ) {
-    timestamp += 1;
-    directory = path.join(paths.trashDir, safeTimestamp(timestamp));
-  }
-
-  await mkdir(directory, { recursive: true });
-  return directory;
-}
-
-function safeTimestamp(timestamp: number): string {
-  return new Date(timestamp).toISOString().replaceAll(':', '-');
 }
 
 export async function removeEmptySkillParent(
@@ -212,24 +183,6 @@ export async function removeEmptySkillParent(
   name: string,
 ): Promise<void> {
   await rmdir(path.join(paths.libraryDir, name)).catch(() => undefined);
-}
-
-async function moveToTrash(
-  source: string,
-  destination: string,
-): Promise<boolean> {
-  try {
-    await lstat(source);
-  } catch (error) {
-    if (isNodeError(error) && error.code === 'ENOENT') {
-      return false;
-    }
-    throw error;
-  }
-
-  await mkdir(path.dirname(destination), { recursive: true });
-  await withFsRetry(() => rename(source, destination));
-  return true;
 }
 
 export async function setSkillTag(
@@ -277,9 +230,7 @@ export async function setSkillTag(
     },
   };
 
-  await withHistory(paths, 'set-skill-tag', async () => {
-    await writeSkillFile(paths, file);
-  });
+  await writeSkillFile(paths, file);
 }
 
 export async function removeSkillVersion(
@@ -346,55 +297,45 @@ export async function removeSkillVersion(
     }
   }
 
-  await withHistory(paths, 'remove-skill-version', async () => {
-    const trashDirectory = await createTrashDirectory(paths);
-    const source = getSkillDir(paths, safeName, safeVersion);
-    const destination = path.join(
-      trashDirectory,
-      safeName,
-      safeVersion,
+  const versionDir = getSkillDir(paths, safeName, safeVersion);
+  try {
+    await withFsRetry(() =>
+      rm(versionDir, { recursive: true, force: true }),
     );
-    const moved = await moveToTrash(source, destination);
+  } catch (error) {
+    throw new SkillinkError(
+      'IO_ERROR',
+      `Failed to delete skill content: ${versionDir}`,
+      { name: safeName, version: safeVersion, path: versionDir },
+      { cause: error },
+    );
+  }
 
-    const current = await readSkillFile(paths);
-    const currentSkill = Object.hasOwn(current.skills, safeName)
-      ? current.skills[safeName]
-      : undefined;
-    if (!currentSkill) {
-      return;
-    }
+  const nextSkills = { ...file.skills };
+  const remainingVersions = { ...skillEntry.versions };
+  delete remainingVersions[safeVersion];
 
-    const remainingVersions = { ...currentSkill.versions };
-    delete remainingVersions[safeVersion];
+  if (Object.keys(remainingVersions).length === 0) {
+    delete nextSkills[safeName];
+  } else {
+    const tags = Object.fromEntries(
+      Object.entries(skillEntry.tags ?? {}).filter(
+        ([, taggedVersion]) => taggedVersion !== safeVersion,
+      ),
+    );
+    nextSkills[safeName] = {
+      ...skillEntry,
+      versions: remainingVersions,
+      ...(Object.keys(tags).length > 0 ? { tags } : { tags: undefined }),
+    };
+  }
 
-    if (Object.keys(remainingVersions).length === 0) {
-      delete current.skills[safeName];
-    } else {
-      const tags = Object.fromEntries(
-        Object.entries(currentSkill.tags ?? {}).filter(
-          ([, taggedVersion]) => taggedVersion !== safeVersion,
-        ),
-      );
-      current.skills[safeName] = {
-        ...currentSkill,
-        versions: remainingVersions,
-        ...(Object.keys(tags).length > 0 ? { tags } : { tags: undefined }),
-      };
-    }
-
-    try {
-      await writeSkillFile(paths, current);
-      if (!Object.hasOwn(current.skills, safeName)) {
-        await removeEmptySkillParent(paths, safeName);
-      }
-    } catch (error) {
-      if (moved) {
-        await mkdir(path.dirname(source), { recursive: true });
-        await withFsRetry(() => rename(destination, source)).catch(
-          () => undefined,
-        );
-      }
-      throw error;
-    }
+  await writeSkillFile(paths, {
+    ...file,
+    skills: nextSkills,
   });
+
+  if (!Object.hasOwn(nextSkills, safeName)) {
+    await removeEmptySkillParent(paths, safeName);
+  }
 }

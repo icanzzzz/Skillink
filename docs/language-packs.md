@@ -18,7 +18,7 @@ Skillink 的 GUI 界面、错误提示和 Doctor 诊断支持通过本地 JSON �
 
 - 语言包安装到控制面的 `locales/`，文件名统一为 `locale.toLowerCase()`；例如 `zh-CN` 写入 `locales/zh-cn.json`。
 - 内置英文 `en` 不落盘，始终可用，不能删除或覆盖。
-- `settings.json` 只保存用户偏好，不进入 route / package / skill 的历史快照。
+- `settings.json` 只保存用户偏好，不进入控制面 git 版本控制；`locales/` 受控制面 git 跟踪。
 - Windows NSIS 安装包会在安装阶段把仓库自带 `zh-CN.json` 复制到 `locales/zh-cn.json`；如果目标已存在则保留用户版本。portable 包不执行安装步骤，不会自动复制首次安装的语言包。应用启动时，如果已安装的 `zh-CN` 语言包与内置包的 `locale` / `name` / `nativeName` 一致，且内置包版本更新或缺少新版本文案，会自动刷新内置包；自定义语言包不会被覆盖。
 
 ## 语言包格式
@@ -65,7 +65,7 @@ Skillink 的 GUI 界面、错误提示和 Doctor 诊断支持通过本地 JSON �
 
 ## key 命名规则
 
-- 以页面或领域开头：`app.*`、`overview.*`、`targets.*`、`skills.*`、`packages.*`、`history.*`、`doctor.*`、`language.*`；
+- 以页面或领域开头：`app.*`、`overview.*`、`targets.*`、`skills.*`、`packages.*`、`doctor.*`、`language.*`；
 - 已知错误码使用 `errors.<CODE>`，例如 `errors.PACKAGE_NOT_FOUND`；
 - Doctor 问题使用 `doctorIssues.<CODE>`，例如 `doctorIssues.MISSING_CONTENT`；
 - 复数使用对象形式，运行时通过 `Intl.PluralRules` 选择分类，缺少分类时回退 `other`；
@@ -138,8 +138,7 @@ skillink locale install ./zh-CN.json --force --use
 - 只允许安装本地文件，不读取 URL；
 - 安装前校验文件大小、JSON 结构、`schemaVersion`、locale、key 格式、key 数量和消息长度；
 - 所有写文件使用原子写入（临时文件 + rename）；
-- `en` 不能安装、覆盖或删除；
-- 语言包不参与 history 快照。
+- `en` 不能安装、覆盖或删除。
 
 ## 当前限制
 

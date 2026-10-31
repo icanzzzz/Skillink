@@ -10,7 +10,10 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getSkillDir, getSkillinkPaths } from '@skillink/shared';
 
-const state = vi.hoisted(() => ({ failWritePath: '' }));
+const state = vi.hoisted(() => ({
+  failWritePath: '',
+  failRemovePath: '',
+}));
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -23,6 +26,14 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         });
       }
       return actual.rename(from, to);
+    },
+    rm: async (target: string, options?: any) => {
+      if (state.failRemovePath && target === state.failRemovePath) {
+        throw Object.assign(new Error('EBUSY: simulated delete failure'), {
+          code: 'EBUSY',
+        });
+      }
+      return actual.rm(target, options);
     },
   };
 });
@@ -56,13 +67,14 @@ async function setup() {
 
 afterEach(async () => {
   state.failWritePath = '';
+  state.failRemovePath = '';
   await Promise.all(
     tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
   );
 });
 
 describe('skill-store failure handling', () => {
-  it('moves content back when skill.json cannot be written during removal', async () => {
+  it('deletes content before writing skill.json', async () => {
     const { paths } = await setup();
     const contentDir = getSkillDir(paths, 'demo', '1.0.0');
     state.failWritePath = paths.skillFile;
@@ -74,8 +86,25 @@ describe('skill-store failure handling', () => {
 
     await expect(
       readFile(path.join(contentDir, 'file.txt'), 'utf8'),
-    ).resolves.toBe('content');
+    ).rejects.toMatchObject({ code: 'ENOENT' });
     const skillFile = await readSkillFile(paths);
     expect(skillFile.skills.demo?.versions['1.0.0']).toBeDefined();
+  });
+
+  it('keeps the catalog entry when content deletion fails', async () => {
+    const { paths } = await setup();
+    const contentDir = getSkillDir(paths, 'demo', '1.0.0');
+    state.failRemovePath = contentDir;
+
+    await expect(
+      removeSkillVersion(paths, 'demo', '1.0.0'),
+    ).rejects.toMatchObject({ code: 'IO_ERROR' });
+    state.failRemovePath = '';
+
+    const skillFile = await readSkillFile(paths);
+    expect(skillFile.skills.demo?.versions['1.0.0']).toBeDefined();
+    await expect(
+      readFile(path.join(contentDir, 'file.txt'), 'utf8'),
+    ).resolves.toBe('content');
   });
 });

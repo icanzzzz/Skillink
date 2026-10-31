@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -211,7 +211,7 @@ describe('garbage collection', () => {
     expect(candidateNames(await planGc(paths, { maxAgeDays: 7 }))).toEqual([]);
   });
 
-  it('moves collected skills to trash and updates skill.json', async () => {
+  it('deletes collected skills and updates skill.json', async () => {
     const { paths } = await setup();
 
     const report = await gc(paths, { dryRun: false, maxAgeDays: 0 });
@@ -223,7 +223,6 @@ describe('garbage collection', () => {
     expect(await pathExists(path.join(paths.libraryDir, 'pdf'))).toBe(false);
     expect(await pathExists(path.join(paths.libraryDir, 'review'))).toBe(false);
     expect((await readSkillFile(paths)).skills).toEqual({});
-    expect((await readdir(paths.trashDir)).length).toBeGreaterThan(0);
     expect((await readPackageFile(paths)).packages.frontend).toBeDefined();
   });
 });

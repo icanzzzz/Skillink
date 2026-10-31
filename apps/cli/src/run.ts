@@ -10,14 +10,22 @@ import {
   addRouteEntry,
   addTarget,
   apply,
+  assertCleanControlRepo,
+  checkPackageSkillReferences,
+  commitRepoChanges,
   copyPackageVersion,
   createPackageVersion,
   doctor,
+  ensureControlRepo,
+  ensureSkillsRepo,
   gc,
   getLanguageState,
+  gitHead,
+  gitLog,
+  gitRepoExists,
   importSkill,
   installLanguagePack,
-  listHistory,
+  isGitAvailable,
   migrateV1ToV2,
   readPackageFile,
   readRouteFile,
@@ -27,7 +35,7 @@ import {
   removeRouteEntry,
   removeSkillVersion,
   removeTarget,
-  restoreHistorySnapshot,
+  rollbackTo,
   scanSkillPackages,
   setActiveLocale,
   setPackageEnabled,
@@ -36,6 +44,8 @@ import {
   setTargetEnabled,
   status,
   summarizeTargetSkills,
+  withCliMutation,
+  withHomeLock,
   writePackageFile,
   writeRouteFile,
   writeSettingsFile,
@@ -127,20 +137,24 @@ async function ensureDirectories(paths: ReturnType<typeof getSkillinkPaths>) {
     mkdir(paths.home, { recursive: true }),
     mkdir(paths.localesDir, { recursive: true }),
     mkdir(paths.libraryDir, { recursive: true }),
-    mkdir(paths.historyDir, { recursive: true }),
     mkdir(paths.cacheDir, { recursive: true }),
     mkdir(paths.logsDir, { recursive: true }),
-    mkdir(paths.trashDir, { recursive: true }),
     mkdir(paths.tmpDir, { recursive: true }),
   ]);
 }
 
-async function writeInitialFiles(
+async function ensureInitialFiles(
   paths: ReturnType<typeof getSkillinkPaths>,
 ): Promise<void> {
-  await writeRouteFile(paths, await readRouteFile(paths));
-  await writePackageFile(paths, await readPackageFile(paths));
-  await writeSkillFile(paths, await readSkillFile(paths));
+  if (!(await pathExists(paths.routeFile))) {
+    await writeRouteFile(paths, await readRouteFile(paths));
+  }
+  if (!(await pathExists(paths.packageFile))) {
+    await writePackageFile(paths, await readPackageFile(paths));
+  }
+  if (!(await pathExists(paths.skillFile))) {
+    await writeSkillFile(paths, await readSkillFile(paths));
+  }
 }
 
 async function writeInitialSettings(
@@ -166,7 +180,7 @@ async function ensureHome(home?: string) {
     );
   }
 
-  await writeInitialFiles(paths);
+  await ensureInitialFiles(paths);
   return paths;
 }
 
@@ -174,14 +188,20 @@ async function runSkillAdd(
   folder: string,
   options: { name?: string; version?: string; json?: boolean },
   context: CliContext,
-): Promise<void> {
-  const result = await importSkill({
+) {
+  return importSkill({
     sourceDir: folder,
     name: options.name,
     version: options.version,
     home: context.home,
   });
+}
 
+function printSkillAddResult(
+  result: Awaited<ReturnType<typeof runSkillAdd>>,
+  options: { json?: boolean },
+  context: CliContext,
+): void {
   if (options.json) {
     printJson(context, result);
     return;
@@ -218,48 +238,114 @@ export async function runCli(
       },
     });
 
+  type Paths = ReturnType<typeof getSkillinkPaths>;
+  const mutate = <T>(
+    paths: Paths,
+    commandPath: string,
+    action: string,
+    summary: string | ((result: T) => string),
+    task: () => Promise<T>,
+    options: { skills?: boolean; commit?: boolean } = {},
+  ): Promise<T> =>
+    withCliMutation(
+      { paths, commandPath, argv, action, summary, ...options },
+      task,
+    );
+
   program
     .command('init')
     .description('Initialize the Skillink control plane')
     .option('--json', 'Print machine-readable JSON')
     .action(async (options: { json?: boolean }) => {
       const paths = getSkillinkPaths(context.home);
-      await ensureDirectories(paths);
-      await writeInitialSettings(paths);
+      const result = await withHomeLock(paths, async () => {
+        if (!(await isGitAvailable())) {
+          throw new SkillinkError(
+            'GIT_UNAVAILABLE',
+            'Initializing the control plane requires git on PATH.',
+            { home: paths.home },
+          );
+        }
 
-      if (await pathExists(paths.skillsFile)) {
-        if (await pathExists(paths.skillFile)) {
-          await writeInitialFiles(paths);
-          if (options.json) {
-            printJson(context, {
-              ok: true,
-              home: paths.home,
-              migrated: false,
-            });
-            return;
+        await ensureDirectories(paths);
+
+        const hadControlRepo = await gitRepoExists(paths, 'control');
+        if (hadControlRepo && (await gitHead(paths, 'control'))) {
+          await assertCleanControlRepo(paths);
+        }
+
+        await writeInitialSettings(paths);
+
+        let migration = {
+          migrated: false,
+          skillCount: 0,
+          packageCount: 0,
+          targetCount: 0,
+        };
+
+        if (await pathExists(paths.skillsFile)) {
+          if (await pathExists(paths.skillFile)) {
+            await ensureInitialFiles(paths);
+          } else {
+            migration = await migrateV1ToV2(paths);
           }
-          context.stdout(`Initialized ${paths.home}`);
-          return;
+        } else {
+          await ensureInitialFiles(paths);
         }
 
-        const result = await migrateV1ToV2(paths);
-        if (options.json) {
-          printJson(context, { ok: true, home: paths.home, ...result });
-          return;
-        }
-        context.stdout(
-          `Migrated ${result.skillCount} skills, ${result.packageCount} packages, ` +
-            `${result.targetCount} targets to ${paths.home}`,
-        );
-        return;
-      }
+        await ensureControlRepo(paths);
+        await ensureSkillsRepo(paths);
+        await commitRepoChanges({
+          paths,
+          repo: 'control',
+          commandPath: 'init',
+          argv,
+          action: 'initialize',
+          summary: 'control plane',
+          scope: 'init',
+        });
+        await commitRepoChanges({
+          paths,
+          repo: 'skills',
+          commandPath: 'init',
+          argv,
+          action: 'initialize',
+          summary: 'skills',
+          scope: 'skills',
+        });
 
-      await writeInitialFiles(paths);
+        return migration;
+      });
+
       if (options.json) {
-        printJson(context, { ok: true, home: paths.home, migrated: false });
+        printJson(context, { ok: true, home: paths.home, ...result });
         return;
       }
-      context.stdout(`Initialized ${paths.home}`);
+
+      if (!result.migrated) {
+        context.stdout(`Initialized ${paths.home}`);
+        return;
+      }
+
+      context.stdout(
+        `Migrated ${result.skillCount} skills, ${result.packageCount} packages, ` +
+          `${result.targetCount} targets to ${paths.home}`,
+      );
+    });
+
+  program
+    .command('env')
+    .description('Show runtime environment capabilities')
+    .option('--json', 'Print machine-readable JSON')
+    .action(async (options: { json?: boolean }) => {
+      const gitAvailable = await isGitAvailable();
+
+      if (options.json) {
+        printJson(context, { gitAvailable });
+        return;
+      }
+
+      context.stdout(`git: ${gitAvailable ? 'available' : 'unavailable'}`);
     });
 
   const locale = program
@@ -307,11 +393,18 @@ export async function runCli(
       options: { use?: boolean; force?: boolean; json?: boolean },
     ) => {
       const paths = getSkillinkPaths(context.home);
-      const report = await installLanguagePack(paths, {
-        sourcePath: file,
-        use: options.use,
-        force: options.force,
-      });
+      const report = await mutate(
+        paths,
+        'locale install',
+        'install',
+        (result) => `${result.pack.locale} ${result.pack.version}`,
+        () =>
+          installLanguagePack(paths, {
+            sourcePath: file,
+            use: options.use,
+            force: options.force,
+          }),
+      );
 
       if (options.json) {
         printJson(context, report);
@@ -333,7 +426,14 @@ export async function runCli(
       .argument('<locale>', 'Locale tag, for example zh-CN'),
   ).action(async (localeName: string, options: { json?: boolean }) => {
     const paths = getSkillinkPaths(context.home);
-    await setActiveLocale(paths, localeName);
+    await mutate(
+      paths,
+      'locale use',
+      'use',
+      localeName,
+      () => setActiveLocale(paths, localeName),
+      { commit: false },
+    );
     const state = await getLanguageState(paths, { env: {} });
 
     if (options.json) {
@@ -351,7 +451,13 @@ export async function runCli(
       .argument('<locale>', 'Locale tag, for example zh-CN'),
   ).action(async (localeName: string, options: { json?: boolean }) => {
     const paths = getSkillinkPaths(context.home);
-    const result = await removeLanguagePack(paths, localeName);
+    const result = await mutate(
+      paths,
+      'locale remove',
+      'remove',
+      (removed: { removed: string }) => removed.removed,
+      () => removeLanguagePack(paths, localeName),
+    );
 
     if (options.json) {
       printJson(context, { ok: true, ...result });
@@ -369,8 +475,22 @@ export async function runCli(
     .option('--json', 'Print machine-readable JSON')
     .action(async (options: { json?: boolean }) => {
       const paths = getSkillinkPaths(context.home);
-      await ensureDirectories(paths);
-      const result = await migrateV1ToV2(paths);
+      const result = await mutate(
+        paths,
+        'migrate',
+        'migrate',
+        (migrated: {
+          skillCount: number;
+          packageCount: number;
+          targetCount: number;
+        }) =>
+          `${migrated.skillCount} skills, ${migrated.packageCount} packages, ` +
+          `${migrated.targetCount} targets`,
+        async () => {
+          await ensureDirectories(paths);
+          return migrateV1ToV2(paths);
+        },
+      );
 
       if (options.json) {
         printJson(context, { ok: true, home: paths.home, ...result });
@@ -391,7 +511,7 @@ export async function runCli(
   program
     .command('snapshot')
     .description(
-      'Print one read-only snapshot of config, health, target skills, and history',
+      'Print one read-only snapshot of config, health, and target skills',
     )
     .option('--json', 'Print machine-readable JSON')
     .action(async (options: { json?: boolean }) => {
@@ -403,7 +523,6 @@ export async function runCli(
         statusReport,
         doctorReport,
         targetSkills,
-        history,
       ] = await Promise.all([
         readSkillFile(paths),
         readPackageFile(paths),
@@ -411,7 +530,6 @@ export async function runCli(
         status({ paths }),
         doctor({ paths }),
         summarizeTargetSkills({ paths }),
-        listHistory(paths),
       ]);
 
       const snapshot = {
@@ -422,7 +540,6 @@ export async function runCli(
         status: statusReport,
         doctor: doctorReport,
         targetSkills,
-        history,
       };
 
       if (options.json) {
@@ -516,8 +633,19 @@ export async function runCli(
       folder: string,
       options: { name?: string; version?: string; json?: boolean },
     ) => {
-      await ensureHome(context.home);
-      await runSkillAdd(folder, options, context);
+      const paths = getSkillinkPaths(context.home);
+      const result = await mutate(
+        paths,
+        'skill add',
+        'add',
+        (added) => `${added.name}@${added.version}`,
+        async () => {
+          await ensureHome(context.home);
+          return runSkillAdd(folder, options, context);
+        },
+        { skills: true },
+      );
+      printSkillAddResult(result, options, context);
     },
   );
 
@@ -536,8 +664,19 @@ export async function runCli(
       folder: string,
       options: { name?: string; version?: string; json?: boolean },
     ) => {
-      await ensureHome(context.home);
-      await runSkillAdd(folder, options, context);
+      const paths = getSkillinkPaths(context.home);
+      const result = await mutate(
+        paths,
+        'skill add',
+        'add',
+        (added) => `${added.name}@${added.version}`,
+        async () => {
+          await ensureHome(context.home);
+          return runSkillAdd(folder, options, context);
+        },
+        { skills: true },
+      );
+      printSkillAddResult(result, options, context);
     },
   );
 
@@ -548,9 +687,18 @@ export async function runCli(
       .argument('<skill@version>', 'Skill name and exact version')
       .argument('<tag>', 'Tag name'),
   ).action(async (spec: string, tag: string, options: { json?: boolean }) => {
-    const paths = await ensureHome(context.home);
+    const paths = getSkillinkPaths(context.home);
     const parsed = parseSpec(spec);
-    await setSkillTag(paths, parsed.name, parsed.version, tag);
+    await mutate(
+      paths,
+      'skill tag',
+      'tag',
+      `${spec} as ${tag}`,
+      async () => {
+        await ensureHome(context.home);
+        return setSkillTag(paths, parsed.name, parsed.version, tag);
+      },
+    );
     if (options.json) {
       printJson(context, { ok: true });
       return;
@@ -561,12 +709,22 @@ export async function runCli(
   addCommonOptions(
     skill
       .command('remove')
-      .description('Move an unreferenced skill version to trash')
+      .description('Delete an unreferenced skill version')
       .argument('<skill@version>', 'Skill name and exact version'),
   ).action(async (spec: string, options: { json?: boolean }) => {
-    const paths = await ensureHome(context.home);
+    const paths = getSkillinkPaths(context.home);
     const parsed = parseSpec(spec);
-    await removeSkillVersion(paths, parsed.name, parsed.version);
+    await mutate(
+      paths,
+      'skill remove',
+      'remove',
+      spec,
+      async () => {
+        await ensureHome(context.home);
+        return removeSkillVersion(paths, parsed.name, parsed.version);
+      },
+      { skills: true },
+    );
     if (options.json) {
       printJson(context, { ok: true });
       return;
@@ -645,16 +803,25 @@ export async function runCli(
           json?: boolean;
         },
       ) => {
-        const paths = await ensureHome(context.home);
+        const paths = getSkillinkPaths(context.home);
         const parsed = parseSpec(spec);
-        const created = await createPackageVersion({
+        const created = await mutate(
           paths,
-          name: parsed.name,
-          version: parsed.version,
-          description: options.description,
-          skills: collectSpecs(options.skill),
-          packages: collectSpecs(options.package),
-        });
+          'package create',
+          'create',
+          spec,
+          async () => {
+            await ensureHome(context.home);
+            return createPackageVersion({
+              paths,
+              name: parsed.name,
+              version: parsed.version,
+              description: options.description,
+              skills: collectSpecs(options.skill),
+              packages: collectSpecs(options.package),
+            });
+          },
+        );
         if (options.json) {
           printJson(context, created);
           return;
@@ -687,21 +854,30 @@ export async function runCli(
           json?: boolean;
         },
       ) => {
-        const paths = await ensureHome(context.home);
+        const paths = getSkillinkPaths(context.home);
         const source = parseSpec(sourceSpec);
         const target = parseSpec(targetSpec);
-        const created = await copyPackageVersion({
+        const created = await mutate(
           paths,
-          sourceName: source.name,
-          sourceVersion: source.version,
-          targetName: target.name,
-          targetVersion: target.version,
-          description: options.description,
-          skillOverrides: collectSpecs(options.skill),
-          packageOverrides: collectSpecs(options.package),
-          dropSkills: asArray(options.dropSkill),
-          dropPackages: asArray(options.dropPackage),
-        });
+          'package copy',
+          'copy',
+          `${sourceSpec} -> ${targetSpec}`,
+          async () => {
+            await ensureHome(context.home);
+            return copyPackageVersion({
+              paths,
+              sourceName: source.name,
+              sourceVersion: source.version,
+              targetName: target.name,
+              targetVersion: target.version,
+              description: options.description,
+              skillOverrides: collectSpecs(options.skill),
+              packageOverrides: collectSpecs(options.package),
+              dropSkills: asArray(options.dropSkill),
+              dropPackages: asArray(options.dropPackage),
+            });
+          },
+        );
         if (options.json) {
           printJson(context, created);
           return;
@@ -717,9 +893,18 @@ export async function runCli(
     .argument('<tag>', 'Tag name')
     .option('--json', 'Print machine-readable JSON')
     .action(async (spec: string, tag: string, options: { json?: boolean }) => {
-      const paths = await ensureHome(context.home);
+      const paths = getSkillinkPaths(context.home);
       const parsed = parseSpec(spec);
-      await setPackageTag(paths, parsed.name, parsed.version, tag);
+      await mutate(
+        paths,
+        'package tag',
+        'tag',
+        `${spec} as ${tag}`,
+        async () => {
+          await ensureHome(context.home);
+          return setPackageTag(paths, parsed.name, parsed.version, tag);
+        },
+      );
       if (options.json) {
         printJson(context, { ok: true });
         return;
@@ -733,15 +918,70 @@ export async function runCli(
     .argument('<package@version>', 'Package name and exact version')
     .option('--json', 'Print machine-readable JSON')
     .action(async (spec: string, options: { json?: boolean }) => {
-      const paths = await ensureHome(context.home);
+      const paths = getSkillinkPaths(context.home);
       const parsed = parseSpec(spec);
-      await removePackageVersion(paths, parsed.name, parsed.version);
+      await mutate(
+        paths,
+        'package remove',
+        'remove',
+        spec,
+        async () => {
+          await ensureHome(context.home);
+          return removePackageVersion(paths, parsed.name, parsed.version);
+        },
+      );
       if (options.json) {
         printJson(context, { ok: true });
         return;
       }
       context.stdout(`Removed ${parsed.name}@${parsed.version}`);
     });
+
+  addCommonOptions(
+    packageCommand
+      .command('check')
+      .description(
+        'Find packages that reference missing skills and clean affected target skills',
+      ),
+  ).action(async (options: { json?: boolean }) => {
+    const paths = getSkillinkPaths(context.home);
+    const report = await mutate(
+      paths,
+      'package check',
+      'check',
+      '',
+      async () => {
+        await ensureHome(context.home);
+        return checkPackageSkillReferences(paths);
+      },
+      { commit: false },
+    );
+
+    if (options.json) {
+      printJson(context, report);
+    } else if (report.brokenReferences.length === 0) {
+      context.stdout('No broken skill references.');
+    } else {
+      for (const reference of report.brokenReferences) {
+        context.stdout(
+          `broken  ${reference.packageName}@${reference.packageVersion} -> ` +
+            `${reference.skillName}@${reference.skillVersion}`,
+        );
+      }
+      for (const target of report.targets) {
+        context.stdout(
+          `cleaned  ${target.targetId}  ${target.removed.join(', ')}`,
+        );
+      }
+      for (const failure of report.failures) {
+        context.stderr(`error  ${failure.targetId}  ${failure.message}`);
+      }
+    }
+
+    if (report.failures.length > 0) {
+      exitCode = 1;
+    }
+  });
 
   const target = program
     .command('target')
@@ -765,14 +1005,23 @@ export async function runCli(
           json?: boolean;
         },
       ) => {
-        const paths = await ensureHome(context.home);
-        const created = await addTarget({
+        const paths = getSkillinkPaths(context.home);
+        const created = await mutate(
           paths,
-          id: options.id,
-          label: options.label,
-          path: targetPath,
-          mode: options.mode ?? 'link',
-        });
+          'target add',
+          'add',
+          (result) => result.id,
+          async () => {
+            await ensureHome(context.home);
+            return addTarget({
+              paths,
+              id: options.id,
+              label: options.label,
+              path: targetPath,
+              mode: options.mode ?? 'link',
+            });
+          },
+        );
         if (options.json) {
           printJson(context, created);
           return;
@@ -814,8 +1063,17 @@ export async function runCli(
     .argument('<id>', 'Target id')
     .option('--json', 'Print machine-readable JSON')
     .action(async (id: string, options: { json?: boolean }) => {
-      const paths = await ensureHome(context.home);
-      const removed = await removeTarget({ paths, id });
+      const paths = getSkillinkPaths(context.home);
+      const removed = await mutate(
+        paths,
+        'target remove',
+        'remove',
+        id,
+        async () => {
+          await ensureHome(context.home);
+          return removeTarget({ paths, id });
+        },
+      );
       if (options.json) {
         printJson(context, removed);
         return;
@@ -829,8 +1087,17 @@ export async function runCli(
     .argument('<id>', 'Target id')
     .option('--json', 'Print machine-readable JSON')
     .action(async (id: string, options: { json?: boolean }) => {
-      const paths = await ensureHome(context.home);
-      const updated = await setTargetEnabled(paths, id, true);
+      const paths = getSkillinkPaths(context.home);
+      const updated = await mutate(
+        paths,
+        'target enable',
+        'enable',
+        id,
+        async () => {
+          await ensureHome(context.home);
+          return setTargetEnabled(paths, id, true);
+        },
+      );
       if (options.json) {
         printJson(context, updated);
         return;
@@ -844,8 +1111,17 @@ export async function runCli(
     .argument('<id>', 'Target id')
     .option('--json', 'Print machine-readable JSON')
     .action(async (id: string, options: { json?: boolean }) => {
-      const paths = await ensureHome(context.home);
-      const updated = await setTargetEnabled(paths, id, false);
+      const paths = getSkillinkPaths(context.home);
+      const updated = await mutate(
+        paths,
+        'target disable',
+        'disable',
+        id,
+        async () => {
+          await ensureHome(context.home);
+          return setTargetEnabled(paths, id, false);
+        },
+      );
       if (options.json) {
         printJson(context, updated);
         return;
@@ -863,14 +1139,23 @@ export async function runCli(
     .option('--json', 'Print machine-readable JSON')
     .action(
       async (targetId: string, spec: string, options: { json?: boolean }) => {
-        const paths = await ensureHome(context.home);
+        const paths = getSkillinkPaths(context.home);
         const parsed = parseSpec(spec);
-        const lock = await addRouteEntry({
+        const lock = await mutate(
           paths,
-          targetId,
-          name: parsed.name,
-          requested: parsed.version,
-        });
+          'route add',
+          'add',
+          `${targetId} ${spec}`,
+          async () => {
+            await ensureHome(context.home);
+            return addRouteEntry({
+              paths,
+              targetId,
+              name: parsed.name,
+              requested: parsed.version,
+            });
+          },
+        );
         if (options.json) {
           printJson(context, lock);
           return;
@@ -921,8 +1206,17 @@ export async function runCli(
     .option('--json', 'Print machine-readable JSON')
     .action(
       async (targetId: string, name: string, options: { json?: boolean }) => {
-        const paths = await ensureHome(context.home);
-        const updated = await setPackageEnabled(paths, targetId, name, true);
+        const paths = getSkillinkPaths(context.home);
+        const updated = await mutate(
+          paths,
+          'route enable',
+          'enable',
+          `${targetId}/${name}`,
+          async () => {
+            await ensureHome(context.home);
+            return setPackageEnabled(paths, targetId, name, true);
+          },
+        );
         if (options.json) {
           printJson(context, updated);
           return;
@@ -939,8 +1233,17 @@ export async function runCli(
     .option('--json', 'Print machine-readable JSON')
     .action(
       async (targetId: string, name: string, options: { json?: boolean }) => {
-        const paths = await ensureHome(context.home);
-        const updated = await setPackageEnabled(paths, targetId, name, false);
+        const paths = getSkillinkPaths(context.home);
+        const updated = await mutate(
+          paths,
+          'route disable',
+          'disable',
+          `${targetId}/${name}`,
+          async () => {
+            await ensureHome(context.home);
+            return setPackageEnabled(paths, targetId, name, false);
+          },
+        );
         if (options.json) {
           printJson(context, updated);
           return;
@@ -962,13 +1265,22 @@ export async function runCli(
         name: string,
         options: { force?: boolean; json?: boolean },
       ) => {
-        const paths = await ensureHome(context.home);
-        const removed = await removeRouteEntry({
+        const paths = getSkillinkPaths(context.home);
+        const removed = await mutate(
           paths,
-          targetId,
-          name,
-          force: options.force,
-        });
+          'route remove',
+          'remove',
+          `${targetId}/${name}`,
+          async () => {
+            await ensureHome(context.home);
+            return removeRouteEntry({
+              paths,
+              targetId,
+              name,
+              force: options.force,
+            });
+          },
+        );
         if (options.json) {
           printJson(context, removed);
           return;
@@ -982,7 +1294,7 @@ export async function runCli(
   program
     .command('gc')
     .description('Remove unreferenced skill versions (dry-run by default)')
-    .option('--apply', 'Move candidates to trash')
+    .option('--apply', 'Delete candidate versions')
     .option('--max-age-days <days>', 'Only collect versions older than this')
     .option('--no-keep-tagged', 'Allow tagged versions to be collected')
     .option('--json', 'Print machine-readable JSON')
@@ -993,28 +1305,41 @@ export async function runCli(
         keepTagged?: boolean;
         json?: boolean;
       }) => {
-        const paths = await ensureHome(context.home);
-        const maxAgeDays =
-          options.maxAgeDays === undefined
-            ? undefined
-            : Number(options.maxAgeDays);
+        const paths = getSkillinkPaths(context.home);
+        const report = await mutate(
+          paths,
+          'gc',
+          'remove',
+          (result) =>
+            `${result.removed.length} unreferenced skill version${
+              result.removed.length === 1 ? '' : 's'
+            }`,
+          async () => {
+            await ensureHome(context.home);
+            const maxAgeDays =
+              options.maxAgeDays === undefined
+                ? undefined
+                : Number(options.maxAgeDays);
 
-        if (
-          maxAgeDays !== undefined &&
-          (!Number.isFinite(maxAgeDays) || maxAgeDays < 0)
-        ) {
-          throw new SkillinkError(
-            'ROUTE_INVALID',
-            'max-age-days must be a non-negative number.',
-            { maxAgeDays: options.maxAgeDays },
-          );
-        }
+            if (
+              maxAgeDays !== undefined &&
+              (!Number.isFinite(maxAgeDays) || maxAgeDays < 0)
+            ) {
+              throw new SkillinkError(
+                'ROUTE_INVALID',
+                'max-age-days must be a non-negative number.',
+                { maxAgeDays: options.maxAgeDays },
+              );
+            }
 
-        const report = await gc(paths, {
-          dryRun: !options.apply,
-          maxAgeDays,
-          keepTagged: options.keepTagged,
-        });
+            return gc(paths, {
+              dryRun: !options.apply,
+              maxAgeDays,
+              keepTagged: options.keepTagged,
+            });
+          },
+          { skills: true, commit: options.apply === true },
+        );
 
         if (options.json) {
           printJson(context, report);
@@ -1039,64 +1364,6 @@ export async function runCli(
       },
     );
 
-  addCommonOptions(
-    program
-      .command('history')
-      .description('List route/package/skill history snapshots'),
-  ).action(async (options: { json?: boolean }) => {
-    const paths = await ensureHome(context.home);
-    const entries = await listHistory(paths);
-
-    if (options.json) {
-      printJson(context, entries);
-      return;
-    }
-
-    if (entries.length === 0) {
-      context.stdout('No history.');
-      return;
-    }
-
-    for (const entry of entries) {
-      context.stdout(`${entry.id}  ${entry.createdAt}  ${entry.reason}`);
-    }
-  });
-
-  program
-    .command('rollback')
-    .description('Restore route.json, package.json, and skill.json from history')
-    .argument('<snapshot-id>', 'History snapshot id')
-    .option('--apply', 'Apply routes after restoring the snapshot')
-    .option('--json', 'Print machine-readable JSON')
-    .action(
-      async (
-        snapshotId: string,
-        options: { apply?: boolean; json?: boolean },
-      ) => {
-        const paths = await ensureHome(context.home);
-        await restoreHistorySnapshot(paths, snapshotId);
-        const report = options.apply ? await apply({ paths }) : undefined;
-
-        if (options.json) {
-          printJson(context, { snapshotId, report });
-        } else {
-          context.stdout(`Restored history snapshot ${snapshotId}`);
-          for (const operation of report?.operations ?? []) {
-            context.stdout(
-              `${operation.kind}  ${operation.name ?? operation.targetId}  ${operation.path}`,
-            );
-          }
-          for (const conflict of report?.conflicts ?? []) {
-            context.stderr(`conflict  ${conflict.name}  ${conflict.reason}`);
-          }
-        }
-
-        if (report && report.conflicts.length > 0) {
-          exitCode = 3;
-        }
-      },
-    );
-
   program
     .command('apply')
     .description('Reconcile route.json into target directories')
@@ -1109,12 +1376,22 @@ export async function runCli(
         dryRun?: boolean;
         json?: boolean;
       }) => {
-        const paths = await ensureHome(context.home);
-        const report = await apply({
+        const paths = getSkillinkPaths(context.home);
+        const report = await mutate(
           paths,
-          targetId: options.target,
-          dryRun: options.dryRun,
-        });
+          'apply',
+          'apply',
+          '',
+          async () => {
+            await ensureHome(context.home);
+            return apply({
+              paths,
+              targetId: options.target,
+              dryRun: options.dryRun,
+            });
+          },
+          { commit: false },
+        );
 
         if (options.json) {
           printJson(context, report);
@@ -1136,6 +1413,91 @@ export async function runCli(
 
         if (report.conflicts.length > 0) {
           exitCode = 3;
+        }
+      },
+    );
+
+  addCommonOptions(
+    program
+      .command('history')
+      .description('List control plane git commits'),
+  ).action(async (options: { json?: boolean }) => {
+    const paths = getSkillinkPaths(context.home);
+    const entries = await gitLog(paths, 'control');
+
+    if (options.json) {
+      printJson(context, entries);
+      return;
+    }
+
+    if (entries.length === 0) {
+      context.stdout('No history.');
+      return;
+    }
+
+    for (const entry of entries) {
+      context.stdout(
+        `${entry.id.slice(0, 7)}  ${entry.createdAt}  ${entry.reason}`,
+      );
+    }
+  });
+
+  program
+    .command('rollback')
+    .description(
+      'Restore the control plane to a commit and re-apply target projections',
+    )
+    .argument('<revision>', 'Commit hash or revision')
+    .option('--no-apply', 'Restore configuration without re-applying targets')
+    .option('--json', 'Print machine-readable JSON')
+    .action(
+      async (
+        revision: string,
+        options: { apply?: boolean; json?: boolean },
+      ) => {
+        const paths = getSkillinkPaths(context.home);
+
+        if (!(await isGitAvailable())) {
+          throw new SkillinkError(
+            'GIT_UNAVAILABLE',
+            'Rolling back requires git on PATH.',
+            { home: paths.home },
+          );
+        }
+
+        const result = await rollbackTo({
+          paths,
+          revision,
+          apply: options.apply !== false,
+          argv,
+        });
+
+        if (options.json) {
+          printJson(context, { ok: true, ...result });
+          return;
+        }
+
+        context.stdout(
+          `Restored ${result.revision.slice(0, 7)} ` +
+            `(${result.removedTargets.length} target${
+              result.removedTargets.length === 1 ? '' : 's'
+            } cleaned)`,
+        );
+        if (result.restoredSkills.length > 0) {
+          context.stdout(
+            `Restored skill content: ${result.restoredSkills
+              .map((skill) => `${skill.name}@${skill.version}`)
+              .join(', ')}`,
+          );
+        }
+        if (options.apply === false) {
+          context.stdout('Configuration restored; targets were not re-applied.');
+        } else if (result.apply) {
+          context.stdout(
+            `${result.apply.operations.length} apply operation${
+              result.apply.operations.length === 1 ? '' : 's'
+            }`,
+          );
         }
       },
     );

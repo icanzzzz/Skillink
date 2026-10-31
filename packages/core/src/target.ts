@@ -20,7 +20,6 @@ import {
   validateTargetRoute,
   writeRouteFile,
 } from './route.js';
-import { withHistory } from './history.js';
 import { gcTargetEntries, resolveTargetSkillNames } from './target-gc.js';
 
 function slugify(value: string): string {
@@ -95,10 +94,8 @@ export async function addTarget(input: AddTargetInput): Promise<TargetRoute> {
     packages: {},
   };
 
-  await withHistory(input.paths, 'add-target', async () => {
-    route.targets.push(target);
-    await writeRouteFile(input.paths, route);
-  });
+  route.targets.push(target);
+  await writeRouteFile(input.paths, route);
 
   return target;
 }
@@ -129,12 +126,10 @@ export async function setTargetEnabled(
   if (enabled) {
     await validateTargetRoute(paths, target);
   }
-  await withHistory(paths, enabled ? 'enable-target' : 'disable-target', async () => {
-    if (skillNames.length > 0) {
-      await gcTargetEntries({ paths, target, skillNames });
-    }
-    await writeRouteFile(paths, route);
-  });
+  if (skillNames.length > 0) {
+    await gcTargetEntries({ paths, target, skillNames });
+  }
+  await writeRouteFile(paths, route);
 
   return target;
 }
@@ -163,14 +158,12 @@ export async function removeTarget(input: RemoveTargetInput): Promise<TargetRout
   });
 
   route.targets.splice(index, 1);
-  await withHistory(input.paths, 'remove-target', async () => {
-    await gcTargetEntries({
-      paths: input.paths,
-      target: removed,
-      skillNames,
-    });
-    await writeRouteFile(input.paths, route);
+  await gcTargetEntries({
+    paths: input.paths,
+    target: removed,
+    skillNames,
   });
+  await writeRouteFile(input.paths, route);
 
   return removed;
 }

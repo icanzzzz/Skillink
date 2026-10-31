@@ -132,12 +132,6 @@ export const GcRequestSchema = z
   })
   .strict();
 
-export const RollbackRequestSchema = z
-  .object({
-    id: NonEmptyString,
-  })
-  .strict();
-
 export const ApplyRequestSchema = z
   .object({
     dryRun: z.boolean().optional(),
@@ -180,7 +174,6 @@ export type PackageRemoveRequest = z.infer<typeof PackageRemoveRequestSchema>;
 export type CreatePackageRequest = z.infer<typeof CreatePackageRequestSchema>;
 export type CopyPackageRequest = z.infer<typeof CopyPackageRequestSchema>;
 export type GcRequest = z.infer<typeof GcRequestSchema>;
-export type RollbackRequest = z.infer<typeof RollbackRequestSchema>;
 export type ApplyRequest = z.infer<typeof ApplyRequestSchema>;
 export type LanguageInstallRequest = z.infer<
   typeof LanguageInstallRequestSchema

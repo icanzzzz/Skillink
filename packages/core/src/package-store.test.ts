@@ -18,7 +18,6 @@ import {
   setPackageTag,
   writePackageFile,
 } from './package-store.js';
-import { listHistory } from './history.js';
 import { writeSkillFile } from './skill-store.js';
 
 const tempDirs: string[] = [];
@@ -394,20 +393,6 @@ describe('createPackageVersion', () => {
     });
   });
 
-  it('creates a history snapshot before writing', async () => {
-    const paths = await setup();
-    await seedSkills(paths, { pdf: ['1.0.0'] });
-
-    await createPackageVersion({
-      paths,
-      name: 'frontend',
-      version: '1.0.0',
-      skills: { pdf: '1.0.0' },
-    });
-
-    const history = await listHistory(paths);
-    expect(history.length).toBeGreaterThan(0);
-  });
 });
 
 describe('copyPackageVersion', () => {

@@ -16,11 +16,11 @@ export interface SkillinkPaths {
   packageFile: string;
   /** v1 catalog; used only by migration */
   skillsFile: string;
+  /** home-level cross-process write lock */
+  lockFile: string;
   libraryDir: string;
-  historyDir: string;
   cacheDir: string;
   logsDir: string;
-  trashDir: string;
   tmpDir: string;
 }
 
@@ -46,11 +46,10 @@ export function getSkillinkPaths(home = getDefaultSkillinkHome()): SkillinkPaths
     skillFile: path.join(resolvedHome, 'skill.json'),
     packageFile: path.join(resolvedHome, 'package.json'),
     skillsFile: path.join(resolvedHome, 'skills.json'),
+    lockFile: path.join(resolvedHome, '.skillink.lock'),
     libraryDir: path.join(resolvedHome, 'skills'),
-    historyDir: path.join(resolvedHome, 'history'),
     cacheDir: path.join(resolvedHome, 'cache'),
     logsDir: path.join(resolvedHome, 'logs'),
-    trashDir: path.join(resolvedHome, 'trash'),
     tmpDir: path.join(resolvedHome, 'tmp'),
   };
 }

@@ -226,7 +226,7 @@ describe('targets', () => {
     ).rejects.toThrow(/control plane/i);
   });
 
-  it('enables and disables a target with history', async () => {
+  it('enables and disables a target', async () => {
     const { paths, targetPath } = await setup();
     await addTarget({ paths, id: 'project-a', path: targetPath });
 

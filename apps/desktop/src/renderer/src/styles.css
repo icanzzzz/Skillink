@@ -1414,66 +1414,6 @@ button {
   font-size: 10.5px;
 }
 
-.history-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.history-row {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 4px;
-  border-top: 1px solid var(--line-soft);
-}
-
-.history-row:first-child {
-  border-top: 0;
-}
-
-.history-row > div:first-child {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.history-row code {
-  color: var(--accent-strong);
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  word-break: break-all;
-}
-
-.history-row span {
-  color: var(--ink-muted);
-  font-size: 11px;
-}
-
-.history-meta {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  white-space: nowrap;
-}
-
-.checkbox {
-  display: flex;
-  gap: 7px;
-  align-items: center;
-  color: var(--ink-muted);
-  font-size: 11px;
-}
-
-.checkbox input {
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-
 .gc-report {
   display: flex;
   flex-direction: column;
@@ -1495,6 +1435,17 @@ button {
 
 .sidebar-bottom .sidebar-foot {
   margin-top: 0;
+}
+
+.sidebar-warning {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--warn-line);
+  border-radius: 10px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 10.5px;
+  line-height: 1.45;
 }
 
 .language-trigger {

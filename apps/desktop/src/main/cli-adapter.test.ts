@@ -9,11 +9,14 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import type { ApplyReport } from '@skillink/shared';
+import { isGitAvailable } from '@skillink/core';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createCliAdapter,
   type CliRunner,
 } from './cli-adapter.js';
+
+const gitReady = await isGitAvailable();
 
 function runnerReturning(output: {
   code: number;
@@ -96,6 +99,22 @@ describe('CLI adapter', () => {
     });
   });
 
+  it('prefers a structured stderr error over stale success JSON', async () => {
+    const { runner } = runnerReturning({
+      code: 1,
+      stdout: '{"ok":true,"name":"pdf","version":"1.0.0"}',
+      stderr:
+        '{"ok":false,"error":{"code":"GIT_COMMIT_FAILED","message":"commit failed"}}',
+    });
+    const adapter = createCliAdapter(runner);
+
+    await expect(adapter.invoke(['skill', 'add', 'pdf'])).rejects.toMatchObject({
+      code: 'GIT_COMMIT_FAILED',
+      message: 'commit failed',
+      exitCode: 1,
+    });
+  });
+
   it('serializes concurrent invocations', async () => {
     let releaseFirst: (() => void) | undefined;
     const started: string[] = [];
@@ -145,8 +164,20 @@ describe('CLI adapter', () => {
     expect(calls).toEqual(['first', 'second']);
   });
 
-  it('snapshots through the snapshot command', async () => {
+  it('reads runtime status through the env command', async () => {
     const { runner, seen } = runnerReturning({
+      code: 0,
+      stdout: '{"gitAvailable":false}',
+    });
+    const adapter = createCliAdapter(runner);
+
+    await expect(adapter.runtimeStatus()).resolves.toEqual({
+      gitAvailable: false,
+    });
+    expect(seen).toEqual([['env', '--json']]);
+  });
+
+  it('snapshots through the snapshot command', async () => {    const { runner, seen } = runnerReturning({
       code: 0,
       stdout: JSON.stringify({
         home: 'C:/home',
@@ -156,7 +187,6 @@ describe('CLI adapter', () => {
         status: { healthy: true, entries: [] },
         doctor: { ok: true, issues: [] },
         targetSkills: [],
-        history: [],
       }),
     });
     const adapter = createCliAdapter(runner);
@@ -167,7 +197,7 @@ describe('CLI adapter', () => {
     expect(seen).toEqual([['snapshot', '--json']]);
   });
 
-  it('runs end-to-end against the real CLI', async () => {
+  it.skipIf(!gitReady)('runs end-to-end against the real CLI', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'skillink-adapter-'));
     const home = path.join(root, 'home');
     const source = path.join(root, 'source');
@@ -231,7 +261,7 @@ describe('CLI adapter', () => {
     }
   });
 
-  it('replaces a same-name real directory through the real CLI', async () => {
+  it.skipIf(!gitReady)('replaces a same-name real directory through the real CLI', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'skillink-adapter-'));
     const home = path.join(root, 'home');
     const source = path.join(root, 'source');

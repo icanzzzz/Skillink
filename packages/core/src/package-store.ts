@@ -11,7 +11,6 @@ import {
   type SkillinkPaths,
 } from '@skillink/shared';
 import { readJsonFile, writeJsonAtomic } from './json-store.js';
-import { withHistory } from './history.js';
 import { assertSkillContent, readSkillFile } from './skill-store.js';
 import {
   resolvePackageGraph,
@@ -186,9 +185,7 @@ export async function createPackageVersion(
     await assertSkillContent(input.paths, skill.name, skill.version);
   }
 
-  await withHistory(input.paths, 'create-package-version', async () => {
-    await writePackageFile(input.paths, candidate);
-  });
+  await writePackageFile(input.paths, candidate);
 
   return nextPackageEntry.versions[version]!;
 }
@@ -301,9 +298,7 @@ export async function copyPackageVersion(
     await assertSkillContent(input.paths, skill.name, skill.version);
   }
 
-  await withHistory(input.paths, 'copy-package-version', async () => {
-    await writePackageFile(input.paths, candidate);
-  });
+  await writePackageFile(input.paths, candidate);
 
   return nextPackageEntry.versions[targetVersion]!;
 }
@@ -355,9 +350,7 @@ export async function setPackageTag(
     },
   };
 
-  await withHistory(paths, 'set-package-tag', async () => {
-    await writePackageFile(paths, file);
-  });
+  await writePackageFile(paths, file);
 }
 
 export function listPackageReverseReferences(
@@ -468,7 +461,5 @@ export async function removePackageVersion(
   const candidate: PackageFile = { ...file, packages };
   validateAllPackages(candidate, skillFile);
 
-  await withHistory(paths, 'remove-package-version', async () => {
-    await writePackageFile(paths, candidate);
-  });
+  await writePackageFile(paths, candidate);
 }

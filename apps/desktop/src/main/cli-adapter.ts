@@ -1,5 +1,6 @@
 import { runCli, type CliContext } from '@skillink/cli/run';
 import type { CliErrorEnvelope, SnapshotReport } from '@skillink/shared';
+import type { RuntimeStatus } from '../shared.js';
 
 export type CliRunner = (
   argv: string[],
@@ -28,6 +29,7 @@ export class CliCommandError extends Error {
 export interface CliAdapter {
   invoke<T>(argv: string[]): Promise<T>;
   snapshot(): Promise<SnapshotReport>;
+  runtimeStatus(): Promise<RuntimeStatus>;
 }
 
 export function createCliAdapter(runner: CliRunner = runCli): CliAdapter {
@@ -53,6 +55,14 @@ export function createCliAdapter(runner: CliRunner = runCli): CliAdapter {
     };
     const exitCode = await runner(args, context);
     const text = stdout.join('\n').trim();
+    const errorText = stderr.join('\n').trim();
+
+    // A structured error on stderr wins over any stdout payload: commands such
+    // as `skill add` may have written their success object before a later
+    // auto-commit failed.
+    if (exitCode !== 0 && errorText) {
+      throw errorFromStderr(errorText, exitCode);
+    }
 
     if (text) {
       try {
@@ -68,7 +78,7 @@ export function createCliAdapter(runner: CliRunner = runCli): CliAdapter {
     }
 
     if (exitCode !== 0) {
-      throw errorFromStderr(stderr.join('\n').trim(), exitCode);
+      throw errorFromStderr(errorText, exitCode);
     }
 
     return undefined as T;
@@ -77,6 +87,7 @@ export function createCliAdapter(runner: CliRunner = runCli): CliAdapter {
   return {
     invoke: (argv) => enqueue(() => invoke(argv)),
     snapshot: () => enqueue(() => invoke<SnapshotReport>(['snapshot'])),
+    runtimeStatus: () => enqueue(() => invoke<RuntimeStatus>(['env'])),
   };
 }
 
