@@ -867,4 +867,117 @@ describe('CLI', () => {
       await readFile(path.join(targetPath, 'pdf', 'unmanaged.txt'), 'utf8'),
     ).toBe('keep');
   });
+
+  it('initializes settings.json without overwriting existing settings', async () => {
+    const home = await tempDir('skillink-cli-');
+    const ctx = context(home);
+
+    expect(await runCli(['init'], ctx)).toBe(0);
+    expect(await readJson(path.join(home, 'settings.json'))).toEqual({
+      schemaVersion: 1,
+    });
+
+    await writeFile(
+      path.join(home, 'settings.json'),
+      JSON.stringify({ schemaVersion: 1, locale: 'en' }),
+      'utf8',
+    );
+    ctx.out.length = 0;
+    expect(await runCli(['init'], ctx)).toBe(0);
+    expect(await readJson(path.join(home, 'settings.json'))).toEqual({
+      schemaVersion: 1,
+      locale: 'en',
+    });
+  });
+
+  it('installs, selects, lists, and removes a language pack', async () => {
+    const home = await tempDir('skillink-cli-');
+    const ctx = context(home);
+    const packPath = path.join(await tempDir('skillink-lang-'), 'zh-CN.json');
+    await writeFile(
+      packPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        locale: 'zh-CN',
+        name: 'Chinese (Simplified)',
+        nativeName: '简体中文',
+        version: '1.0.0',
+        messages: { 'app.nav.overview': '概览' },
+      }),
+      'utf8',
+    );
+
+    await runCli(['init'], ctx);
+    ctx.out.length = 0;
+    expect(
+      await runCli(['locale', 'install', packPath, '--use', '--json'], ctx),
+    ).toBe(0);
+
+    const installed = JSON.parse(ctx.out.join('\n'));
+    expect(installed.pack).toMatchObject({
+      locale: 'zh-CN',
+      nativeName: '简体中文',
+    });
+    expect(installed.active).toBe(true);
+    expect(await pathExists(path.join(home, 'locales', 'zh-cn.json'))).toBe(
+      true,
+    );
+    expect(await readJson(path.join(home, 'settings.json'))).toEqual({
+      schemaVersion: 1,
+      locale: 'zh-CN',
+    });
+
+    ctx.out.length = 0;
+    expect(await runCli(['locale', 'list', '--json'], ctx)).toBe(0);
+    const state = JSON.parse(ctx.out.join('\n'));
+    expect(state.current).toBe('zh-CN');
+    expect(state.messages['app.nav.overview']).toBe('概览');
+
+    ctx.out.length = 0;
+    expect(await runCli(['locale', 'use', 'en', '--json'], ctx)).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({ current: 'en' });
+
+    ctx.out.length = 0;
+    expect(await runCli(['locale', 'remove', 'zh-CN', '--json'], ctx)).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({
+      removed: 'zh-CN',
+      current: 'en',
+    });
+  });
+
+  it('rejects an invalid language pack', async () => {
+    const home = await tempDir('skillink-cli-');
+    const ctx = context(home);
+    const packPath = path.join(await tempDir('skillink-lang-'), 'invalid.json');
+    await writeFile(packPath, '{not json', 'utf8');
+
+    await runCli(['init'], ctx);
+    ctx.err.length = 0;
+    expect(await runCli(['locale', 'install', packPath], ctx)).toBe(1);
+    expect(ctx.err.join('\n')).toContain('LANGUAGE_PACK_INVALID');
+  });
+
+  it('prints a human-readable language install report', async () => {
+    const home = await tempDir('skillink-cli-');
+    const ctx = context(home);
+    const packPath = path.join(await tempDir('skillink-lang-'), 'zh-CN.json');
+    await writeFile(
+      packPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        locale: 'zh-CN',
+        name: 'Chinese (Simplified)',
+        nativeName: '简体中文',
+        version: '1.0.0',
+        messages: { 'app.nav.overview': '概览' },
+      }),
+      'utf8',
+    );
+
+    await runCli(['init'], ctx);
+    ctx.out.length = 0;
+    expect(await runCli(['locale', 'install', packPath], ctx)).toBe(0);
+    expect(ctx.out.join('\n')).toContain('Installed');
+    expect(ctx.out.join('\n')).toContain('Chinese (Simplified)');
+  });
 });

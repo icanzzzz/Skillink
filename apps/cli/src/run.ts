@@ -14,17 +14,21 @@ import {
   createPackageVersion,
   doctor,
   gc,
+  getLanguageState,
   importSkill,
+  installLanguagePack,
   listHistory,
   migrateV1ToV2,
   readPackageFile,
   readRouteFile,
   readSkillFile,
+  removeLanguagePack,
   removePackageVersion,
   removeRouteEntry,
   removeSkillVersion,
   removeTarget,
   restoreHistorySnapshot,
+  setActiveLocale,
   setPackageEnabled,
   setPackageTag,
   setSkillTag,
@@ -33,6 +37,7 @@ import {
   summarizeTargetSkills,
   writePackageFile,
   writeRouteFile,
+  writeSettingsFile,
   writeSkillFile,
 } from '@skillink/core';
 
@@ -119,6 +124,7 @@ async function pathExists(target: string): Promise<boolean> {
 async function ensureDirectories(paths: ReturnType<typeof getSkillinkPaths>) {
   await Promise.all([
     mkdir(paths.home, { recursive: true }),
+    mkdir(paths.localesDir, { recursive: true }),
     mkdir(paths.libraryDir, { recursive: true }),
     mkdir(paths.historyDir, { recursive: true }),
     mkdir(paths.cacheDir, { recursive: true }),
@@ -134,6 +140,14 @@ async function writeInitialFiles(
   await writeRouteFile(paths, await readRouteFile(paths));
   await writePackageFile(paths, await readPackageFile(paths));
   await writeSkillFile(paths, await readSkillFile(paths));
+}
+
+async function writeInitialSettings(
+  paths: ReturnType<typeof getSkillinkPaths>,
+): Promise<void> {
+  if (!(await pathExists(paths.settingsFile))) {
+    await writeSettingsFile(paths, { schemaVersion: 1 });
+  }
 }
 
 async function ensureHome(home?: string) {
@@ -210,6 +224,7 @@ export async function runCli(
     .action(async (options: { json?: boolean }) => {
       const paths = getSkillinkPaths(context.home);
       await ensureDirectories(paths);
+      await writeInitialSettings(paths);
 
       if (await pathExists(paths.skillsFile)) {
         if (await pathExists(paths.skillFile)) {
@@ -245,6 +260,107 @@ export async function runCli(
       }
       context.stdout(`Initialized ${paths.home}`);
     });
+
+  const locale = program
+    .command('locale')
+    .description('Manage UI language packs');
+
+  addCommonOptions(
+    locale.command('list').description('List installed language packs'),
+  ).action(async (options: { json?: boolean }) => {
+    const paths = getSkillinkPaths(context.home);
+    const state = await getLanguageState(paths);
+
+    if (options.json) {
+      printJson(context, state);
+      return;
+    }
+
+    const current = state.packs.find(
+      (pack) => pack.locale.toLowerCase() === state.current.toLowerCase(),
+    );
+    context.stdout(
+      `Current language: ${state.current}${
+        current ? ` (${current.nativeName})` : ''
+      }`,
+    );
+
+    for (const pack of state.packs) {
+      context.stdout(
+        `${pack.locale}  ${pack.nativeName} (${pack.name})  ${pack.version}  ` +
+          `${Math.round(pack.coverage * 100)}%${pack.builtIn ? '  built-in' : ''}`,
+      );
+    }
+  });
+
+  addCommonOptions(
+    locale
+      .command('install')
+      .description('Install a language pack from a local JSON file')
+      .argument('<file>', 'Language pack JSON file')
+      .option('--use', 'Select the language after installing')
+      .option('--force', 'Replace an already installed language pack'),
+  ).action(
+    async (
+      file: string,
+      options: { use?: boolean; force?: boolean; json?: boolean },
+    ) => {
+      const paths = getSkillinkPaths(context.home);
+      const report = await installLanguagePack(paths, {
+        sourcePath: file,
+        use: options.use,
+        force: options.force,
+      });
+
+      if (options.json) {
+        printJson(context, report);
+        return;
+      }
+
+      context.stdout(
+        `Installed ${report.pack.name} (${report.pack.locale}) ` +
+          `${report.pack.version} - ${Math.round(report.pack.coverage * 100)}% ` +
+          `translated, ${report.missingKeys.length} missing keys`,
+      );
+    },
+  );
+
+  addCommonOptions(
+    locale
+      .command('use')
+      .description('Select an installed language')
+      .argument('<locale>', 'Locale tag, for example zh-CN'),
+  ).action(async (localeName: string, options: { json?: boolean }) => {
+    const paths = getSkillinkPaths(context.home);
+    await setActiveLocale(paths, localeName);
+    const state = await getLanguageState(paths, { env: {} });
+
+    if (options.json) {
+      printJson(context, { ok: true, current: state.current });
+      return;
+    }
+
+    context.stdout(`Current language: ${state.current}`);
+  });
+
+  addCommonOptions(
+    locale
+      .command('remove')
+      .description('Remove an installed language pack')
+      .argument('<locale>', 'Locale tag, for example zh-CN'),
+  ).action(async (localeName: string, options: { json?: boolean }) => {
+    const paths = getSkillinkPaths(context.home);
+    const result = await removeLanguagePack(paths, localeName);
+
+    if (options.json) {
+      printJson(context, { ok: true, ...result });
+      return;
+    }
+
+    context.stdout(
+      `Removed ${result.removed}. Current language: ${result.current}`,
+    );
+  });
 
   program
     .command('migrate')
