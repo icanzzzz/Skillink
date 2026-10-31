@@ -1,10 +1,24 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { getSkillinkPaths } from '@skillink/shared';
+import { getSkillDir, getSkillinkPaths } from '@skillink/shared';
 import { addTarget, removeTarget, setTargetEnabled } from './target.js';
-import { readRouteFile } from './route.js';
+import {
+  addRouteEntry,
+  readRouteFile,
+  setPackageEnabled,
+  writeRouteFile,
+} from './route.js';
+import { importSkill } from './import-skill.js';
+import { createPackageVersion } from './package-store.js';
 
 const tempDirs: string[] = [];
 
@@ -19,6 +33,38 @@ async function setup() {
   const paths = getSkillinkPaths(path.join(root, 'home'));
   const targetPath = path.join(root, 'project', 'skills');
   await mkdir(targetPath, { recursive: true });
+  return { root, paths, targetPath };
+}
+
+async function pathExists(target: string): Promise<boolean> {
+  return stat(target)
+    .then(() => true)
+    .catch(() => false);
+}
+
+async function createTargetWithPackage() {
+  const { root, paths, targetPath } = await setup();
+  const source = await tempDir('skillink-target-source-');
+  await writeFile(path.join(source, 'SKILL.md'), '# pdf', 'utf8');
+  await importSkill({
+    sourceDir: source,
+    name: 'pdf',
+    version: '1.0.0',
+    home: paths.home,
+  });
+  await createPackageVersion({
+    paths,
+    name: 'frontend',
+    version: '1.0.0',
+    skills: { pdf: '1.0.0' },
+  });
+  await addTarget({ paths, id: 'project-a', path: targetPath });
+  await addRouteEntry({
+    paths,
+    targetId: 'project-a',
+    name: 'frontend',
+    requested: '1.0.0',
+  });
   return { root, paths, targetPath };
 }
 
@@ -209,5 +255,71 @@ describe('targets', () => {
     ).resolves.toBe('keep');
     const route = await readRouteFile(paths);
     expect(route.targets).toHaveLength(0);
+  });
+
+  it('removes resolved skill directories even when they are not managed links', async () => {
+    const { paths, targetPath } = await createTargetWithPackage();
+
+    // 故意创建真实目录，证明 route 解析结果比 isManagedLink 优先。
+    await mkdir(path.join(targetPath, 'pdf'), { recursive: true });
+    await writeFile(
+      path.join(targetPath, 'pdf', 'note.txt'),
+      'copy',
+      'utf8',
+    );
+    await mkdir(path.join(targetPath, 'extra'), { recursive: true });
+    await writeFile(
+      path.join(targetPath, 'extra', 'note.txt'),
+      'keep',
+      'utf8',
+    );
+    await writeFile(path.join(targetPath, 'keep.txt'), 'keep', 'utf8');
+
+    await removeTarget({ paths, id: 'project-a' });
+
+    expect(await pathExists(path.join(targetPath, 'pdf'))).toBe(false);
+    expect(
+      await readFile(path.join(targetPath, 'extra', 'note.txt'), 'utf8'),
+    ).toBe('keep');
+    expect(await readFile(path.join(targetPath, 'keep.txt'), 'utf8')).toBe(
+      'keep',
+    );
+    expect(await pathExists(targetPath)).toBe(true);
+    expect(await pathExists(getSkillDir(paths, 'pdf', '1.0.0'))).toBe(true);
+    expect((await readRouteFile(paths)).targets).toEqual([]);
+  });
+
+  it('includes disabled targets and disabled package locks in cleanup', async () => {
+    const { paths, targetPath } = await createTargetWithPackage();
+    await setTargetEnabled(paths, 'project-a', false);
+    await setPackageEnabled(paths, 'project-a', 'frontend', false);
+
+    await mkdir(path.join(targetPath, 'pdf'), { recursive: true });
+    await writeFile(
+      path.join(targetPath, 'pdf', 'note.txt'),
+      'copy',
+      'utf8',
+    );
+
+    await removeTarget({ paths, id: 'project-a' });
+
+    expect(await pathExists(path.join(targetPath, 'pdf'))).toBe(false);
+    expect((await readRouteFile(paths)).targets).toEqual([]);
+  });
+
+  it('does not remove the target when route packages cannot be resolved', async () => {
+    const { paths, targetPath } = await createTargetWithPackage();
+    const route = await readRouteFile(paths);
+    route.targets[0]!.packages.frontend!.resolved = '9.9.9';
+    await writeRouteFile(paths, route);
+
+    await mkdir(path.join(targetPath, 'pdf'), { recursive: true });
+
+    await expect(
+      removeTarget({ paths, id: 'project-a' }),
+    ).rejects.toMatchObject({ code: 'VERSION_NOT_FOUND' });
+
+    expect((await readRouteFile(paths)).targets).toHaveLength(1);
+    expect(await pathExists(path.join(targetPath, 'pdf'))).toBe(true);
   });
 });

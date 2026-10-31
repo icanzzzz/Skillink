@@ -808,7 +808,9 @@ export async function runCli(
 
   target
     .command('remove')
-    .description('Remove a target from route.json')
+    .description(
+      'Remove a target from route.json and delete its route-resolved skill directories from the target directory',
+    )
     .argument('<id>', 'Target id')
     .option('--json', 'Print machine-readable JSON')
     .action(async (id: string, options: { json?: boolean }) => {

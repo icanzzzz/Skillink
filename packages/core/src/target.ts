@@ -21,6 +21,7 @@ import {
   writeRouteFile,
 } from './route.js';
 import { withHistory } from './history.js';
+import { gcTargetEntries, resolveTargetSkillNames } from './target-gc.js';
 
 function slugify(value: string): string {
   const slug = value
@@ -146,10 +147,21 @@ export async function removeTarget(input: RemoveTargetInput): Promise<TargetRout
     );
   }
 
-  const [removed] = route.targets.splice(index, 1);
+  const removed = route.targets[index]!;
+  const skillNames = await resolveTargetSkillNames({
+    paths: input.paths,
+    target: removed,
+  });
+
+  route.targets.splice(index, 1);
   await withHistory(input.paths, 'remove-target', async () => {
+    await gcTargetEntries({
+      paths: input.paths,
+      target: removed,
+      skillNames,
+    });
     await writeRouteFile(input.paths, route);
   });
 
-  return removed!;
+  return removed;
 }

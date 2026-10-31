@@ -5,6 +5,7 @@ import {
   readFile,
   rm,
   stat,
+  unlink,
   writeFile,
 } from 'node:fs/promises';
 import os from 'node:os';
@@ -251,6 +252,51 @@ describe('CLI', () => {
         expect.objectContaining({ name: 'pdf', state: 'ok' }),
       ]),
     );
+  });
+
+  it('removes route-resolved skill directories on target remove', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    await runCli(
+      ['skill', 'add', source, '--name', 'pdf', '--version', '1.0.0'],
+      ctx,
+    );
+    await runCli(
+      ['package', 'create', 'demo@1.0.0', '--skill', 'pdf@1.0.0'],
+      ctx,
+    );
+    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
+    await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
+    await runCli(['apply'], ctx);
+
+    // 把 apply 创建的链接换成真实目录，证明 route 解析结果优先。
+    await unlink(path.join(targetPath, 'pdf'));
+    await mkdir(path.join(targetPath, 'pdf'), { recursive: true });
+    await writeFile(
+      path.join(targetPath, 'pdf', 'note.txt'),
+      'copy',
+      'utf8',
+    );
+    await writeFile(path.join(targetPath, 'keep.txt'), 'keep', 'utf8');
+
+    expect(await runCli(['target', 'remove', 'project-a'], ctx)).toBe(0);
+
+    expect(await pathExists(path.join(targetPath, 'pdf'))).toBe(false);
+    expect(await readFile(path.join(targetPath, 'keep.txt'), 'utf8')).toBe(
+      'keep',
+    );
+    expect(
+      await pathExists(path.join(home, 'skills', 'pdf', '1.0.0')),
+    ).toBe(true);
+    expect(await pathExists(targetPath)).toBe(true);
+    expect((await readJson(path.join(home, 'route.json'))).targets).toEqual([]);
+    expect(ctx.out.join('\n')).toContain('Removed target project-a');
   });
 
   it('copies a package with a skill override', async () => {
