@@ -56,7 +56,6 @@ export interface RollbackInput {
   revision: string;
   /** Set false to restore configuration without re-projecting targets. */
   apply?: boolean;
-  argv?: string[];
   /** Override lock timing for tests or long operations. */
   lockOptions?: HomeLockOptions;
 }
@@ -330,6 +329,9 @@ async function rollbackToLocked(
   }
 
   const shortRevision = targetCommit.slice(0, 7);
+  const rollbackCommand =
+    `skillink rollback ${input.revision}` +
+    (input.apply === false ? ' --no-apply' : '');
 
   if (restorable.restores.length > 0 || extraSkills.length > 0) {
     await commitRepoChanges({
@@ -340,7 +342,7 @@ async function rollbackToLocked(
           scope: 'skills',
           action: 'restore',
           summary: shortRevision,
-          command: `skillink rollback ${input.revision}`,
+          command: rollbackCommand,
           changedFiles,
         }),
     });
@@ -354,7 +356,7 @@ async function rollbackToLocked(
         scope: 'rollback',
         action: 'restore',
         summary: shortRevision,
-        command: `skillink rollback ${input.revision}`,
+        command: rollbackCommand,
         changedFiles,
       }),
   });

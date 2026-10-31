@@ -33,6 +33,13 @@ export function registerInitCommands(
           `${result.targetCount} targets to ${paths.home}`,
       );
     });
+}
+
+export function registerMigrateCommands(
+  program: Command,
+  runtime: CommandRuntime,
+): void {
+  const { context } = runtime;
 
   program
     .command('migrate')

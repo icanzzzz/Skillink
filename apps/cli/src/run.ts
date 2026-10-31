@@ -2,12 +2,13 @@ import { Command, CommanderError } from 'commander';
 import { isSkillinkError } from '@skillink/shared';
 import { printJsonError, type CliContext } from './cli-context.js';
 import { createCommandRuntime } from './command-runtime.js';
-import { registerInitCommands } from './commands/init.js';
+import { registerInitCommands, registerMigrateCommands } from './commands/init.js';
 import { registerSkillCommands } from './commands/skill.js';
 import { registerPackageCommands } from './commands/package.js';
 import { registerTargetCommands } from './commands/target.js';
 import { registerRouteCommands } from './commands/route.js';
 import { registerLocaleCommands } from './commands/locale.js';
+import { registerEnvironmentCommands, registerSnapshotCommands } from './commands/environment.js';
 import { registerLifecycleCommands } from './commands/lifecycle.js';
 
 export type { CliContext } from './cli-context.js';
@@ -42,11 +43,14 @@ export async function runCli(
   });
 
   registerInitCommands(program, runtime);
+  registerEnvironmentCommands(program, runtime);
+  registerLocaleCommands(program, runtime);
+  registerMigrateCommands(program, runtime);
+  registerSnapshotCommands(program, runtime);
   registerSkillCommands(program, runtime);
   registerPackageCommands(program, runtime);
   registerTargetCommands(program, runtime);
   registerRouteCommands(program, runtime);
-  registerLocaleCommands(program, runtime);
   registerLifecycleCommands(program, runtime);
 
   try {

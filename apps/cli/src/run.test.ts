@@ -43,4 +43,42 @@ describe('CLI command layer', () => {
     await runtime.ensureHome();
     await expect(stat(runtime.paths().routeFile)).resolves.toBeDefined();
   });
+
+  it('keeps the historical command order in help output', async () => {
+    const out: string[] = [];
+
+    expect(
+      await runCli(['--help'], {
+        stdout: (line) => out.push(line),
+        stderr: () => undefined,
+      }),
+    ).toBe(0);
+
+    const text = out.join('\n');
+    let previous = -1;
+    for (const name of [
+      'init',
+      'env',
+      'locale',
+      'migrate',
+      'snapshot',
+      'skill',
+      'add',
+      'package',
+      'target',
+      'route',
+      'gc',
+      'apply',
+      'history',
+      'rollback',
+      'status',
+      'doctor',
+    ]) {
+      const index = text.indexOf(`\n  ${name}`);
+      expect(index, `${name} should be listed after the previous command`).toBeGreaterThan(
+        previous,
+      );
+      previous = index;
+    }
+  });
 });
