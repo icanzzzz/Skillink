@@ -1,50 +1,60 @@
-export * from './apply.js';
-export * from './doctor.js';
-export * from './folder-scan.js';
-export * from './fs-retry.js';
-export * from './gc.js';
-export * from './git.js';
-export * from './git-commit.js';
-export * from './git-lock.js';
-export * from './import-skill.js';
-export * from './json-store.js';
-export * from './language-store.js';
-export * from './links.js';
-export * from './migrate.js';
-export * from './package-check.js';
-export * from './package-graph.js';
-export * from './package-name.js';
-export * from './package-store.js';
-export * from './path-policy.js';
-export * from './route.js';
-export * from './rollback.js';
-export * from './skill-integrity.js';
-export * from './skill-md.js';
-export * from './skill-scan.js';
-export * from './skill-store.js';
-export * from './status.js';
-export * from './target.js';
-export * from './target-entry.js';
-export * from './target-gc.js';
-export * from './target-resolution.js';
-export type {
-  ApplyConflict,
-  ApplyOperation,
-  ApplyOperationKind,
-  ApplyReport,
-  CliErrorEnvelope,
-  DoctorIssue,
-  DoctorIssueCode,
-  DoctorReport,
-  GcCandidate,
-  GcPlan,
-  GcReport,
-  ImportSkillResult,
-  SkillPackageCandidate,
-  SkillPackageScanReport,
-  SnapshotReport,
-  StatusEntry,
-  StatusReport,
-  StatusState,
-  TargetSkillSummary,
-} from '@skillink/shared';
+export { apply } from './apply.js';
+export { doctor } from './doctor.js';
+export { gc, planGc } from './gc.js';
+export {
+  ensureControlRepo,
+  ensureSkillsRepo,
+  gitAddAll,
+  gitCommit,
+  gitHead,
+  gitLog,
+  gitRepoExists,
+  gitShowFile,
+  gitStatus,
+  isGitAvailable,
+} from './git.js';
+export {
+  assertCleanControlRepo,
+  commitRepoChanges,
+  ensureCleanOrBootstrap,
+  withCliMutation,
+} from './git-commit.js';
+export { withHomeLock } from './git-lock.js';
+export { importSkill } from './import-skill.js';
+export { stableStringify } from './json-store.js';
+export {
+  getLanguageState,
+  installLanguagePack,
+  readSettingsFile,
+  removeLanguagePack,
+  setActiveLocale,
+  writeSettingsFile,
+} from './language-store.js';
+export { migrateV1ToV2 } from './migrate.js';
+export { checkPackageSkillReferences } from './package-check.js';
+export {
+  copyPackageVersion,
+  createPackageVersion,
+  readPackageFile,
+  removePackageVersion,
+  setPackageTag,
+  writePackageFile,
+} from './package-store.js';
+export {
+  addRouteEntry,
+  readRouteFile,
+  removeRouteEntry,
+  setPackageEnabled,
+  writeRouteFile,
+} from './route.js';
+export { rollbackTo } from './rollback.js';
+export { scanSkillPackages } from './skill-scan.js';
+export {
+  readSkillFile,
+  removeSkillVersion,
+  setSkillTag,
+  writeSkillFile,
+} from './skill-store.js';
+export { status } from './status.js';
+export { addTarget, removeTarget, setTargetEnabled } from './target.js';
+export { summarizeTargetSkills } from './target-resolution.js';
