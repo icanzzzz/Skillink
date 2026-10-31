@@ -1114,6 +1114,83 @@ button {
   color: var(--ink-muted);
 }
 
+.tag-button {
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.tag-button:hover {
+  border-color: var(--accent);
+  background: #dcebe3;
+}
+
+.tag-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(31, 111, 92, 0.13);
+}
+
+.tag.is-active {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.tag.is-active code,
+.tag.is-active span {
+  color: #fff;
+}
+
+.version-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 10px;
+}
+
+.version-tab {
+  padding: 4px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  line-height: 1.35;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.version-tab:hover {
+  border-color: var(--accent-line);
+  background: var(--surface-raised);
+  color: var(--accent-strong);
+}
+
+.version-tab.is-active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.version-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(31, 111, 92, 0.13);
+}
+
+.version-detail {
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 11px;
+  background: var(--surface-muted);
+}
+
 .version-block {
   padding: 8px 0;
   border-top: 1px solid var(--line-soft);

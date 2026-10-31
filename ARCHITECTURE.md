@@ -1,8 +1,8 @@
 # Skillink 项目架构（v2.0）
 
 > 日期：2026-10-31  
-> 状态：v2.0 MVP + hardening + i18n + batch import + language pack refresh（2026-10-31）  
-> 文档基线：`2012023 feat: add batch skill installation` + 2026-10-31 语言包刷新与安装卡片修订  
+> 状态：v2.0 MVP + hardening + i18n + batch import + language pack refresh + installed skill version grouping（2026-10-31）  
+> 文档基线：`2012023 feat: add batch skill installation` + 2026-10-31 语言包刷新、安装卡片 placeholder 与已安装技能版本聚合修订  
 > 取代：v1.2 的 `skills.json` 公用库模型  
 > 路径约定：`<user>`、`<repo>` 为占位符；Windows 使用 `%USERPROFILE%`，Linux/macOS 使用 `~`。
 
@@ -459,7 +459,7 @@ skillink package copy <source>@<version> <target>@<version> \
 - GUI 在点击确认时检测目录链接，命中则提示链接路径、取消该包安装，其他包不受影响；
 - 默认名/版本：源目录名为 `<name>@<version>` 时解析并分别使用；显式 `--name` / `--version` 优先；
 - 安装卡片把扫描名称保存为 `autoName`，名称输入框初始为空并只把扫描名称显示为 placeholder；用户留空确认时使用 `autoName`，手动输入时以输入值为准；
-- 版本输入框的 placeholder 固定为“版本 / Version”，不向用户展示内部 `0.0.0+hash` 提示；
+- 版本输入框只显示自动生成版本的 semver 主体 `0.0.0`，不向用户展示 `+<hash8>` 构建元数据；用户留空确认时由导入按当前内容生成完整版本；
 - 目录名缺少名称时，GUI 要求用户手动填写；名称仍缺失时批量扫描回退 `SKILL.md` frontmatter 的 name；CLI 回退文件夹名；
 - 版本缺失或不是合法 semver 时回退 `0.0.0+<hash8>`；
 - 同 name@version + 同 integrity：复用；
@@ -714,7 +714,7 @@ drift / missing       -> apply
 
 - **Overview**：skills、packages、targets、links、doctor；
 - **Targets**：target 列表、package 数、解析后的 skill 数、分配 package、target/package enable/disable、删除 target/route、apply 预览（dry-run）、prune、apply 结果；
-- **Skills**：选择目录批量扫描 `SKILL.md`，逐个确认安装；扫描名称只作为名称输入框 placeholder，留空确认时作为默认名称；版本输入框使用“版本 / Version”占位；确认时检测包内目录链接，命中则提示绝对路径并取消该包安装；标签、删除、GC；
+- **Skills**：选择目录批量扫描 `SKILL.md`，逐个确认安装；扫描名称只作为名称输入框 placeholder，留空确认时作为默认名称；版本输入框显示自动生成版本的 semver 主体 `0.0.0`，不显示 `+<hash8>` 构建元数据；确认时检测包内目录链接，命中则提示绝对路径并取消该包安装；已安装技能按技能名聚合为一张卡片，通过版本切换标签选择版本，再对当前版本执行标记/移除，标签可直接切换到对应版本；GC；
 - **Packages**：创建/复制 package、组合列表、标签、删除；
 - **History**：三文件快照与回滚；
 - **Doctor**：健康检查；
@@ -858,15 +858,15 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 
 ## 10. 测试策略
 
-当前验证（2026-10-31）：46 个测试文件、403 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
+当前验证（2026-10-31）：46 个测试文件、404 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
 
 | 层级 | 内容 |
 |---|---|
 | 单元测试 | schema、package 图、环检测、skill 冲突、路径策略、链接计划、历史、GC、迁移 |
 | 集成测试 | 临时目录、真实 junction/symlink、冲突、崩溃恢复 |
 | CLI 测试 | 完整 skill -> package -> route -> apply 闭环、迁移、回滚、批量扫描 |
-| GUI 测试 | IPC schema、页面渲染、空状态、组合展示、target/route 生命周期、apply 预览、批量安装与目录链接警告 |
-| 桌面/i18n 测试 | 语言包 schema/覆盖率、内置包启动刷新、安装卡片 placeholder 与默认名称 |
+| GUI 测试 | IPC schema、页面渲染、空状态、组合展示、target/route 生命周期、apply 预览、批量安装、已安装技能版本聚合与目录链接警告 |
+| 桌面/i18n 测试 | 语言包 schema/覆盖率、内置包启动刷新、安装卡片 placeholder 与默认名称、已安装技能版本切换 |
 | 安全测试 | 恶意源文件夹、路径穿越、断链、只读文件、同名冲突、内容篡改、非受信 IPC |
 | 兼容测试 | Windows 11 本地主验收；Windows/Ubuntu/macOS CI 矩阵 |
 
@@ -937,17 +937,18 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 23. `locale` 命令能安装、切换、列出、删除语言包；缺失/损坏语言包回退英文；`zh-CN` 覆盖全部英文 key；
 24. `skill scan` 能批量发现技能包；每个包独立确认安装；包含目录链接的包提示绝对路径并取消该包安装，其余包不受影响；
 25. 内置 `zh-CN` 包版本更新或缺 key 时，应用启动后自动刷新已安装副本；身份不同的自定义语言包不被覆盖；
-26. 安装卡片中的扫描名称只显示为输入框 placeholder，留空确认时使用扫描名称；版本输入框不展示 `0.0.0+hash`。
+26. 安装卡片中的扫描名称只显示为输入框 placeholder，留空确认时使用扫描名称；版本输入框显示自动生成版本的 semver 主体 `0.0.0`，不显示 `+<hash8>` 构建元数据；
+27. 已安装技能按技能名聚合为一张卡片，版本切换控件选择版本后，标记/移除操作只作用于当前版本。
 
 ---
 
 ### 11.1 当前实现验证
 
-- `pnpm test`：46 个测试文件、403 个测试通过（2026-10-31）；
+- `pnpm test`：46 个测试文件、404 个测试通过（2026-10-31）；
 - `pnpm typecheck`：通过；
 - `pnpm build`：CLI 与 Electron 桌面端构建成功；
 - 真实 CLI E2E：skill 安装、package 创建/复制、target/route、apply、status/doctor、冲突修复、history/rollback、gc dry-run 均跑通；
-- 桌面冒烟：旧版 `zh-CN` 语言包在启动后自动刷新到内置版本，版本 placeholder 更新为“版本”；
+- 桌面冒烟：旧版 `zh-CN` 语言包在启动后自动刷新到内置版本，版本输入框显示 `0.0.0`，不显示 hash；
 - hardening 验证：内容完整性篡改、apply 预检/回滚、导入限制、路径展开、文件锁重试、IPC sender、大小写冲突、frontmatter、GUI 生命周期均有测试覆盖。
 
 ---

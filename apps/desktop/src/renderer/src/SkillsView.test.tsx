@@ -56,6 +56,42 @@ describe('SkillsView', () => {
     expect(html).toContain('Scan folder');
   });
 
+  it('groups installed versions into one card with a single action panel', () => {
+    const html = renderToStaticMarkup(
+      <SkillsView
+        skills={{
+          schemaVersion: 2,
+          skills: {
+            demo: {
+              tags: { stable: '1.0.0', latest: '1.1.0' },
+              versions: {
+                '1.0.0': {
+                  integrity: 'sha512-abc',
+                  fileCount: 2,
+                  size: 128,
+                  built: false,
+                },
+                '1.1.0': {
+                  integrity: 'sha512-def',
+                  fileCount: 3,
+                  size: 256,
+                  built: false,
+                },
+              },
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(html.match(/class="package-card skill-card"/g)).toHaveLength(1);
+    expect(
+      html.match(/class="version-tab(?: is-active)?"/g),
+    ).toHaveLength(2);
+    expect(html.match(/placeholder="tag"/g)).toHaveLength(1);
+    expect(html).toContain('aria-pressed="true"');
+  });
+
   it('renders translated skill headings and empty state', () => {
     const html = renderWithMessages(
       <SkillsView skills={createEmptySkillFile()} />,
@@ -79,13 +115,13 @@ describe('SkillsView', () => {
               versions: {
                 '1.0.0': {
                   integrity: 'sha512-abc',
-                  fileCount: 1,
+                  fileCount: 2,
                   size: 128,
                   built: false,
                 },
                 '1.1.0': {
                   integrity: 'sha512-def',
-                  fileCount: 2,
+                  fileCount: 1,
                   size: 256,
                   built: false,
                 },
@@ -117,7 +153,6 @@ describe('SkillsView', () => {
       />,
     );
 
-    expect(html).toContain('1 file');
     expect(html).toContain('2 files');
     expect(html).toContain('2 candidates');
   });
@@ -162,8 +197,9 @@ describe('SkillsView', () => {
 
     expect(html).toContain('placeholder="linked"');
     expect(html).not.toContain('value="linked"');
-    expect(html).toContain('placeholder="Version"');
-    expect(html).not.toContain('0.0.0+hash');
+    expect(html).toContain('placeholder="0.0.0"');
+    expect(html).not.toContain('placeholder="Version"');
+    expect(html).not.toContain('0.0.0+');
     expect(html).toContain('<strong>linked</strong>');
     expect(html).not.toContain('disabled');
   });

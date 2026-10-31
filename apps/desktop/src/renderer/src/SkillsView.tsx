@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent } from 'react';
 import type {
   GcReport,
   ImportSkillResult,
+  SkillEntry,
   SkillFile,
   SkillPackageCandidate,
   SkillPackageScanReport,
@@ -210,6 +211,137 @@ export function SkillBatchCard({
   );
 }
 
+export interface InstalledSkillCardProps {
+  name: string;
+  entry: SkillEntry;
+  busy?: boolean;
+  onTag?: (input: SkillTagFormInput) => void;
+  onRemove?: (input: SkillVersionInput) => void;
+}
+
+export function InstalledSkillCard({
+  name,
+  entry,
+  busy = false,
+  onTag,
+  onRemove,
+}: InstalledSkillCardProps) {
+  const { t } = useI18n();
+  const versions = Object.keys(entry.versions);
+  const [selectedVersion, setSelectedVersion] = useState(versions[0] ?? '');
+  const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
+  const activeVersion = entry.versions[selectedVersion]
+    ? selectedVersion
+    : versions[0] ?? '';
+  const activeInfo = activeVersion ? entry.versions[activeVersion] : undefined;
+
+  if (!activeInfo) {
+    return null;
+  }
+
+  const tagDraft = tagDrafts[activeVersion] ?? '';
+  const tags = Object.entries(entry.tags ?? {});
+
+  function changeTag(value: string): void {
+    setTagDrafts((current) => ({ ...current, [activeVersion]: value }));
+  }
+
+  function submitTag(): void {
+    const tag = tagDraft.trim();
+    if (!onTag || tag === '') {
+      return;
+    }
+    onTag({ name, version: activeVersion, tag });
+    setTagDrafts((current) => ({ ...current, [activeVersion]: '' }));
+  }
+
+  return (
+    <article className="package-card skill-card">
+      <div className="package-title">
+        <strong>{name}</strong>
+        <span>{t('skills.badge')}</span>
+      </div>
+      {entry.description ? <p>{entry.description}</p> : null}
+
+      {tags.length > 0 ? (
+        <div className="tag-list">
+          {tags.map(([tag, taggedVersion]) => (
+            <button
+              className={`tag tag-button${
+                taggedVersion === activeVersion ? ' is-active' : ''
+              }`}
+              type="button"
+              key={tag}
+              onClick={() => {
+                if (entry.versions[taggedVersion]) {
+                  setSelectedVersion(taggedVersion);
+                }
+              }}
+            >
+              <code>{tag}</code>
+              <span>{taggedVersion}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div
+        className="version-tabs"
+        role="group"
+        aria-label={t('skills.form.version')}
+      >
+        {versions.map((skillVersion) => (
+          <button
+            className={`version-tab${
+              skillVersion === activeVersion ? ' is-active' : ''
+            }`}
+            type="button"
+            key={skillVersion}
+            aria-pressed={skillVersion === activeVersion}
+            onClick={() => setSelectedVersion(skillVersion)}
+          >
+            {skillVersion}
+          </button>
+        ))}
+      </div>
+
+      <div className="version-detail">
+        <div className="version-row">
+          <span>{t('skills.files', { count: activeInfo.fileCount })}</span>
+          <span>{formatBytes(activeInfo.size)}</span>
+        </div>
+        <div className="version-actions">
+          <input
+            aria-label={t('skills.tagAriaLabel', {
+              name,
+              version: activeVersion,
+            })}
+            value={tagDraft}
+            onChange={(event) => changeTag(event.target.value)}
+            placeholder={t('skills.tagPlaceholder')}
+          />
+          <button
+            className="secondary"
+            type="button"
+            disabled={busy || !onTag || tagDraft.trim() === ''}
+            onClick={submitTag}
+          >
+            {t('skills.tag')}
+          </button>
+          <button
+            className="danger"
+            type="button"
+            disabled={busy || !onRemove}
+            onClick={() => onRemove?.({ name, version: activeVersion })}
+          >
+            {t('common.remove')}
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export function SkillsView({
   skills,
   gcReport = null,
@@ -227,7 +359,6 @@ export function SkillsView({
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanned, setScanned] = useState(false);
-  const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
   const scanRequest = useRef(0);
   const entries = Object.entries(skills.skills);
 
@@ -349,10 +480,6 @@ export function SkillsView({
     }
   }
 
-  function tagKey(skillName: string, skillVersion: string): string {
-    return `${skillName}@${skillVersion}`;
-  }
-
   return (
     <main className="view">
       <section className="panel">
@@ -447,90 +574,14 @@ export function SkillsView({
         ) : (
           <div className="package-grid">
             {entries.map(([skillName, entry]) => (
-              <article className="package-card" key={skillName}>
-                <div className="package-title">
-                  <strong>{skillName}</strong>
-                  <span>{t('skills.badge')}</span>
-                </div>
-                {entry.description ? <p>{entry.description}</p> : null}
-
-                <div className="tag-list">
-                  {Object.entries(entry.tags ?? {}).map(
-                    ([tag, taggedVersion]) => (
-                      <span className="tag" key={tag}>
-                        <code>{tag}</code>
-                        <span>{taggedVersion}</span>
-                      </span>
-                    ),
-                  )}
-                </div>
-
-                <div className="version-list">
-                  {Object.entries(entry.versions).map(
-                    ([skillVersion, info]) => {
-                      const key = tagKey(skillName, skillVersion);
-                      return (
-                        <div className="version-block" key={skillVersion}>
-                          <div className="version-row">
-                            <code>{skillVersion}</code>
-                            <span>
-                              {t('skills.files', { count: info.fileCount })}
-                            </span>
-                            <span>{formatBytes(info.size)}</span>
-                          </div>
-                          <div className="version-actions">
-                            <input
-                              aria-label={t('skills.tagAriaLabel', {
-                                name: skillName,
-                                version: skillVersion,
-                              })}
-                              value={tagDrafts[key] ?? ''}
-                              onChange={(event) =>
-                                setTagDrafts((current) => ({
-                                  ...current,
-                                  [key]: event.target.value,
-                                }))
-                              }
-                              placeholder={t('skills.tagPlaceholder')}
-                            />
-                            <button
-                              className="secondary"
-                              type="button"
-                              disabled={
-                                busy ||
-                                !onTag ||
-                                !(tagDrafts[key] ?? '').trim()
-                              }
-                              onClick={() =>
-                                onTag?.({
-                                  name: skillName,
-                                  version: skillVersion,
-                                  tag: (tagDrafts[key] ?? '').trim(),
-                                })
-                              }
-                            >
-                              {t('skills.tag')}
-                            </button>
-                            <button
-                              className="danger"
-                              type="button"
-                              disabled={busy || !onRemove}
-                              onClick={() =>
-                                onRemove?.({
-                                  name: skillName,
-                                  version: skillVersion,
-                                })
-                              }
-                            >
-                              {t('common.remove')}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    },
-                  )}
-                </div>
-              </article>
+              <InstalledSkillCard
+                key={skillName}
+                name={skillName}
+                entry={entry}
+                busy={busy}
+                onTag={onTag}
+                onRemove={onRemove}
+              />
             ))}
           </div>
         )}
