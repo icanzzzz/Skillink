@@ -6,6 +6,9 @@ import {
   buildCreatePackageArgs,
   buildGcArgs,
   buildImportSkillArgs,
+  buildLanguageInstallArgs,
+  buildLanguageRemoveArgs,
+  buildLanguageUseArgs,
   buildRouteAddArgs,
 } from './cli-commands.js';
 
@@ -122,6 +125,28 @@ describe('CLI argv builders', () => {
       '30',
       '--no-keep-tagged',
       '--json',
+    ]);
+  });
+
+  it('builds language pack commands', () => {
+    expect(
+      buildLanguageInstallArgs({
+        path: 'C:/packs/zh-CN.json',
+        use: true,
+        force: true,
+      }),
+    ).toEqual([
+      'locale',
+      'install',
+      'C:/packs/zh-CN.json',
+      '--force',
+      '--use',
+    ]);
+    expect(buildLanguageUseArgs('zh-CN')).toEqual(['locale', 'use', 'zh-CN']);
+    expect(buildLanguageRemoveArgs('zh-CN')).toEqual([
+      'locale',
+      'remove',
+      'zh-CN',
     ]);
   });
 });

@@ -6,6 +6,8 @@ import {
   CreatePackageRequestSchema,
   GcRequestSchema,
   ImportSkillRequestSchema,
+  LanguageInstallRequestSchema,
+  LanguageUseRequestSchema,
   PackageRemoveRequestSchema,
   PackageTagRequestSchema,
   RollbackRequestSchema,
@@ -214,5 +216,31 @@ describe('IPC request schemas', () => {
       prune: false,
     });
     expect(ApplyRequestSchema.safeParse({ unknown: true }).success).toBe(false);
+  });
+
+  it('validates language pack requests', () => {
+    expect(
+      LanguageInstallRequestSchema.parse({
+        path: 'C:/packs/zh-CN.json',
+        use: true,
+        force: true,
+      }),
+    ).toEqual({
+      path: 'C:/packs/zh-CN.json',
+      use: true,
+      force: true,
+    });
+    expect(LanguageInstallRequestSchema.safeParse({ path: '' }).success).toBe(
+      false,
+    );
+    expect(
+      LanguageInstallRequestSchema.parse({ path: 'C:/packs/zh-CN.json' }),
+    ).toEqual({ path: 'C:/packs/zh-CN.json' });
+    expect(LanguageUseRequestSchema.safeParse({ locale: '' }).success).toBe(
+      false,
+    );
+    expect(LanguageUseRequestSchema.parse({ locale: 'zh-CN' })).toEqual({
+      locale: 'zh-CN',
+    });
   });
 });

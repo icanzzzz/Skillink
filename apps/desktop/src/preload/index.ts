@@ -20,6 +20,13 @@ const api: DesktopApi = {
   routeEnable: (input) => ipcRenderer.invoke('skillink:route-enable', input),
   gc: (input = {}) => ipcRenderer.invoke('skillink:gc', input),
   rollback: (input) => ipcRenderer.invoke('skillink:rollback', input),
+  getLanguageState: () => ipcRenderer.invoke('skillink:language-state'),
+  chooseLanguagePack: () => ipcRenderer.invoke('skillink:choose-language-pack'),
+  installLanguagePack: (input) =>
+    ipcRenderer.invoke('skillink:language-install', input),
+  useLanguage: (locale) => ipcRenderer.invoke('skillink:language-use', { locale }),
+  removeLanguage: (locale) =>
+    ipcRenderer.invoke('skillink:language-remove', { locale }),
 };
 
 contextBridge.exposeInMainWorld('skillink', api);

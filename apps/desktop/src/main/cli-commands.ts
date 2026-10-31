@@ -5,6 +5,7 @@ import type {
   CreatePackageRequest,
   GcRequest,
   ImportSkillRequest,
+  LanguageInstallRequest,
   PackageRemoveRequest,
   PackageTagRequest,
   RollbackRequest,
@@ -175,4 +176,28 @@ export function buildGcArgs(request: GcRequest = {}): string[] {
 
 export function buildRollbackArgs(request: RollbackRequest): string[] {
   return ['rollback', request.id, '--json'];
+}
+
+export function buildLanguageListArgs(): string[] {
+  return ['locale', 'list'];
+}
+
+export function buildLanguageInstallArgs(
+  request: LanguageInstallRequest,
+): string[] {
+  return [
+    'locale',
+    'install',
+    request.path,
+    ...(request.force ? ['--force'] : []),
+    ...(request.use ? ['--use'] : []),
+  ];
+}
+
+export function buildLanguageUseArgs(locale: string): string[] {
+  return ['locale', 'use', locale];
+}
+
+export function buildLanguageRemoveArgs(locale: string): string[] {
+  return ['locale', 'remove', locale];
 }

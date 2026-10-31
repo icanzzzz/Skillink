@@ -5,6 +5,8 @@ import type {
   ApplyReport,
   GcReport,
   ImportSkillResult,
+  LanguageState,
+  LocaleInstallReport,
   PackageLock,
   PackageVersion,
   TargetRoute,
@@ -16,6 +18,9 @@ import {
   CreatePackageRequestSchema,
   GcRequestSchema,
   ImportSkillRequestSchema,
+  LanguageInstallRequestSchema,
+  LanguageRemoveRequestSchema,
+  LanguageUseRequestSchema,
   PackageRemoveRequestSchema,
   PackageTagRequestSchema,
   RollbackRequestSchema,
@@ -35,6 +40,10 @@ import {
   buildCreatePackageArgs,
   buildGcArgs,
   buildImportSkillArgs,
+  buildLanguageInstallArgs,
+  buildLanguageListArgs,
+  buildLanguageRemoveArgs,
+  buildLanguageUseArgs,
   buildPackageRemoveArgs,
   buildPackageTagArgs,
   buildRemoveTargetArgs,
@@ -56,6 +65,21 @@ async function chooseFolder(
   const window = BrowserWindow.fromWebContents(event.sender);
   const options: Electron.OpenDialogOptions = {
     properties: ['openDirectory'],
+  };
+  const result = window
+    ? await dialog.showOpenDialog(window, options)
+    : await dialog.showOpenDialog(options);
+
+  return result.canceled ? null : (result.filePaths[0] ?? null);
+}
+
+async function chooseLanguagePack(
+  event: Electron.IpcMainInvokeEvent,
+): Promise<string | null> {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  const options: Electron.OpenDialogOptions = {
+    properties: ['openFile'],
+    filters: [{ name: 'Skillink language pack', extensions: ['json'] }],
   };
   const result = window
     ? await dialog.showOpenDialog(window, options)
@@ -92,6 +116,29 @@ export function registerIpcHandlers(
 
   handle('skillink:snapshot', () => cli.snapshot());
   handle('skillink:choose-folder', (event) => chooseFolder(event));
+  handle('skillink:language-state', () =>
+    cli.invoke<LanguageState>(buildLanguageListArgs()),
+  );
+  handle('skillink:choose-language-pack', (event) =>
+    chooseLanguagePack(event),
+  );
+
+  handle('skillink:language-install', async (_event, input: unknown) => {
+    const request = LanguageInstallRequestSchema.parse(input);
+    return cli.invoke<LocaleInstallReport>(
+      buildLanguageInstallArgs(request),
+    );
+  });
+
+  handle('skillink:language-use', async (_event, input: unknown) => {
+    const request = LanguageUseRequestSchema.parse(input);
+    await cli.invoke(buildLanguageUseArgs(request.locale));
+  });
+
+  handle('skillink:language-remove', async (_event, input: unknown) => {
+    const request = LanguageRemoveRequestSchema.parse(input);
+    await cli.invoke(buildLanguageRemoveArgs(request.locale));
+  });
 
   handle('skillink:apply', async (_event, input: unknown) => {
     const request = ApplyRequestSchema.parse(input ?? {});

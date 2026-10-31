@@ -139,6 +139,26 @@ export const ApplyRequestSchema = z
   })
   .strict();
 
+export const LanguageInstallRequestSchema = z
+  .object({
+    path: NonEmptyString,
+    use: z.boolean().optional(),
+    force: z.boolean().optional(),
+  })
+  .strict();
+
+export const LanguageUseRequestSchema = z
+  .object({
+    locale: NonEmptyString,
+  })
+  .strict();
+
+export const LanguageRemoveRequestSchema = z
+  .object({
+    locale: NonEmptyString,
+  })
+  .strict();
+
 export type ImportSkillRequest = z.infer<typeof ImportSkillRequestSchema>;
 export type AddTargetRequest = z.infer<typeof AddTargetRequestSchema>;
 export type RouteAddRequest = z.infer<typeof RouteAddRequestSchema>;
@@ -155,3 +175,8 @@ export type CopyPackageRequest = z.infer<typeof CopyPackageRequestSchema>;
 export type GcRequest = z.infer<typeof GcRequestSchema>;
 export type RollbackRequest = z.infer<typeof RollbackRequestSchema>;
 export type ApplyRequest = z.infer<typeof ApplyRequestSchema>;
+export type LanguageInstallRequest = z.infer<
+  typeof LanguageInstallRequestSchema
+>;
+export type LanguageUseRequest = z.infer<typeof LanguageUseRequestSchema>;
+export type LanguageRemoveRequest = z.infer<typeof LanguageRemoveRequestSchema>;

@@ -2,6 +2,8 @@ import type {
   ApplyReport,
   GcReport,
   ImportSkillResult,
+  LanguageState,
+  LocaleInstallReport,
   PackageLock,
   PackageVersion,
   SnapshotReport,
@@ -14,6 +16,7 @@ import type {
   CreatePackageRequest,
   GcRequest,
   ImportSkillRequest,
+  LanguageInstallRequest,
   PackageRemoveRequest,
   PackageTagRequest,
   RollbackRequest,
@@ -47,4 +50,11 @@ export interface DesktopApi {
   routeEnable(input: RouteEnableRequest): Promise<PackageLock>;
   gc(input?: GcRequest): Promise<GcReport>;
   rollback(input: RollbackRequest): Promise<void>;
+  getLanguageState(): Promise<LanguageState>;
+  chooseLanguagePack(): Promise<string | null>;
+  installLanguagePack(
+    input: LanguageInstallRequest,
+  ): Promise<LocaleInstallReport>;
+  useLanguage(locale: string): Promise<void>;
+  removeLanguage(locale: string): Promise<void>;
 }
