@@ -39,20 +39,49 @@ function isPackage(specifier: string, packageName: string): boolean {
   );
 }
 
-type Rule = [name: string, matches: (specifier: string) => boolean];
+type Rule = [
+  name: string,
+  matches: (specifier: string, file: string) => boolean,
+];
+
+function resolvesInto(
+  file: string,
+  specifier: string,
+  directory: string,
+): boolean {
+  if (!specifier.startsWith('.')) {
+    return false;
+  }
+  const resolved = path.resolve(path.dirname(file), specifier);
+  return (
+    resolved === directory || resolved.startsWith(`${directory}${path.sep}`)
+  );
+}
+
+async function listDirectSourceFiles(dir: string): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() && /\.(ts|tsx)$/.test(entry.name))
+    .map((entry) => path.join(dir, entry.name));
+}
 
 async function findViolations(
   scope: string,
   rules: Rule[],
+  options: { recursive?: boolean } = {},
 ): Promise<string[]> {
   const root = path.join(repoRoot, scope);
+  const files =
+    options.recursive === false
+      ? await listDirectSourceFiles(root)
+      : await listSourceFiles(root);
   const violations: string[] = [];
 
-  for (const file of await listSourceFiles(root)) {
+  for (const file of files) {
     const source = await readFile(file, 'utf8');
     for (const specifier of importSpecifiers(source)) {
       for (const [rule, matches] of rules) {
-        if (matches(specifier)) {
+        if (matches(specifier, file)) {
           const relative = path
             .relative(repoRoot, file)
             .split(path.sep)
@@ -117,11 +146,70 @@ describe('module boundaries', () => {
       ['renderer-core', (specifier) => isPackage(specifier, '@skillink/core')],
       ['renderer-electron', (specifier) => isPackage(specifier, 'electron')],
       ['renderer-node', (specifier) => specifier.startsWith('node:')],
-      ['renderer-main', (specifier) => specifier.startsWith('../main/')],
-      ['renderer-preload', (specifier) => specifier.startsWith('../preload/')],
+      [
+        'renderer-main',
+        (specifier, file) =>
+          resolvesInto(
+            file,
+            specifier,
+            path.join(repoRoot, 'apps/desktop/src/main'),
+          ),
+      ],
+      [
+        'renderer-preload',
+        (specifier, file) =>
+          resolvesInto(
+            file,
+            specifier,
+            path.join(repoRoot, 'apps/desktop/src/preload'),
+          ),
+      ],
     ]);
 
     expect(violations).toEqual([]);
+  });
+
+  it('keeps desktop shared modules free of platform-only imports', async () => {
+    const violations = await findViolations(
+      'apps/desktop/src',
+      [
+        ['desktop-core', (specifier) => isPackage(specifier, '@skillink/core')],
+        ['desktop-electron', (specifier) => isPackage(specifier, 'electron')],
+        ['desktop-node', (specifier) => specifier.startsWith('node:')],
+      ],
+      { recursive: false },
+    );
+
+    expect(violations).toEqual([]);
+  });
+
+  it('detects renderer imports that escape into main or preload', () => {
+    const rendererFile = path.join(
+      repoRoot,
+      'apps/desktop/src/renderer/src/example.tsx',
+    );
+
+    expect(
+      resolvesInto(
+        rendererFile,
+        '../../main/ipc.js',
+        path.join(repoRoot, 'apps/desktop/src/main'),
+      ),
+    ).toBe(true);
+    expect(
+      resolvesInto(
+        rendererFile,
+        '../../preload/index.js',
+        path.join(repoRoot, 'apps/desktop/src/preload'),
+      ),
+    ).toBe(true);
+    expect(
+      resolvesInto(
+        rendererFile,
+        './local.js',
+        path.join(repoRoot, 'apps/desktop/src/main'),
+      ),
+    ).toBe(false);
   });
 
   it('declares every workspace cross-package import', async () => {
