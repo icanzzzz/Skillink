@@ -259,6 +259,13 @@ export const EN_MESSAGES = {
   'packages.composition.skills': 'skills',
   'packages.composition.packages': 'packages',
 
+  'history.eyebrow': 'HISTORY',
+  'history.heading': 'Route, package, and skill snapshots',
+  'history.applyAfter': 'Apply after rollback',
+  'history.empty':
+    'No history yet. Route, package, and skill changes create snapshots automatically.',
+  'history.rollback': 'Rollback',
+
   'doctor.eyebrow': 'DIAGNOSTICS',
   'doctor.heading': 'Doctor',
   'doctor.issues': {

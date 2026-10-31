@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { HistoryView } from './HistoryView.js';
+import { renderWithMessages } from './i18n.test-utils.js';
 
 describe('HistoryView', () => {
   it('renders snapshot ids and rollback buttons', () => {
@@ -26,5 +27,15 @@ describe('HistoryView', () => {
     const html = renderToStaticMarkup(<HistoryView entries={[]} />);
 
     expect(html).toContain('No history yet');
+  });
+
+  it('renders translated history text', () => {
+    const html = renderWithMessages(<HistoryView entries={[]} />, {
+      'history.heading': '历史记录',
+      'history.empty': '还没有历史记录。',
+    });
+
+    expect(html).toContain('历史记录');
+    expect(html).toContain('还没有历史记录。');
   });
 });

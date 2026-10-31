@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { HistoryEntry } from '@skillink/shared';
+import { useI18n } from './i18n.js';
 
 export interface HistoryViewProps {
   entries: HistoryEntry[];
@@ -7,16 +8,12 @@ export interface HistoryViewProps {
   onRollback?: (id: string, applyAfter: boolean) => void;
 }
 
-function formatTime(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
-}
-
 export function HistoryView({
   entries,
   busy = false,
   onRollback,
 }: HistoryViewProps) {
+  const { t, formatDate } = useI18n();
   const [applyAfter, setApplyAfter] = useState(false);
 
   return (
@@ -24,8 +21,8 @@ export function HistoryView({
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">HISTORY</p>
-            <h2>Route, package, and skill snapshots</h2>
+            <p className="eyebrow">{t('history.eyebrow')}</p>
+            <h2>{t('history.heading')}</h2>
           </div>
           <label className="checkbox">
             <input
@@ -33,15 +30,12 @@ export function HistoryView({
               checked={applyAfter}
               onChange={(event) => setApplyAfter(event.target.checked)}
             />
-            Apply after rollback
+            {t('history.applyAfter')}
           </label>
         </div>
 
         {entries.length === 0 ? (
-          <p className="empty">
-            No history yet. Route, package, and skill changes create snapshots
-            automatically.
-          </p>
+          <p className="empty">{t('history.empty')}</p>
         ) : (
           <div className="history-list">
             {entries.map((entry) => (
@@ -51,14 +45,14 @@ export function HistoryView({
                   <span>{entry.reason}</span>
                 </div>
                 <div className="history-meta">
-                  <span>{formatTime(entry.createdAt)}</span>
+                  <span>{formatDate(entry.createdAt)}</span>
                   <button
                     className="secondary"
                     type="button"
                     disabled={busy || !onRollback}
                     onClick={() => onRollback?.(entry.id, applyAfter)}
                   >
-                    Rollback
+                    {t('history.rollback')}
                   </button>
                 </div>
               </article>
