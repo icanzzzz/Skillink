@@ -440,7 +440,7 @@ metadata:
     const result = await importSkill({ sourceDir: source, home });
 
     expect(result.name).toBe('demo');
-    expect(result.version).toMatch(/^0\.0\.0\+[0-9a-f]{8}$/);
+    expect(result.version).toMatch(/^1\.0\.0\+[0-9a-f]{8}$/);
   });
 
   it('uses a version from a version-only folder name when the name is supplied', async () => {
@@ -466,7 +466,7 @@ metadata:
       home,
     });
 
-    expect(result.version).toMatch(/^0\.0\.0\+[0-9a-f]{8}$/);
+    expect(result.version).toMatch(/^1\.0\.0\+[0-9a-f]{8}$/);
   });
 
   it('rejects directory links inside the source folder with their path', async () => {

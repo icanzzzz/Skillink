@@ -51,7 +51,7 @@ describe('versions', () => {
   });
 
   it('accepts auto versions with build metadata', () => {
-    expect(normalizeVersion('0.0.0+abc12345')).toBe('0.0.0+abc12345');
+    expect(normalizeVersion('1.0.0+abc12345')).toBe('1.0.0+abc12345');
   });
 
   it('returns undefined for an empty version', () => {

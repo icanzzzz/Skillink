@@ -459,9 +459,9 @@ skillink package copy <source>@<version> <target>@<version> \
 - GUI 在点击确认时检测目录链接，命中则提示链接路径、取消该包安装，其他包不受影响；
 - 默认名/版本：源目录名为 `<name>@<version>` 时解析并分别使用；显式 `--name` / `--version` 优先；
 - 安装卡片把扫描名称保存为 `autoName`，名称输入框初始为空并只把扫描名称显示为 placeholder；用户留空确认时使用 `autoName`，手动输入时以输入值为准；
-- 版本输入框只显示自动生成版本的 semver 主体 `0.0.0`，不向用户展示 `+<hash8>` 构建元数据；用户留空确认时由导入按当前内容生成完整版本；
+- 版本输入框只显示自动生成版本的 semver 主体 `1.0.0`，不向用户展示 `+<hash8>` 构建元数据；用户留空确认时由导入按当前内容生成完整版本；
 - 目录名缺少名称时，GUI 要求用户手动填写；名称仍缺失时批量扫描回退 `SKILL.md` frontmatter 的 name；CLI 回退文件夹名；
-- 版本缺失或不是合法 semver 时回退 `0.0.0+<hash8>`；
+- 版本缺失或不是合法 semver 时回退 `1.0.0+<hash8>`；
 - 同 name@version + 同 integrity：复用；
 - 同 name@version + 不同 integrity：拒绝；
 - 导入扫描直接拒绝源目录中的符号链接和目录联接（junction），错误信息与 `details.path` 包含绝对路径；
@@ -714,7 +714,7 @@ drift / missing       -> apply
 
 - **Overview**：skills、packages、targets、links、doctor；
 - **Targets**：target 列表、package 数、解析后的 skill 数、分配 package、target/package enable/disable、删除 target/route、apply 预览（dry-run）、prune、apply 结果；
-- **Skills**：选择目录批量扫描 `SKILL.md`，逐个确认安装；扫描名称只作为名称输入框 placeholder，留空确认时作为默认名称；版本输入框显示自动生成版本的 semver 主体 `0.0.0`，不显示 `+<hash8>` 构建元数据；确认时检测包内目录链接，命中则提示绝对路径并取消该包安装；已安装技能按技能名聚合为一张卡片，通过版本切换标签选择版本，再对当前版本执行标记/移除，标签可直接切换到对应版本；GC；
+- **Skills**：选择目录批量扫描 `SKILL.md`，逐个确认安装；扫描名称只作为名称输入框 placeholder，留空确认时作为默认名称；版本输入框显示自动生成版本的 semver 主体 `1.0.0`，不显示 `+<hash8>` 构建元数据；确认时检测包内目录链接，命中则提示绝对路径并取消该包安装；已安装技能按技能名聚合为一张卡片，通过版本切换标签选择版本，再对当前版本执行标记/移除，标签可直接切换到对应版本；GC；
 - **Packages**：创建/复制 package、组合列表、标签、删除；
 - **History**：三文件快照与回滚；
 - **Doctor**：健康检查；
@@ -937,7 +937,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 23. `locale` 命令能安装、切换、列出、删除语言包；缺失/损坏语言包回退英文；`zh-CN` 覆盖全部英文 key；
 24. `skill scan` 能批量发现技能包；每个包独立确认安装；包含目录链接的包提示绝对路径并取消该包安装，其余包不受影响；
 25. 内置 `zh-CN` 包版本更新或缺 key 时，应用启动后自动刷新已安装副本；身份不同的自定义语言包不被覆盖；
-26. 安装卡片中的扫描名称只显示为输入框 placeholder，留空确认时使用扫描名称；版本输入框显示自动生成版本的 semver 主体 `0.0.0`，不显示 `+<hash8>` 构建元数据；
+26. 安装卡片中的扫描名称只显示为输入框 placeholder，留空确认时使用扫描名称；版本输入框显示自动生成版本的 semver 主体 `1.0.0`，不显示 `+<hash8>` 构建元数据；
 27. 已安装技能按技能名聚合为一张卡片，版本切换控件选择版本后，标记/移除操作只作用于当前版本。
 
 ---
@@ -948,7 +948,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 - `pnpm typecheck`：通过；
 - `pnpm build`：CLI 与 Electron 桌面端构建成功；
 - 真实 CLI E2E：skill 安装、package 创建/复制、target/route、apply、status/doctor、冲突修复、history/rollback、gc dry-run 均跑通；
-- 桌面冒烟：旧版 `zh-CN` 语言包在启动后自动刷新到内置版本，版本输入框显示 `0.0.0`，不显示 hash；
+- 桌面冒烟：旧版 `zh-CN` 语言包在启动后自动刷新到内置版本，版本输入框显示 `1.0.0`，不显示 hash；
 - hardening 验证：内容完整性篡改、apply 预检/回滚、导入限制、路径展开、文件锁重试、IPC sender、大小写冲突、frontmatter、GUI 生命周期均有测试覆盖。
 
 ---

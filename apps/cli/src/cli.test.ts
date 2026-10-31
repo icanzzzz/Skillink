@@ -165,7 +165,7 @@ describe('CLI', () => {
     const skillFile = await readJson(path.join(home, 'skill.json'));
     const versions = Object.keys(skillFile.skills.demo.versions);
     expect(versions).toHaveLength(1);
-    expect(versions[0]).toMatch(/^0\.0\.0\+[0-9a-f]{8}$/);
+    expect(versions[0]).toMatch(/^1\.0\.0\+[0-9a-f]{8}$/);
   });
 
   it('scans a folder for multiple skill packages', async () => {

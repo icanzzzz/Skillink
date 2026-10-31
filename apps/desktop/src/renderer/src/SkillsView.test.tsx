@@ -197,9 +197,9 @@ describe('SkillsView', () => {
 
     expect(html).toContain('placeholder="linked"');
     expect(html).not.toContain('value="linked"');
-    expect(html).toContain('placeholder="0.0.0"');
+    expect(html).toContain('placeholder="1.0.0"');
     expect(html).not.toContain('placeholder="Version"');
-    expect(html).not.toContain('0.0.0+');
+    expect(html).not.toContain('1.0.0+');
     expect(html).toContain('<strong>linked</strong>');
     expect(html).not.toContain('disabled');
   });

@@ -210,7 +210,7 @@ export const EN_MESSAGES = {
   'skills.form.name': 'Skill name',
   'skills.form.namePlaceholder': 'folder name',
   'skills.form.version': 'Version',
-  'skills.form.versionPlaceholder': '0.0.0',
+  'skills.form.versionPlaceholder': '1.0.0',
   'skills.form.scan': 'Scan folder',
   'skills.form.import': 'Import skill',
   'skills.badge': 'skill',

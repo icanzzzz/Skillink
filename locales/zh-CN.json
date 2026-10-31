@@ -3,7 +3,7 @@
   "locale": "zh-CN",
   "name": "Chinese (Simplified)",
   "nativeName": "简体中文",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "direction": "ltr",
   "messages": {
     "app.brand": "Skillink",
@@ -194,7 +194,7 @@
     "skills.form.name": "技能名称",
     "skills.form.namePlaceholder": "文件夹名称",
     "skills.form.version": "版本",
-    "skills.form.versionPlaceholder": "0.0.0",
+    "skills.form.versionPlaceholder": "1.0.0",
     "skills.form.scan": "扫描目录",
     "skills.form.import": "导入技能",
     "skills.badge": "技能",

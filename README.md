@@ -49,7 +49,7 @@ pnpm dev:cli -- init
 # 目录名形如 pdf@1.0.0 时自动解析名称和版本
 pnpm dev:cli -- skill add <folder>/pdf@1.0.0
 
-# 普通目录：手动指定名称；版本省略时自动生成 0.0.0+hash
+# 普通目录：手动指定名称；版本省略时自动生成 1.0.0+hash
 pnpm dev:cli -- skill add <folder-with-SKILL.md> --name pdf
 
 # 创建 package：组合 skill 和其他 package

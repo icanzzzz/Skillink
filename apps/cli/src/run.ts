@@ -507,7 +507,7 @@ export async function runCli(
       .option('--name <name>', 'Skill name (default: <name>@<version> folder name)')
       .option(
         '--version <version>',
-        'Skill version (default: <name>@<version> folder name or 0.0.0+hash)',
+        'Skill version (default: <name>@<version> folder name or 1.0.0+hash)',
       ),
   );
 
@@ -529,7 +529,7 @@ export async function runCli(
       .option('--name <name>', 'Skill name (default: <name>@<version> folder name)')
       .option(
         '--version <version>',
-        'Skill version (default: <name>@<version> folder name or 0.0.0+hash)',
+        'Skill version (default: <name>@<version> folder name or 1.0.0+hash)',
       ),
   ).action(
     async (
