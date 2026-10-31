@@ -6,6 +6,7 @@ export * from './gc.js';
 export * from './history.js';
 export * from './import-skill.js';
 export * from './json-store.js';
+export * from './language-store.js';
 export * from './links.js';
 export * from './migrate.js';
 export * from './package-graph.js';
