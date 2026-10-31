@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { createEmptyPackageFile, createEmptySkillFile } from '@skillink/shared';
+import { renderWithMessages } from './i18n.test-utils.js';
 import { PackagesView } from './PackagesView.js';
 
 describe('PackagesView', () => {
@@ -57,5 +58,23 @@ describe('PackagesView', () => {
     expect(html).toContain('pdf@1.0.0');
     expect(html).toContain('base@2.0.0');
     expect(html).toContain('Available skills');
+  });
+
+  it('renders translated package headings and actions', () => {
+    const html = renderWithMessages(
+      <PackagesView
+        packages={createEmptyPackageFile()}
+        skills={createEmptySkillFile()}
+      />,
+      {
+        'packages.heading': '包组合',
+        'packages.create': '创建包',
+        'packages.copy': '复制包',
+      },
+    );
+
+    expect(html).toContain('包组合');
+    expect(html).toContain('创建包');
+    expect(html).toContain('复制包');
   });
 });
