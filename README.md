@@ -27,7 +27,8 @@ target -> package -> skill -> 实体内容
 - `route.json` 只写 package lock；
 - Windows junction / POSIX symlink 投影；
 - `apply` / `status` / `doctor` / `gc`；
-- apply 先完成全量预检再写文件系统，执行失败有进程内回滚；
+- apply 先完成全量预检再写文件系统；执行失败会回滚本次创建的链接，但被替换的真实目录/文件不会恢复；
+- apply 只处理 route 期望集合中的同名条目；集合外条目不动，不再提供 `--prune`；route 版本覆盖或删除时由 target GC 清理不再需要的投影；
 - 三个配置文件的历史快照；普通写入失败会尝试恢复三文件，恢复本身失败会报 `IO_ERROR` 并列出 `restoreFailures`；
 - v1 `skills.json` -> v2 全有或全无迁移；
 - target/import 路径支持 `~`、`%USERPROFILE%`、`$HOME`；
@@ -136,7 +137,7 @@ skillink route remove <target-id> <package> [--force] [--json]
 skillink route list [--json]
 skillink route enable|disable <target-id> <package> [--json]
 
-skillink apply [--target <id>] [--dry-run] [--prune]
+skillink apply [--target <id>] [--dry-run]
 skillink snapshot [--json]
 skillink status [--json] [--target <id>]
 skillink doctor [--json]
@@ -165,7 +166,7 @@ GUI 主进程通过 CLI adapter 在进程内执行 CLI 命令，Renderer 不接�
 GUI 页面：
 
 - **Overview**：skills、packages、targets、links、doctor 概览；
-- **Targets**：添加/删除 target、分配/删除 package、target/package enable/disable、显示 package 数与解析后的 skill 数、删除 target 时先清理 route 解析出的 skill 目录/链接、apply 预览（dry-run）、prune、apply 结果；
+- **Targets**：添加/删除 target、分配/删除 package、target/package enable/disable、显示 package 数与解析后的 skill 数、删除或禁用 target/package 时清理 route 解析出的 skill 目录/链接、apply 预览（dry-run）、apply 结果；
 - **Skills**：选择一个目录批量扫描 `SKILL.md`，逐个确认安装；确认时检测目录链接，命中则提示链接路径并跳过该包；标签、删除、GC；
 - **Packages**：创建/复制 package、查看组合、标签、删除；
 - **History**：查看三文件快照并回滚；

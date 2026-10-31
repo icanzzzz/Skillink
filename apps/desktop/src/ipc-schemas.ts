@@ -141,7 +141,6 @@ export const RollbackRequestSchema = z
 export const ApplyRequestSchema = z
   .object({
     dryRun: z.boolean().optional(),
-    prune: z.boolean().optional(),
     targetId: OptionalNonEmptyString,
   })
   .strict();

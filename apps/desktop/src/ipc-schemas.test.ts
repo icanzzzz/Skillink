@@ -226,11 +226,11 @@ describe('IPC request schemas', () => {
   });
 
   it('accepts apply options with only known fields', () => {
-    expect(ApplyRequestSchema.parse({ dryRun: true, prune: false })).toEqual({
+    expect(ApplyRequestSchema.parse({ dryRun: true })).toEqual({
       dryRun: true,
-      prune: false,
     });
     expect(ApplyRequestSchema.safeParse({ unknown: true }).success).toBe(false);
+    expect(ApplyRequestSchema.safeParse({ prune: true }).success).toBe(false);
   });
 
   it('validates language pack requests', () => {

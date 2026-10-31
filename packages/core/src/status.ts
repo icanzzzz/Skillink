@@ -1,4 +1,4 @@
-import { lstat, readdir, stat } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
   SkillinkError,
@@ -10,12 +10,8 @@ import {
   type StatusReport,
   type StatusState,
 } from '@skillink/shared';
-import { inspectPath, isManagedLink } from './links.js';
-import {
-  assertSafeRealTargetPath,
-  isPathInside,
-  isSamePath,
-} from './path-policy.js';
+import { assertSafeRealTargetPath } from './path-policy.js';
+import { compareTargetEntry } from './target-entry.js';
 import { readRouteFile } from './route.js';
 import { readPackageFile } from './package-store.js';
 import { readSkillFile } from './skill-store.js';
@@ -105,6 +101,19 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
       continue;
     }
 
+    if (target.mode !== 'link') {
+      entries.push({
+        targetId: target.id,
+        targetPath,
+        name: '<target>',
+        version: '',
+        state: 'conflict',
+        path: targetPath,
+        detail: `Unsupported target mode "${target.mode}".`,
+      });
+      continue;
+    }
+
     const enabledLocks = Object.entries(target.packages).filter(
       ([, lock]) => lock.enabled !== false,
     );
@@ -190,9 +199,14 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
       }
 
       const destination = path.join(targetPath, skill.name);
-      const inspection = await inspectPath(destination);
+      const comparison = await compareTargetEntry({
+        destination,
+        sourcePath,
+        mode: target.mode,
+        expected: skill.entry,
+      });
 
-      if (inspection.kind === 'missing') {
+      if (comparison.kind === 'missing') {
         entries.push({
           targetId: target.id,
           targetPath,
@@ -205,46 +219,43 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
         continue;
       }
 
-      if (inspection.kind === 'link') {
-        if (isSamePath(inspection.target, sourcePath)) {
-          entries.push({
-            targetId: target.id,
-            targetPath,
-            name: skill.name,
-            version: skill.version,
-            state: 'ok',
-            path: destination,
-            sourcePath,
-          });
-          continue;
-        }
-
-        if (
-          isPathInside(inspection.target, paths.libraryDir) ||
-          isSamePath(inspection.target, paths.libraryDir)
-        ) {
-          entries.push({
-            targetId: target.id,
-            targetPath,
-            name: skill.name,
-            version: skill.version,
-            state: 'wrong-version',
-            path: destination,
-            sourcePath,
-            detail: `Link points to ${inspection.target}.`,
-          });
-          continue;
-        }
-
+      if (comparison.kind === 'ok') {
         entries.push({
           targetId: target.id,
           targetPath,
           name: skill.name,
           version: skill.version,
-          state: 'unmanaged',
+          state: 'ok',
           path: destination,
           sourcePath,
-          detail: `Link points outside the library: ${inspection.target}.`,
+        });
+        continue;
+      }
+
+      if (comparison.kind === 'wrong-mode') {
+        entries.push({
+          targetId: target.id,
+          targetPath,
+          name: skill.name,
+          version: skill.version,
+          state: 'wrong-mode',
+          path: destination,
+          sourcePath,
+          detail: `Existing ${comparison.actual.kind} is not a ${target.mode} entry.`,
+        });
+        continue;
+      }
+
+      if (comparison.kind === 'broken-link') {
+        entries.push({
+          targetId: target.id,
+          targetPath,
+          name: skill.name,
+          version: skill.version,
+          state: 'broken-link',
+          path: destination,
+          sourcePath,
+          detail: 'Link target is missing.',
         });
         continue;
       }
@@ -254,45 +265,15 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
         targetPath,
         name: skill.name,
         version: skill.version,
-        state: 'conflict',
+        state:
+          comparison.kind === 'wrong-version' ? 'wrong-version' : 'conflict',
         path: destination,
         sourcePath,
-        detail: `Existing ${inspection.kind} is not a managed link.`,
+        detail:
+          comparison.kind === 'wrong-version'
+            ? `Content does not match ${skill.name}@${skill.version}.`
+            : errorDetail(comparison.error),
       });
-    }
-
-    const desiredNames = new Set(resolution.skills.keys());
-    const children = await readdir(targetPath, { withFileTypes: true }).catch(
-      (error: unknown) => {
-        if (isNodeError(error) && error.code === 'ENOENT') {
-          return [];
-        }
-        throw error;
-      },
-    );
-
-    for (const child of children) {
-      if (desiredNames.has(child.name)) {
-        continue;
-      }
-
-      const childPath = path.join(targetPath, child.name);
-      const info = await lstat(childPath);
-      if (!info.isSymbolicLink()) {
-        continue;
-      }
-
-      if (await isManagedLink(childPath, paths)) {
-        entries.push({
-          targetId: target.id,
-          targetPath,
-          name: child.name,
-          version: '',
-          state: 'extra',
-          path: childPath,
-          detail: 'Managed link is not present in route.json.',
-        });
-      }
     }
   }
 

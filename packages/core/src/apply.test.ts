@@ -1,7 +1,9 @@
 import {
+  cp,
   lstat,
   mkdir,
   mkdtemp,
+  readFile,
   readlink,
   rm,
   writeFile,
@@ -16,6 +18,7 @@ import {
 } from '@skillink/shared';
 import { apply } from './apply.js';
 import { importSkill } from './import-skill.js';
+import { createDirectoryLink } from './links.js';
 import { computePackageIntegrity } from './package-graph.js';
 import {
   createPackageVersion,
@@ -24,7 +27,6 @@ import {
 import {
   addRouteEntry,
   readRouteFile,
-  removeRouteEntry,
   writeRouteFile,
 } from './route.js';
 import { addTarget } from './target.js';
@@ -384,7 +386,7 @@ describe('apply', () => {
     );
   });
 
-  it('prunes only managed skills that are no longer required', async () => {
+  it('leaves entries outside the route untouched', async () => {
     const { paths, targetPath } = await setup();
     await addRouteEntry({
       paths,
@@ -392,38 +394,27 @@ describe('apply', () => {
       name: 'pdf-pack',
       requested: '1.0.0',
     });
-    await addRouteEntry({
-      paths,
-      targetId: 'project-a',
-      name: 'docs-pack',
-      requested: '1.0.0',
-    });
     await apply({ paths });
-    await removeRouteEntry({
-      paths,
-      targetId: 'project-a',
-      name: 'docs-pack',
-    });
+    const extraPath = path.join(targetPath, 'review');
+    await createDirectoryLink(
+      getSkillDir(paths, 'review', '1.0.0'),
+      extraPath,
+    );
 
-    const report = await apply({ paths, prune: true });
+    const report = await apply({ paths });
 
     expect(report.ok).toBe(true);
-    await expect(lstat(path.join(targetPath, 'docs'))).rejects.toMatchObject({
-      code: 'ENOENT',
-    });
-    await expect(lstat(path.join(targetPath, 'review'))).rejects.toMatchObject({
-      code: 'ENOENT',
-    });
-    expect((await lstat(path.join(targetPath, 'pdf'))).isSymbolicLink()).toBe(
-      true,
+    expect((await lstat(extraPath)).isSymbolicLink()).toBe(true);
+    expect(await linkTarget(extraPath)).toBe(
+      getSkillDir(paths, 'review', '1.0.0'),
     );
   });
 
-  it('reports an unmanaged folder conflict without deleting it', async () => {
+  it('replaces a same-name real directory with a managed link', async () => {
     const { paths, targetPath } = await setup();
-    const conflictPath = path.join(targetPath, 'pdf');
-    await mkdir(conflictPath);
-    await writeFile(path.join(conflictPath, 'keep.txt'), 'keep', 'utf8');
+    const destination = path.join(targetPath, 'pdf');
+    await mkdir(destination);
+    await writeFile(path.join(destination, 'keep.txt'), 'keep', 'utf8');
     await addRouteEntry({
       paths,
       targetId: 'project-a',
@@ -433,15 +424,161 @@ describe('apply', () => {
 
     const report = await apply({ paths });
 
-    expect(report.ok).toBe(false);
-    expect(report.conflicts).toEqual(
+    expect(report.ok).toBe(true);
+    expect(report.operations).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: 'pdf', path: conflictPath }),
+        expect.objectContaining({ kind: 'replace-link', name: 'pdf' }),
       ]),
     );
+    const replacement = report.operations.find(
+      (operation) => operation.kind === 'replace-link',
+    );
+    expect(replacement).not.toHaveProperty('previousKind');
+    expect(replacement).not.toHaveProperty('previousSourcePath');
+    expect((await lstat(destination)).isSymbolicLink()).toBe(true);
+    expect(await linkTarget(destination)).toBe(
+      getSkillDir(paths, 'pdf', '1.0.0'),
+    );
     await expect(
-      writeFile(path.join(conflictPath, 'keep.txt'), 'still here', 'utf8'),
-    ).resolves.toBeUndefined();
+      readFile(path.join(destination, 'keep.txt'), 'utf8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('replaces a same-name regular file with a managed link', async () => {
+    const { paths, targetPath } = await setup();
+    const destination = path.join(targetPath, 'pdf');
+    await writeFile(destination, 'not a skill', 'utf8');
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'pdf-pack',
+      requested: '1.0.0',
+    });
+
+    const report = await apply({ paths });
+
+    expect(report.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'replace-link', name: 'pdf' }),
+      ]),
+    );
+    expect((await lstat(destination)).isSymbolicLink()).toBe(true);
+    expect(await linkTarget(destination)).toBe(
+      getSkillDir(paths, 'pdf', '1.0.0'),
+    );
+  });
+
+  it('replaces a broken link', async () => {
+    const { paths, targetPath } = await setup();
+    const missing = path.join(
+      await tempDir('skillink-apply-missing-link-'),
+      'gone',
+    );
+    await mkdir(missing);
+    const destination = path.join(targetPath, 'pdf');
+    await createDirectoryLink(missing, destination);
+    await rm(missing, { recursive: true, force: true });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'pdf-pack',
+      requested: '1.0.0',
+    });
+
+    const report = await apply({ paths });
+
+    expect(report.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'replace-link', name: 'pdf' }),
+      ]),
+    );
+    expect(await linkTarget(destination)).toBe(
+      getSkillDir(paths, 'pdf', '1.0.0'),
+    );
+  });
+
+  it('skips an external link whose content matches the skill', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'pdf-pack',
+      requested: '1.0.0',
+    });
+    const external = path.join(
+      await tempDir('skillink-apply-external-identical-'),
+      'pdf-copy',
+    );
+    await cp(getSkillDir(paths, 'pdf', '1.0.0'), external, {
+      recursive: true,
+    });
+    const destination = path.join(targetPath, 'pdf');
+    await createDirectoryLink(external, destination);
+
+    const report = await apply({ paths });
+
+    expect(report.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'skip', name: 'pdf' }),
+      ]),
+    );
+    expect(await linkTarget(destination)).toBe(path.resolve(external));
+  });
+
+  it('replaces an external link whose content differs from the skill', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'pdf-pack',
+      requested: '1.0.0',
+    });
+    const external = path.join(
+      await tempDir('skillink-apply-external-different-'),
+      'pdf-copy',
+    );
+    await cp(getSkillDir(paths, 'pdf', '1.0.0'), external, {
+      recursive: true,
+    });
+    await writeFile(path.join(external, 'content.txt'), 'changed', 'utf8');
+    const destination = path.join(targetPath, 'pdf');
+    await createDirectoryLink(external, destination);
+
+    const report = await apply({ paths });
+
+    expect(report.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'replace-link', name: 'pdf' }),
+      ]),
+    );
+    expect(await linkTarget(destination)).toBe(
+      getSkillDir(paths, 'pdf', '1.0.0'),
+    );
+  });
+
+  it('does not delete a real directory on dry-run', async () => {
+    const { paths, targetPath } = await setup();
+    const destination = path.join(targetPath, 'pdf');
+    await mkdir(destination);
+    await writeFile(path.join(destination, 'keep.txt'), 'keep', 'utf8');
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'pdf-pack',
+      requested: '1.0.0',
+    });
+
+    const report = await apply({ paths, dryRun: true });
+
+    expect(report.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'replace-link', name: 'pdf' }),
+      ]),
+    );
+    expect((await lstat(destination)).isDirectory()).toBe(true);
+    await expect(
+      readFile(path.join(destination, 'keep.txt'), 'utf8'),
+    ).resolves.toBe('keep');
   });
 
   it('rejects a route whose skill content is missing', async () => {

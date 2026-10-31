@@ -13,7 +13,12 @@ import { getSkillinkPaths, type TargetRoute } from '@skillink/shared';
 import { createDirectoryLink } from './links.js';
 import { importSkill } from './import-skill.js';
 import { createPackageVersion } from './package-store.js';
-import { gcTargetEntries, resolveTargetSkillNames } from './target-gc.js';
+import {
+  gcTargetEntries,
+  resolvePackageSkillNames,
+  resolveTargetActiveSkillNames,
+  resolveTargetSkillNames,
+} from './target-gc.js';
 
 const tempDirs: string[] = [];
 
@@ -83,6 +88,53 @@ describe('target GC', () => {
     await expect(resolveTargetSkillNames({ paths, target })).resolves.toEqual([
       'pdf',
     ]);
+  });
+
+  it('resolves one package closure for route-change cleanup', async () => {
+    const { paths, target } = await setup();
+    await createPackageVersion({
+      paths,
+      name: 'nested',
+      version: '1.0.0',
+      packages: { frontend: '1.0.0' },
+    });
+
+    await expect(
+      resolvePackageSkillNames({
+        paths,
+        packageRef: { name: 'frontend', version: '1.0.0' },
+      }),
+    ).resolves.toEqual(['pdf']);
+    await expect(
+      resolvePackageSkillNames({
+        paths,
+        packageRef: { name: 'nested', version: '1.0.0' },
+      }),
+    ).resolves.toEqual(['pdf']);
+    expect(target.packages.frontend?.enabled).toBe(false);
+  });
+
+  it('resolves only enabled package locks as active target skills', async () => {
+    const { paths, target } = await setup();
+    const enabledTarget: TargetRoute = {
+      ...target,
+      packages: {
+        frontend: { ...target.packages.frontend!, enabled: true },
+      },
+    };
+
+    await expect(
+      resolveTargetActiveSkillNames({ paths, target }),
+    ).resolves.toEqual([]);
+    await expect(
+      resolveTargetActiveSkillNames({ paths, target: enabledTarget }),
+    ).resolves.toEqual(['pdf']);
+    await expect(
+      resolveTargetActiveSkillNames({
+        paths,
+        target: { ...enabledTarget, enabled: false },
+      }),
+    ).resolves.toEqual([]);
   });
 
   it('deletes resolved directory links and real directories but skips files', async () => {

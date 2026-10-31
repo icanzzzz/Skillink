@@ -92,18 +92,16 @@ export const EN_MESSAGES = {
   'status.unresolved': 'unresolved',
   'status.ok': 'ok',
   'status.missing': 'missing',
+  'status.wrong_mode': 'wrong-mode',
   'status.wrong_version': 'wrong-version',
   'status.broken_link': 'broken-link',
   'status.conflict': 'conflict',
-  'status.unmanaged': 'unmanaged',
-  'status.extra': 'extra',
   'status.enabled': 'enabled',
   'status.disabled': 'disabled',
 
   'apply.kind.create_target': 'create-target',
   'apply.kind.create_link': 'create-link',
   'apply.kind.replace_link': 'replace-link',
-  'apply.kind.remove_link': 'remove-link',
   'apply.kind.skip': 'skip',
 
   'common.browse': 'Browse',
@@ -127,7 +125,6 @@ export const EN_MESSAGES = {
     one: '{count} skill',
     other: '{count} skills',
   },
-  'targets.prune': 'Prune',
   'targets.previewApply': 'Preview apply',
   'targets.actions.enableTarget': 'Enable target',
   'targets.actions.disableTarget': 'Disable target',
@@ -137,8 +134,12 @@ export const EN_MESSAGES = {
   'targets.actions.removeRoute': 'Remove route',
   'targets.confirm.removeTarget':
     'Remove target "{name}"? Its route-resolved skill directories will be deleted from the target directory, even if they were not created by Skillink. Regular files and the target directory itself are kept.',
+  'targets.confirm.disableTarget':
+    'Disable target "{name}"? Its route-resolved skill directories will be deleted from the target directory, even if they were not created by Skillink.',
+  'targets.confirm.disableRoute':
+    'Disable package "{name}" on target "{target}"? Skill directories no longer needed by the target will be deleted, even if they were not created by Skillink.',
   'targets.confirm.removeRoute':
-    'Remove package "{name}" from target "{target}"?',
+    'Remove package "{name}" from target "{target}"? Skill directories no longer needed by the target will be deleted, even if they were not created by Skillink.',
   'targets.packages.empty': 'No packages assigned yet.',
   'targets.apply.eyebrow': 'APPLY',
   'targets.apply.preview': 'Apply preview',

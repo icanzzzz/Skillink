@@ -20,6 +20,7 @@ export * from './skill-scan.js';
 export * from './skill-store.js';
 export * from './status.js';
 export * from './target.js';
+export * from './target-entry.js';
 export * from './target-gc.js';
 export * from './target-resolution.js';
 export type {

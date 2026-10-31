@@ -43,3 +43,6 @@ Thumbs.db
 # Local worktrees
 .worktrees/
 worktrees/
+
+# opencode
+.opencode/

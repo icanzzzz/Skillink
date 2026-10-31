@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { ApplyReport } from '@skillink/shared';
@@ -224,7 +231,7 @@ describe('CLI adapter', () => {
     }
   });
 
-  it('returns apply conflict reports from the real CLI', async () => {
+  it('replaces a same-name real directory through the real CLI', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'skillink-adapter-'));
     const home = path.join(root, 'home');
     const source = path.join(root, 'source');
@@ -269,15 +276,14 @@ describe('CLI adapter', () => {
 
       const report = await adapter.invoke<ApplyReport>(['apply']);
 
-      expect(report.ok).toBe(false);
-      expect(report.conflicts).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ name: 'pdf', reason: expect.any(String) }),
-        ]),
-      );
+      expect(report.ok).toBe(true);
+      expect(report.conflicts).toEqual([]);
       expect(
-        await readFile(path.join(targetPath, 'pdf', 'unmanaged.txt'), 'utf8'),
-      ).toBe('keep');
+        (await lstat(path.join(targetPath, 'pdf'))).isSymbolicLink(),
+      ).toBe(true);
+      await expect(
+        readFile(path.join(targetPath, 'pdf', 'unmanaged.txt'), 'utf8'),
+      ).rejects.toMatchObject({ code: 'ENOENT' });
     } finally {
       vi.unstubAllEnvs();
       await rm(root, { recursive: true, force: true });

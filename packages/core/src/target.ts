@@ -119,11 +119,20 @@ export async function setTargetEnabled(
     );
   }
 
+  const wasEnabled = target.enabled;
+  const skillNames =
+    !enabled && wasEnabled
+      ? await resolveTargetSkillNames({ paths, target }).catch(() => [])
+      : [];
+
   target.enabled = enabled;
   if (enabled) {
     await validateTargetRoute(paths, target);
   }
   await withHistory(paths, enabled ? 'enable-target' : 'disable-target', async () => {
+    if (skillNames.length > 0) {
+      await gcTargetEntries({ paths, target, skillNames });
+    }
     await writeRouteFile(paths, route);
   });
 

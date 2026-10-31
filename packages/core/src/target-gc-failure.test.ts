@@ -66,8 +66,17 @@ import { getSkillDir } from '@skillink/shared';
 import { importSkill } from './import-skill.js';
 import { createPackageVersion } from './package-store.js';
 import { createDirectoryLink } from './links.js';
-import { addRouteEntry, readRouteFile } from './route.js';
-import { addTarget, removeTarget } from './target.js';
+import {
+  addRouteEntry,
+  readRouteFile,
+  removeRouteEntry,
+  setPackageEnabled,
+} from './route.js';
+import {
+  addTarget,
+  removeTarget,
+  setTargetEnabled,
+} from './target.js';
 
 const tempDirs: string[] = [];
 
@@ -147,6 +156,81 @@ describe('target GC failure handling', () => {
     ).rejects.toMatchObject({ code: 'IO_ERROR' });
 
     expect((await readRouteFile(paths)).targets).toHaveLength(1);
+    expect(await pathExists(skillPath)).toBe(true);
+  });
+
+  it('keeps route unchanged when package-disable GC fails', async () => {
+    const { paths, targetPath } = await setup();
+    const skillPath = path.join(targetPath, 'pdf');
+    await mkdir(skillPath, { recursive: true });
+    state.failRmPath = skillPath;
+
+    await expect(
+      setPackageEnabled(paths, 'project-a', 'frontend', false),
+    ).rejects.toMatchObject({ code: 'IO_ERROR' });
+
+    const route = await readRouteFile(paths);
+    expect(route.targets[0]?.packages.frontend?.enabled).not.toBe(false);
+    expect(await pathExists(skillPath)).toBe(true);
+  });
+
+  it('keeps route unchanged when route-remove GC fails', async () => {
+    const { paths, targetPath } = await setup();
+    const skillPath = path.join(targetPath, 'pdf');
+    await mkdir(skillPath, { recursive: true });
+    state.failRmPath = skillPath;
+
+    await expect(
+      removeRouteEntry({
+        paths,
+        targetId: 'project-a',
+        name: 'frontend',
+      }),
+    ).rejects.toMatchObject({ code: 'IO_ERROR' });
+
+    const route = await readRouteFile(paths);
+    expect(route.targets[0]?.packages.frontend).toBeDefined();
+    expect(await pathExists(skillPath)).toBe(true);
+  });
+
+  it('keeps route unchanged when route-add replacement GC fails', async () => {
+    const { paths, targetPath } = await setup();
+    await createPackageVersion({
+      paths,
+      name: 'frontend',
+      version: '1.1.0',
+      skills: { review: '1.0.0' },
+    });
+    const skillPath = path.join(targetPath, 'pdf');
+    await mkdir(skillPath, { recursive: true });
+    state.failRmPath = skillPath;
+
+    await expect(
+      addRouteEntry({
+        paths,
+        targetId: 'project-a',
+        name: 'frontend',
+        requested: '1.1.0',
+      }),
+    ).rejects.toMatchObject({ code: 'IO_ERROR' });
+
+    const route = await readRouteFile(paths);
+    expect(route.targets[0]?.packages.frontend?.resolved).toBe('1.0.0');
+    expect(await pathExists(skillPath)).toBe(true);
+  });
+
+  it('keeps route unchanged when target-disable GC fails', async () => {
+    const { paths, targetPath } = await setup();
+    const skillPath = path.join(targetPath, 'pdf');
+    await mkdir(skillPath, { recursive: true });
+    state.failRmPath = skillPath;
+
+    await expect(
+      setTargetEnabled(paths, 'project-a', false),
+    ).rejects.toMatchObject({ code: 'IO_ERROR' });
+
+    const route = await readRouteFile(paths);
+    expect(route.targets[0]?.enabled).not.toBe(false);
     expect(await pathExists(skillPath)).toBe(true);
   });
 

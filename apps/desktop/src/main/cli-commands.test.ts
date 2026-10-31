@@ -37,13 +37,11 @@ describe('CLI argv builders', () => {
     expect(
       buildApplyArgs({
         dryRun: true,
-        prune: true,
         targetId: 'project-a',
       }),
     ).toEqual([
       'apply',
       '--dry-run',
-      '--prune',
       '--target',
       'project-a',
       '--json',

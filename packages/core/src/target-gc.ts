@@ -46,6 +46,55 @@ export async function resolveTargetSkillNames(
   return [...resolvePackageGraph(packageFile, skillFile, roots).skills.keys()].sort();
 }
 
+export interface PackageSkillNamesInput {
+  paths: SkillinkPaths;
+  packageRef: { name: string; version: string };
+}
+
+export async function resolvePackageSkillNames(
+  input: PackageSkillNamesInput,
+): Promise<string[]> {
+  const [packageFile, skillFile] = await Promise.all([
+    readPackageFile(input.paths),
+    readSkillFile(input.paths),
+  ]);
+
+  return [
+    ...resolvePackageGraph(packageFile, skillFile, [input.packageRef]).skills.keys(),
+  ].sort();
+}
+
+export async function resolveTargetActiveSkillNames(
+  input: TargetGcInput,
+): Promise<string[]> {
+  if (!input.target.enabled) {
+    return [];
+  }
+
+  const roots = Object.entries(input.target.packages)
+    .filter(([, lock]) => lock.enabled !== false)
+    .map(([name, lock]) => ({ name, version: lock.resolved }));
+
+  if (roots.length === 0) {
+    return [];
+  }
+
+  const [packageFile, skillFile] = await Promise.all([
+    readPackageFile(input.paths),
+    readSkillFile(input.paths),
+  ]);
+
+  return [...resolvePackageGraph(packageFile, skillFile, roots).skills.keys()].sort();
+}
+
+export function subtractSkillNames(
+  names: string[],
+  keep: Iterable<string>,
+): string[] {
+  const keepSet = new Set(keep);
+  return names.filter((name) => !keepSet.has(name));
+}
+
 export async function gcTargetEntries(
   input: TargetGcInput & { skillNames: string[] },
 ): Promise<string[]> {

@@ -938,7 +938,7 @@ describe('CLI', () => {
     expect(ctx.err.join('\n')).toBe('');
   });
 
-  it('keeps apply conflict JSON on stdout and exits 3', async () => {
+  it('replaces a same-name real directory during apply', async () => {
     const root = await tempDir('skillink-cli-');
     const home = path.join(root, 'home');
     const source = await makeSkillSource();
@@ -961,21 +961,20 @@ describe('CLI', () => {
 
     ctx.out.length = 0;
     ctx.err.length = 0;
-    expect(await runCli(['apply', '--json'], ctx)).toBe(3);
+    expect(await runCli(['apply', '--json'], ctx)).toBe(0);
     const report = JSON.parse(ctx.out.join('\n')) as {
       ok: boolean;
-      conflicts: Array<{ name: string; reason: string }>;
+      conflicts: unknown[];
     };
-    expect(report.ok).toBe(false);
-    expect(report.conflicts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: 'pdf', reason: expect.any(String) }),
-      ]),
-    );
+    expect(report.ok).toBe(true);
+    expect(report.conflicts).toEqual([]);
     expect(ctx.err.join('\n')).toBe('');
-    expect(
-      await readFile(path.join(targetPath, 'pdf', 'unmanaged.txt'), 'utf8'),
-    ).toBe('keep');
+    expect((await lstat(path.join(targetPath, 'pdf'))).isSymbolicLink()).toBe(
+      true,
+    );
+    await expect(
+      readFile(path.join(targetPath, 'pdf', 'unmanaged.txt'), 'utf8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('initializes settings.json without overwriting existing settings', async () => {

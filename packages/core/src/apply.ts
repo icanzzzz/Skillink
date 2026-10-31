@@ -1,24 +1,19 @@
-import { lstat, mkdir, readdir, realpath, rmdir, stat } from 'node:fs/promises';
+import { mkdir, realpath, rm, rmdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
   SkillinkError,
   assertSafeSegment,
   assertSafeVersion,
   getSkillinkPaths,
-  type ApplyConflict,
   type ApplyOperation,
-  type ApplyOperationKind,
   type ApplyReport,
   type PackageFile,
   type SkillinkPaths,
   type TargetRoute,
 } from '@skillink/shared';
-import {
-  createDirectoryLink,
-  inspectPath,
-  isManagedLink,
-  removeLink,
-} from './links.js';
+import { createDirectoryLink, removeLink } from './links.js';
+import { withFsRetry } from './fs-retry.js';
+import { compareTargetEntry } from './target-entry.js';
 import {
   assertSafeRealTargetPath,
   isPathInside,
@@ -39,11 +34,11 @@ export interface ApplyInput {
   home?: string;
   targetId?: string;
   dryRun?: boolean;
-  prune?: boolean;
 }
 
 interface PlannedOperation extends ApplyOperation {
   previousSourcePath?: string;
+  previousKind?: 'link' | 'directory' | 'file' | 'other';
 }
 
 interface PlannedTarget {
@@ -51,7 +46,15 @@ interface PlannedTarget {
   targetPath: string;
   targetExisted: boolean;
   operations: PlannedOperation[];
-  conflicts: ApplyConflict[];
+}
+
+function toPublicOperation(operation: PlannedOperation): ApplyOperation {
+  const {
+    previousKind: _previousKind,
+    previousSourcePath: _previousSourcePath,
+    ...publicOperation
+  } = operation;
+  return publicOperation;
 }
 
 type UndoAction =
@@ -107,7 +110,6 @@ async function planTarget(
   packageFile: PackageFile,
   skillFile: Awaited<ReturnType<typeof readSkillFile>>,
   target: TargetRoute,
-  prune: boolean,
 ): Promise<PlannedTarget | undefined> {
   if (!target.enabled) {
     return undefined;
@@ -116,7 +118,6 @@ async function planTarget(
   const targetPath = await assertSafeRealTargetPath(target.path, paths);
   const targetExisted = await inspectTargetDirectory(targetPath);
   const operations: PlannedOperation[] = [];
-  const conflicts: ApplyConflict[] = [];
 
   if (!targetExisted) {
     operations.push({
@@ -183,9 +184,14 @@ async function planTarget(
       );
     }
 
-    const inspection = await inspectPath(destination);
+    const comparison = await compareTargetEntry({
+      destination,
+      sourcePath: sourceDir,
+      mode: target.mode,
+      expected: skill.entry,
+    });
 
-    if (inspection.kind === 'missing') {
+    if (comparison.kind === 'missing') {
       operations.push({
         kind: 'create-link',
         targetId: target.id,
@@ -198,82 +204,40 @@ async function planTarget(
       continue;
     }
 
-    if (inspection.kind === 'link') {
-      if (isSamePath(inspection.target, sourceDir)) {
-        operations.push({
-          kind: 'skip',
-          targetId: target.id,
-          targetPath,
-          name: skill.name,
-          version: skill.version,
-          path: destination,
-          sourcePath: sourceDir,
-        });
-        continue;
-      }
-
-      if (await isManagedLink(destination, paths)) {
-        operations.push({
-          kind: 'replace-link',
-          targetId: target.id,
-          targetPath,
-          name: skill.name,
-          version: skill.version,
-          path: destination,
-          sourcePath: sourceDir,
-          previousSourcePath: inspection.target,
-        });
-        continue;
-      }
-    }
-
-    conflicts.push({
-      targetId: target.id,
-      name: skill.name,
-      path: destination,
-      reason:
-        inspection.kind === 'link'
-          ? 'Existing link is not managed by Skillink.'
-          : `Existing ${inspection.kind} is not a managed link.`,
-    });
-  }
-
-  if (prune) {
-    const entries = await readdir(targetPath, { withFileTypes: true }).catch(
-      (error: unknown) => {
-        if (isNodeError(error) && error.code === 'ENOENT') {
-          return [];
-        }
-        throw error;
-      },
-    );
-
-    for (const entry of entries) {
-      if (desired.has(entry.name)) {
-        continue;
-      }
-
-      const entryPath = path.join(targetPath, entry.name);
-      const info = await lstat(entryPath);
-      if (!info.isSymbolicLink()) {
-        continue;
-      }
-
-      if (!(await isManagedLink(entryPath, paths))) {
-        continue;
-      }
-
-      const inspection = await inspectPath(entryPath);
+    if (comparison.kind === 'ok') {
       operations.push({
-        kind: 'remove-link',
+        kind: 'skip',
         targetId: target.id,
         targetPath,
-        name: entry.name,
-        path: entryPath,
-        previousSourcePath:
-          inspection.kind === 'link' ? inspection.target : undefined,
+        name: skill.name,
+        version: skill.version,
+        path: destination,
+        sourcePath: sourceDir,
       });
+      continue;
     }
+
+    if (comparison.kind === 'error') {
+      throw comparison.error;
+    }
+
+    operations.push({
+      kind: 'replace-link',
+      targetId: target.id,
+      targetPath,
+      name: skill.name,
+      version: skill.version,
+      path: destination,
+      sourcePath: sourceDir,
+      previousKind:
+        comparison.actual.kind === 'missing'
+          ? 'other'
+          : comparison.actual.kind,
+      previousSourcePath:
+        comparison.actual.kind === 'link'
+          ? comparison.actual.target
+          : undefined,
+    });
   }
 
   return {
@@ -281,7 +245,6 @@ async function planTarget(
     targetPath,
     targetExisted,
     operations,
-    conflicts,
   };
 }
 
@@ -360,20 +323,14 @@ async function executePlan(
               target: operation.previousSourcePath,
             });
           }
-          await removeLink(operation.path);
-          await createDirectoryLink(operation.sourcePath!, operation.path);
-          continue;
-        }
-
-        if (operation.kind === 'remove-link') {
-          if (operation.previousSourcePath) {
-            undo.push({
-              kind: 'restore-link',
-              path: operation.path,
-              target: operation.previousSourcePath,
-            });
+          if (operation.previousKind === 'link') {
+            await removeLink(operation.path);
+          } else {
+            await withFsRetry(() =>
+              rm(operation.path, { recursive: true, force: true }),
+            );
           }
-          await removeLink(operation.path);
+          await createDirectoryLink(operation.sourcePath!, operation.path);
         }
       }
     }
@@ -417,20 +374,15 @@ export async function apply(input: ApplyInput = {}): Promise<ApplyReport> {
 
   const plans: PlannedTarget[] = [];
   for (const target of selectedTargets) {
-    const plan = await planTarget(
-      paths,
-      packageFile,
-      skillFile,
-      target,
-      input.prune ?? false,
-    );
+    const plan = await planTarget(paths, packageFile, skillFile, target);
     if (plan) {
       plans.push(plan);
     }
   }
 
-  const operations = plans.flatMap((plan) => plan.operations);
-  const conflicts = plans.flatMap((plan) => plan.conflicts);
+  const operations = plans.flatMap((plan) =>
+    plan.operations.map(toPublicOperation),
+  );
   const dryRun = input.dryRun ?? false;
 
   if (!dryRun) {
@@ -439,8 +391,8 @@ export async function apply(input: ApplyInput = {}): Promise<ApplyReport> {
 
   return {
     dryRun,
-    ok: conflicts.length === 0,
+    ok: true,
     operations,
-    conflicts,
+    conflicts: [],
   };
 }

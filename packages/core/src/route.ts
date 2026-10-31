@@ -16,6 +16,12 @@ import {
 } from './package-graph.js';
 import { withHistory } from './history.js';
 import { assertSafePackageName } from './package-name.js';
+import {
+  gcTargetEntries,
+  resolvePackageSkillNames,
+  resolveTargetActiveSkillNames,
+  subtractSkillNames,
+} from './target-gc.js';
 
 export async function readRouteFile(paths: SkillinkPaths): Promise<RouteFile> {
   return readJsonFile(paths.routeFile, RouteFileSchema, createEmptyRouteFile());
@@ -63,6 +69,13 @@ export async function addRouteEntry(
   const packageFile = await readPackageFile(input.paths);
   const skillFile = await readSkillFile(input.paths);
   const resolved = resolvePackageVersion(packageFile, name, input.requested);
+  const previousLock = target.packages[name];
+  const previousSkills = previousLock
+    ? await resolvePackageSkillNames({
+        paths: input.paths,
+        packageRef: { name, version: previousLock.resolved },
+      }).catch(() => [])
+    : [];
 
   const lock: PackageLock = {
     requested: input.requested,
@@ -92,9 +105,29 @@ export async function addRouteEntry(
       })),
   );
 
+  let removedSkills: string[] = [];
+  if (previousSkills.length > 0) {
+    try {
+      const nextSkills = await resolveTargetActiveSkillNames({
+        paths: input.paths,
+        target: candidate,
+      });
+      removedSkills = subtractSkillNames(previousSkills, nextSkills);
+    } catch {
+      removedSkills = [];
+    }
+  }
+
   route.targets[targetIndex] = candidate;
 
   await withHistory(input.paths, 'add-route-entry', async () => {
+    if (removedSkills.length > 0) {
+      await gcTargetEntries({
+        paths: input.paths,
+        target: candidate,
+        skillNames: removedSkills,
+      });
+    }
     await writeRouteFile(input.paths, route);
   });
 
@@ -157,14 +190,40 @@ export async function setPackageEnabled(
   }
 
   const lock = target.packages[name]!;
+  const wasEnabled = lock.enabled !== false;
+  const removedSkills =
+    !enabled && wasEnabled && target.enabled
+      ? await resolvePackageSkillNames({
+          paths,
+          packageRef: { name, version: lock.resolved },
+        }).catch(() => [])
+      : [];
+
   lock.enabled = enabled;
   if (enabled) {
     await validateTargetRoute(paths, target);
   }
+
+  let removeSkills: string[] = [];
+  if (!enabled && removedSkills.length > 0) {
+    try {
+      const remainingSkills = await resolveTargetActiveSkillNames({
+        paths,
+        target,
+      });
+      removeSkills = subtractSkillNames(removedSkills, remainingSkills);
+    } catch {
+      removeSkills = [];
+    }
+  }
+
   await withHistory(
     paths,
     enabled ? 'enable-route-package' : 'disable-route-package',
     async () => {
+      if (removeSkills.length > 0) {
+        await gcTargetEntries({ paths, target, skillNames: removeSkills });
+      }
       await writeRouteFile(paths, route);
     },
   );
@@ -198,6 +257,12 @@ export async function removeRouteEntry(
     return false;
   }
 
+  const removedLock = target.packages[name]!;
+  const removedSkills = await resolvePackageSkillNames({
+    paths: input.paths,
+    packageRef: { name, version: removedLock.resolved },
+  }).catch(() => []);
+
   delete target.packages[name];
 
   if (!input.force) {
@@ -225,7 +290,27 @@ export async function removeRouteEntry(
     }
   }
 
+  let removeSkills: string[] = [];
+  if (removedSkills.length > 0) {
+    try {
+      const remainingSkills = await resolveTargetActiveSkillNames({
+        paths: input.paths,
+        target,
+      });
+      removeSkills = subtractSkillNames(removedSkills, remainingSkills);
+    } catch {
+      removeSkills = [];
+    }
+  }
+
   await withHistory(input.paths, 'remove-route-entry', async () => {
+    if (removeSkills.length > 0) {
+      await gcTargetEntries({
+        paths: input.paths,
+        target,
+        skillNames: removeSkills,
+      });
+    }
     await writeRouteFile(input.paths, route);
   });
   return true;

@@ -1,5 +1,4 @@
 import {
-  lstat,
   mkdir,
   mkdtemp,
   rm,
@@ -15,6 +14,7 @@ import {
 } from '@skillink/shared';
 import { apply } from './apply.js';
 import { importSkill } from './import-skill.js';
+import { createDirectoryLink } from './links.js';
 import { computePackageIntegrity } from './package-graph.js';
 import {
   createPackageVersion,
@@ -24,7 +24,6 @@ import {
 import {
   addRouteEntry,
   readRouteFile,
-  removeRouteEntry,
   writeRouteFile,
 } from './route.js';
 import { status } from './status.js';
@@ -142,7 +141,7 @@ describe('status', () => {
     );
   });
 
-  it('reports conflict for an unmanaged real folder', async () => {
+  it('reports wrong-mode for a same-name real folder', async () => {
     const { paths, targetPath } = await setup();
     await addRouteEntry({
       paths,
@@ -157,7 +156,33 @@ describe('status', () => {
     expect(report.healthy).toBe(false);
     expect(report.entries).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: 'pdf', state: 'conflict' }),
+        expect.objectContaining({ name: 'pdf', state: 'wrong-mode' }),
+      ]),
+    );
+  });
+
+  it('reports broken-link for a dangling skill link', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'pdf-pack',
+      requested: '1.0.0',
+    });
+    const missing = path.join(
+      await tempDir('skillink-status-missing-target-'),
+      'gone',
+    );
+    await mkdir(missing);
+    const destination = path.join(targetPath, 'pdf');
+    await createDirectoryLink(missing, destination);
+    await rm(missing, { recursive: true, force: true });
+
+    const report = await status({ paths });
+
+    expect(report.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'pdf', state: 'broken-link' }),
       ]),
     );
   });
@@ -192,7 +217,7 @@ describe('status', () => {
     );
   });
 
-  it('reports extra managed links not present in the route', async () => {
+  it('ignores links outside the route', async () => {
     const { paths, targetPath } = await setup();
     await addRouteEntry({
       paths,
@@ -200,30 +225,16 @@ describe('status', () => {
       name: 'pdf-pack',
       requested: '1.0.0',
     });
-    await addRouteEntry({
-      paths,
-      targetId: 'project-a',
-      name: 'docs-pack',
-      requested: '1.0.0',
-    });
     await apply({ paths });
-    await removeRouteEntry({
-      paths,
-      targetId: 'project-a',
-      name: 'docs-pack',
-    });
+    await createDirectoryLink(
+      getSkillDir(paths, 'review', '1.0.0'),
+      path.join(targetPath, 'review'),
+    );
 
     const report = await status({ paths });
 
-    expect(report.entries).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: 'docs', state: 'extra' }),
-        expect.objectContaining({ name: 'review', state: 'extra' }),
-      ]),
-    );
-    expect(
-      (await lstat(path.join(targetPath, 'docs'))).isSymbolicLink(),
-    ).toBe(true);
+    expect(report.healthy).toBe(true);
+    expect(report.entries.some((entry) => entry.name === 'review')).toBe(false);
   });
 
   it('reports a missing package version with packageName', async () => {

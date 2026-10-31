@@ -840,7 +840,7 @@ export async function runCli(
 
   target
     .command('disable')
-    .description('Disable a target')
+    .description('Disable a target and delete its route-resolved skill directories')
     .argument('<id>', 'Target id')
     .option('--json', 'Print machine-readable JSON')
     .action(async (id: string, options: { json?: boolean }) => {
@@ -857,7 +857,7 @@ export async function runCli(
 
   route
     .command('add')
-    .description('Assign a package version to a target')
+    .description('Assign a package version and delete target skills dropped by the change')
     .argument('<target-id>', 'Target id')
     .argument('<package@version>', 'Package name and version/range/tag')
     .option('--json', 'Print machine-readable JSON')
@@ -933,7 +933,7 @@ export async function runCli(
 
   route
     .command('disable')
-    .description('Disable a package assignment on a target')
+    .description('Disable a package assignment and delete skills no longer needed')
     .argument('<target-id>', 'Target id')
     .argument('<package>', 'Package name')
     .option('--json', 'Print machine-readable JSON')
@@ -951,7 +951,7 @@ export async function runCli(
 
   route
     .command('remove')
-    .description('Remove a package assignment from a target')
+    .description('Remove a package assignment and delete skills no longer needed')
     .argument('<target-id>', 'Target id')
     .argument('<package>', 'Package name')
     .option('--force', 'Remove even if the remaining graph is invalid')
@@ -1102,13 +1102,11 @@ export async function runCli(
     .description('Reconcile route.json into target directories')
     .option('--target <id>', 'Only apply one target')
     .option('--dry-run', 'Show the plan without changing the filesystem')
-    .option('--prune', 'Remove managed links no longer in route.json')
     .option('--json', 'Print machine-readable JSON')
     .action(
       async (options: {
         target?: string;
         dryRun?: boolean;
-        prune?: boolean;
         json?: boolean;
       }) => {
         const paths = await ensureHome(context.home);
@@ -1116,7 +1114,6 @@ export async function runCli(
           paths,
           targetId: options.target,
           dryRun: options.dryRun,
-          prune: options.prune,
         });
 
         if (options.json) {

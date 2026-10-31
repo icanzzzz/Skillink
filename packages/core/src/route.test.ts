@@ -9,6 +9,7 @@ import {
   type SkillFile,
   type SkillinkPaths,
 } from '@skillink/shared';
+import { createDirectoryLink } from './links.js';
 import { computePackageIntegrity } from './package-graph.js';
 import {
   createPackageVersion,
@@ -21,6 +22,7 @@ import {
   readRouteFile,
   removeRouteEntry,
   setPackageEnabled,
+  writeRouteFile,
 } from './route.js';
 import { writeSkillFile } from './skill-store.js';
 import { addTarget } from './target.js';
@@ -31,6 +33,12 @@ async function tempDir(prefix: string): Promise<string> {
   const dir = await mkdtemp(path.join(os.tmpdir(), prefix));
   tempDirs.push(dir);
   return dir;
+}
+
+async function pathExists(target: string): Promise<boolean> {
+  return stat(target)
+    .then(() => true)
+    .catch(() => false);
 }
 
 async function seedSkills(
@@ -435,6 +443,209 @@ describe('route entries', () => {
     ).rejects.toMatchObject({ code: 'INVALID_NAME' });
 
     expect((Object.prototype as { enabled?: boolean }).enabled).toBeUndefined();
+  });
+
+  it('cleans target skills that are no longer needed when removing a route', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'frontend',
+      requested: '1.0.0',
+    });
+    await createDirectoryLink(
+      getSkillDir(paths, 'pdf', '1.0.0'),
+      path.join(targetPath, 'pdf'),
+    );
+    await createDirectoryLink(
+      getSkillDir(paths, 'review', '1.0.0'),
+      path.join(targetPath, 'review'),
+    );
+
+    await expect(
+      removeRouteEntry({
+        paths,
+        targetId: 'project-a',
+        name: 'frontend',
+      }),
+    ).resolves.toBe(true);
+
+    expect(await pathExists(path.join(targetPath, 'pdf'))).toBe(false);
+    expect(await pathExists(path.join(targetPath, 'review'))).toBe(false);
+    expect(await pathExists(targetPath)).toBe(true);
+  });
+
+  it('keeps skills shared by another package when removing a route', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'frontend',
+      requested: '1.0.0',
+    });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'legacy',
+      requested: '1.0.0',
+    });
+    await createDirectoryLink(
+      getSkillDir(paths, 'pdf', '1.0.0'),
+      path.join(targetPath, 'pdf'),
+    );
+    await createDirectoryLink(
+      getSkillDir(paths, 'review', '1.0.0'),
+      path.join(targetPath, 'review'),
+    );
+
+    await removeRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'legacy',
+    });
+
+    expect(await pathExists(path.join(targetPath, 'pdf'))).toBe(true);
+    expect(await pathExists(path.join(targetPath, 'review'))).toBe(true);
+  });
+
+  it('cleans target skills when disabling a package', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'frontend',
+      requested: '1.0.0',
+    });
+    await createDirectoryLink(
+      getSkillDir(paths, 'pdf', '1.0.0'),
+      path.join(targetPath, 'pdf'),
+    );
+    await createDirectoryLink(
+      getSkillDir(paths, 'review', '1.0.0'),
+      path.join(targetPath, 'review'),
+    );
+
+    await setPackageEnabled(paths, 'project-a', 'frontend', false);
+
+    expect(await pathExists(path.join(targetPath, 'pdf'))).toBe(false);
+    expect(await pathExists(path.join(targetPath, 'review'))).toBe(false);
+  });
+
+  it('keeps skills shared by another package when disabling a package', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'frontend',
+      requested: '1.0.0',
+    });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'legacy',
+      requested: '1.0.0',
+    });
+    await createDirectoryLink(
+      getSkillDir(paths, 'pdf', '1.0.0'),
+      path.join(targetPath, 'pdf'),
+    );
+    await createDirectoryLink(
+      getSkillDir(paths, 'review', '1.0.0'),
+      path.join(targetPath, 'review'),
+    );
+
+    await setPackageEnabled(paths, 'project-a', 'legacy', false);
+
+    expect(await pathExists(path.join(targetPath, 'pdf'))).toBe(true);
+    expect(await pathExists(path.join(targetPath, 'review'))).toBe(true);
+  });
+
+  it('cleans dropped skills when a routed package changes version', async () => {
+    const { paths, targetPath } = await setup();
+    await createPackageVersion({
+      paths,
+      name: 'docs',
+      version: '1.1.0',
+      skills: { review: '1.0.0' },
+    });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'docs',
+      requested: '1.0.0',
+    });
+    await createDirectoryLink(
+      getSkillDir(paths, 'pdf', '1.2.0'),
+      path.join(targetPath, 'pdf'),
+    );
+
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'docs',
+      requested: '1.1.0',
+    });
+
+    expect(await pathExists(path.join(targetPath, 'pdf'))).toBe(false);
+  });
+
+  it('cleans removed skills even when the target is disabled', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'frontend',
+      requested: '1.0.0',
+    });
+    const linkPath = path.join(targetPath, 'pdf');
+    await createDirectoryLink(
+      getSkillDir(paths, 'pdf', '1.0.0'),
+      linkPath,
+    );
+    const route = await readRouteFile(paths);
+    route.targets[0]!.enabled = false;
+    await writeRouteFile(paths, route);
+
+    await removeRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'frontend',
+    });
+
+    expect(await pathExists(linkPath)).toBe(false);
+  });
+
+  it('cleans dropped skills on a disabled target when a package changes version', async () => {
+    const { paths, targetPath } = await setup();
+    await createPackageVersion({
+      paths,
+      name: 'docs',
+      version: '1.1.0',
+      skills: { review: '1.0.0' },
+    });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'docs',
+      requested: '1.0.0',
+    });
+    const linkPath = path.join(targetPath, 'pdf');
+    await createDirectoryLink(
+      getSkillDir(paths, 'pdf', '1.2.0'),
+      linkPath,
+    );
+    const route = await readRouteFile(paths);
+    route.targets[0]!.enabled = false;
+    await writeRouteFile(paths, route);
+
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'docs',
+      requested: '1.1.0',
+    });
+
+    expect(await pathExists(linkPath)).toBe(false);
   });
 
   it('removes a route entry without touching the target directory', async () => {

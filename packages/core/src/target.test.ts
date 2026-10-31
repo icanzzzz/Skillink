@@ -10,6 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { getSkillDir, getSkillinkPaths } from '@skillink/shared';
+import { createDirectoryLink } from './links.js';
 import { addTarget, removeTarget, setTargetEnabled } from './target.js';
 import {
   addRouteEntry,
@@ -242,6 +243,23 @@ describe('targets', () => {
     ).rejects.toMatchObject({ code: 'TARGET_NOT_FOUND' });
   });
 
+  it('deletes route-resolved entries when disabling a target', async () => {
+    const { paths, targetPath } = await createTargetWithPackage();
+    const linkPath = path.join(targetPath, 'pdf');
+    await createDirectoryLink(
+      getSkillDir(paths, 'pdf', '1.0.0'),
+      linkPath,
+    );
+
+    await setTargetEnabled(paths, 'project-a', false);
+
+    expect(await pathExists(linkPath)).toBe(false);
+    expect(await pathExists(targetPath)).toBe(true);
+    expect(
+      (await readRouteFile(paths)).targets[0]?.enabled,
+    ).toBe(false);
+  });
+
   it('removes a target without deleting the target directory', async () => {
     const { paths, targetPath } = await setup();
     await writeFile(path.join(targetPath, 'keep.txt'), 'keep', 'utf8');
@@ -260,7 +278,7 @@ describe('targets', () => {
   it('removes resolved skill directories even when they are not managed links', async () => {
     const { paths, targetPath } = await createTargetWithPackage();
 
-    // 故意创建真实目录，证明 route 解析结果比 isManagedLink 优先。
+    // 故意创建真实目录，证明 route 解析结果优先于实际条目来源。
     await mkdir(path.join(targetPath, 'pdf'), { recursive: true });
     await writeFile(
       path.join(targetPath, 'pdf', 'note.txt'),

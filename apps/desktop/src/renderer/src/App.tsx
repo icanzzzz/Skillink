@@ -299,19 +299,16 @@ export function App({ api }: AppProps) {
     });
   }
 
-  function applyRoutes(options: { prune?: boolean } = {}): void {
+  function applyRoutes(): void {
     void runAction(async () => {
-      const report = await client!.apply({ prune: options.prune });
+      const report = await client!.apply({});
       setApplyReport(report);
     });
   }
 
-  function previewRoutes(options: { prune?: boolean } = {}): void {
+  function previewRoutes(): void {
     void runAction(async () => {
-      const report = await client!.apply({
-        prune: options.prune,
-        dryRun: true,
-      });
+      const report = await client!.apply({ dryRun: true });
       setApplyReport(report);
     });
   }

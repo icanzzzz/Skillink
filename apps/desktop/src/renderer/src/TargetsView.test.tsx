@@ -1,8 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { TargetRoute } from '@skillink/shared';
 import { renderWithMessages } from './i18n.test-utils.js';
-import { TargetsView } from './TargetsView.js';
+import { TargetsView, invokeTargetsAction } from './TargetsView.js';
 
 const target: TargetRoute = {
   id: 'project-a',
@@ -85,6 +85,17 @@ describe('TargetsView', () => {
     expect(html).not.toContain('Package assignments');
   });
 
+  it('renders targets as cards in a responsive grid', () => {
+    const html = renderToStaticMarkup(
+      <TargetsView targets={[target, secondTarget]} />,
+    );
+
+    expect(html).toContain('class="target-grid"');
+    expect(html.match(/class="target-card"/g)).toHaveLength(2);
+    expect(html).not.toContain('targets-table');
+    expect(html).not.toContain('table-head');
+  });
+
   it('keeps disabled packages manageable from the target row', () => {
     const disabledTarget: TargetRoute = {
       ...target,
@@ -107,6 +118,14 @@ describe('TargetsView', () => {
 
     expect(html).toContain('Enable route');
     expect(html).toContain('Remove route');
+  });
+
+  it('invokes apply and preview actions without options', () => {
+    const action = vi.fn();
+
+    invokeTargetsAction(action);
+
+    expect(action).toHaveBeenCalledWith();
   });
 
   it('renders lifecycle controls and apply reports', () => {
@@ -134,6 +153,7 @@ describe('TargetsView', () => {
     expect(html).toContain('Remove target');
     expect(html).toContain('Disable target');
     expect(html).toContain('Preview apply');
+    expect(html).not.toContain('Prune');
     expect(html).toContain('frontend');
     expect(html).toContain('Remove route');
     expect(html).toContain('dry-run');

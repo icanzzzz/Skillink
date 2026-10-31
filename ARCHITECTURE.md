@@ -58,8 +58,8 @@ target -> package -> skill -> 实体内容
 | Projection | Target 下的 skill 链接或副本 |
 | Apply | 把 route 的期望状态展开为 skill 并收敛到 Target |
 | Drift | Target 实际状态与 route 不一致 |
-| Managed | 由 Skillink 创建和管理的链接/副本 |
-| Unmanaged | 非 Skillink 创建的内容，工具不自动删除 |
+| Managed | route 期望集合中的同名目标条目；不看条目由谁创建 |
+| Unmanaged | route 期望集合外的目标条目，工具不自动删除 |
 | Package Graph | package 版本之间的引用图，节点为 `name@version` |
 | Transitive Integrity | 根 package 及其所有嵌套 package 版本的规范化哈希 |
 
@@ -143,7 +143,8 @@ CLI ------------------------> @skillink/core -> @skillink/shared
 | `shared/src/reports.ts` | CLI/GUI 共用的报告、快照和错误类型 |
 | `shared/src/skill-directory.ts` | 解析 `<name>@<version>` 目录名 |
 | `core/src/package-graph.ts` | package DFS、环检测、skill 冲突、传递闭包哈希 |
-| `core/src/target-gc.ts` | target 移除时按 route package 解析结果清理目标目录 skill 目录/链接 |
+| `core/src/target-entry.ts` | 同名目标条目的形态/内容比对，apply 与 status 共用 |
+| `core/src/target-gc.ts` | target 移除/禁用、package 禁用、route 移除/覆盖时按 route 解析结果清理目标目录 skill 目录/链接 |
 | `core/src/apply.ts` / `status.ts` / `doctor.ts` / `gc.ts` / `history.ts` | 核心生命周期 |
 | `core/src/import-skill.ts` / `skill-scan.ts` | 单包导入与批量扫描 |
 | `desktop/src/main/ipc.ts` | IPC 白名单、Zod 输入校验、sender 校验 |
@@ -533,18 +534,20 @@ skillink route add <target-id> <package@range-or-tag>
   -> 验证每个 package lock 的传递闭包哈希
   -> 展开所有启用 package 为 skill 集合
   -> 检查同一 target 内 skill 版本冲突
-  -> 对比 target 实际链接
-  -> 创建/替换/跳过/删除（--prune）
+  -> 对期望集合中的同名条目比对形态和内容
+  -> 创建/替换/跳过
 ```
 
 - target 只创建 skill 链接/副本，不创建 package 目录；
 - 每个 skill 源目录必须存在，且根目录有 `SKILL.md`；
 - 每个 skill 内容的 `integrity/fileCount/size` 必须与 `skill.json` 一致；
 - skill 名/版本必须是安全路径段，源/目标路径必须保持在库和 target 内；
-- `--prune` 只删除受管且不再需要的 skill 链接；
-- 未托管同名内容永不覆盖；
-- 所有 target 先完成配置、package 图、skill 内容、路径和冲突预检，再创建目录/链接；
-- 执行期间创建/替换/prune 的链接有进程内回滚；进程崩溃仍可能留下半完成状态；
+- route 是受管的唯一准则：期望集合中的同名条目无论由谁创建，都按 Skillink 的投影处理；
+- 同名条目形态与 `target.mode` 不同时直接删除，按 route 记录的模式重建；形态相同（链接）时再与 skill 库比对 `integrity/fileCount/size`，不同则删除重建；
+- 只处理同名且在期望集合中的条目；集合外条目不动；
+- 替换真实目录或文件使用 `rm -rf` 直接删除，失败时不恢复被替换内容；
+- 所有 target 先完成配置、package 图、skill 内容、路径和条目预检，再创建目录/链接；
+- 执行期间创建/替换的链接有进程内回滚；被删除的真实目录/文件不在回滚范围内；进程崩溃仍可能留下半完成状态；
 - v2.0 仅支持 `mode: link`；`target add --mode copy` 直接返回 `COPY_MODE_UNSUPPORTED`，迁移遗留 copy target 由 doctor 报 `UNSUPPORTED_MODE`；
 - 失败时三个配置文件保持不变。
 
@@ -553,11 +556,14 @@ skillink route add <target-id> <package@range-or-tag>
 每个 target 的每个期望 skill 输出：
 
 ```text
-ok | missing | wrong-version | broken-link | conflict | unmanaged | extra | disabled
+ok | missing | wrong-mode | wrong-version | broken-link | conflict | disabled
 ```
 
 - package 解析失败时输出 package 级错误；
-- `extra` 只报告受管但不在期望集合中的链接；
+- 只报告期望集合中的同名条目；集合外条目忽略；
+- 形态与 `target.mode` 不同输出 `wrong-mode`；
+- 形态相同但内容哈希不同输出 `wrong-version`；
+- 不再用“链接是否指向库内”区分 managed；
 - disabled target 输出 `<target>` disabled，不参与链接健康判断；
 - `healthy` 要求所有条目为 `ok` 或 `disabled`。
 
@@ -593,6 +599,11 @@ ok | missing | wrong-version | broken-link | conflict | unmanaged | extra | disa
 - 删除时先移入 `trash/`，再更新 skill.json；失败回滚；
 - package 配置不参与 GC；
 - `target remove` 的清理是独立的投影 GC：先解析 target 的全部 package lock（含 `enabled: false` 和 disabled target）得到 skill 名称集合，再删除目标目录顶层同名链接/junction 和真实目录；
+- `target disable` 使用与 `target remove` 相同的全部 lock 集合清理整个 target 投影；
+- `package disable` 清理“被禁用 package 的传递闭包 − 剩余启用 package 的传递闭包”；target 已 disabled 时跳过，lock 仍在 route 中，后续 `target remove` 仍可清理；
+- `route remove` 清理“被移除 package 的传递闭包 − 剩余启用 package 的传递闭包”；即使 target 或 lock 已 disabled，也按被移除 lock 解析并清理，因为该 lock 即将从 route 消失；
+- `route add` 覆盖同一 package 版本时，按旧/新活跃 skill 集合的差集清理；即使 target 已 disabled，也按旧 lock 解析并清理，因为旧 lock 已消失；
+- 解析失败时跳过投影 GC，配置写入继续进行（`target remove` 保持解析失败即中止）；
 - 普通文件和其他类型不处理；不在解析结果中的 extra 条目保留；
 - 目标目录本身和 `skills/` 内容不删除；
 - 该步骤成功后才写 `route.json`；失败时不写 route，已删除的目标目录条目不恢复。
@@ -601,9 +612,10 @@ ok | missing | wrong-version | broken-link | conflict | unmanaged | extra | disa
 
 - `skill remove`：拒绝删除被 route 传递闭包引用或被 tag 保留的版本；仅被未引用 package 引用时允许，doctor 报悬空；
 - `package remove`：拒绝删除被任一 route（含 disabled）或其他 package 版本引用的版本；
-- `route remove`：默认校验剩余 target 仍可解析；`--force` 可删除损坏配置；
+- `route remove`：默认校验剩余 target 仍可解析；`--force` 可删除损坏配置；成功后清理不再需要的 target 投影；
 - `package tag` / `skill tag`：只允许指向已存在版本；
 - `target remove`：解析 target 的全部 package lock（含 disabled）得到 skill 名称集合，删除目标目录中同名链接/真实目录（普通文件和其他类型跳过），成功后删除 route target；GC 失败或 route 写入失败时 route 不变并立即报错；目标目录本身和 skill 库内容保留；
+- `target disable` / `package disable`：更新 enabled 前先清理不再需要的 target 投影，失败时不写 route；
 - `skill` 内容删除先进入 `trash/`；target 投影的链接/目录直接删除，不进入 `trash/`。
 
 ### 6.9 History
@@ -715,13 +727,13 @@ drift / missing       -> apply
 
 - `0` 成功；
 - `1` 一般错误 / unhealthy / 参数解析错误；
-- `3` apply 冲突；
+- `3` apply 冲突（保留；route-authoritative apply 当前不产生冲突）；
 - `route add` 的 `SKILL_VERSION_CONFLICT` 当前返回 `1`，stderr 包含 `error [SKILL_VERSION_CONFLICT]`。
 
 ### 7.2 GUI
 
 - **Overview**：skills、packages、targets、links、doctor；
-- **Targets**：target 列表、package 数、解析后的 skill 数、分配 package、target/package enable/disable、删除 target/route（删除 target 时先清理 route 解析出的 skill 目录/链接）、apply 预览（dry-run）、prune、apply 结果；
+- **Targets**：target 列表、package 数、解析后的 skill 数、分配 package、target/package enable/disable（禁用时清理不再需要的投影）、删除 target/route（按 route 清理目标目录条目）、apply 预览（dry-run）、apply 结果；
 - **Skills**：选择目录批量扫描 `SKILL.md`，逐个确认安装；扫描名称只作为名称输入框 placeholder，留空确认时作为默认名称；版本输入框显示自动生成版本的 semver 主体 `1.0.0`，不显示 `+<hash8>` 构建元数据；确认时检测包内目录链接，命中则提示绝对路径并取消该包安装；已安装技能按技能名聚合为一张卡片，通过版本切换标签选择版本，再对当前版本执行标记/移除，标签可直接切换到对应版本；GC；
 - **Packages**：创建/复制 package、组合列表、标签、删除；
 - **History**：三文件快照与回滚；
@@ -833,7 +845,7 @@ $env:SKILLINK_HOME = "$PSScriptRoot\skillink-data"
 | 恶意 package 图 | DFS 环检测、生命周期校验 |
 | route 手工篡改 | 严格 schema、传递闭包哈希、apply/doctor 校验 |
 | package/skill 内容缺失 | `assertSkillContent`：目录存在且根目录有 `SKILL.md` |
-| 删除未托管内容 | 只删除受管链接/副本；默认不 prune |
+| 删除目标内容 | route 期望集合中的同名条目视为受管；形态或内容不同时删除重建；集合外条目不动 |
 | 版本库被篡改 | `apply`/`doctor`/history 重新计算 skill manifest；检测 `SKILL_INTEGRITY_MISMATCH` |
 | 配置损坏 | schema 校验、原子写、历史快照、交叉校验 |
 | Renderer XSS | contextIsolation、sandbox、nodeIntegration false、CSP |
@@ -915,7 +927,9 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 - doctor/apply 会重新哈希 skill 内容，超大版本库首次检查可能较慢；
 - CLI 的普通帮助和命令输出仍为英文；`locale` 管理命令本身也输出英文；
 - `direction: rtl` 会应用到 `document.documentElement.dir`，但 Arabic/Hebrew 的逐页视觉验收尚未完成；
-- `target remove` 直接删除目标目录中由 route 解析出的 skill 目录/链接；GC 中途失败或 route 写入失败时，已经删除的目标目录条目不会恢复，`route.json` 保持不变。
+- `apply` 替换真实目录/文件时直接 `rm -rf`，进程内回滚只恢复链接，不恢复被删除的真实内容；
+- `target remove` / `target disable` / `package disable` / `route remove` / `route add` 覆盖版本时直接删除 route 解析出的目标目录条目；GC 中途失败或 route 写入失败时，已经删除的目标目录条目不会恢复，`route.json` 保持不变；
+- `history rollback` 只恢复配置，不执行 target 投影 GC。
 
 ---
 
@@ -942,13 +956,15 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 19. target/import 路径支持 `~`、`%USERPROFILE%`、`$HOME`；导入拒绝系统目录和超限目录；
 20. `target add --mode copy` 返回 `COPY_MODE_UNSUPPORTED`，doctor 能诊断遗留 copy target；
 21. `route remove` 默认校验剩余图，`--force` 可修复；target/package enable/disable 可用；
-22. GUI 能删除 target/route、切换 enable、预览/执行 apply/prune，并显示解析后的 skill 数；
+22. GUI 能删除 target/route、切换 enable（禁用时清理投影）、预览/执行 apply，并显示解析后的 skill 数；
 23. `locale` 命令能安装、切换、列出、删除语言包；缺失/损坏语言包回退英文；`zh-CN` 覆盖全部英文 key；
 24. `skill scan` 能批量发现技能包；每个包独立确认安装；包含目录链接的包提示绝对路径并取消该包安装，其余包不受影响；
 25. 内置 `zh-CN` 包版本更新或缺 key 时，应用启动后自动刷新已安装副本；身份不同的自定义语言包不被覆盖；
 26. 安装卡片中的扫描名称只显示为输入框 placeholder，留空确认时使用扫描名称；版本输入框显示自动生成版本的 semver 主体 `1.0.0`，不显示 `+<hash8>` 构建元数据；
 27. 已安装技能按技能名聚合为一张卡片，版本切换控件选择版本后，标记/移除操作只作用于当前版本；
-28. `target remove` 解析 target 的全部 package lock（含 disabled）得到 skill 集合，删除目标目录中同名链接/真实目录，普通文件和其他类型保留；GC 失败或 route 写入失败时 route 不变并报错；目标目录和 `skills/` 内容保留。
+28. `target remove` 解析 target 的全部 package lock（含 disabled）得到 skill 集合，删除目标目录中同名链接/真实目录，普通文件和其他类型保留；GC 失败或 route 写入失败时 route 不变并报错；目标目录和 `skills/` 内容保留；
+29. apply 对 route 期望集合中的同名条目按形态和内容接管：真实目录/文件直接删除并重建链接，链接内容不同则重建，集合外条目不动；`--prune` 不存在；
+30. `target disable`、`package disable`、`route remove`、`route add` 版本覆盖都会清理不再需要的 target 投影；解析失败时跳过清理并允许配置修复。
 
 ---
 

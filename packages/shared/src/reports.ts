@@ -4,7 +4,6 @@ export type ApplyOperationKind =
   | 'create-target'
   | 'create-link'
   | 'replace-link'
-  | 'remove-link'
   | 'skip';
 
 export interface ApplyOperation {
@@ -34,11 +33,10 @@ export interface ApplyReport {
 export type StatusState =
   | 'ok'
   | 'missing'
+  | 'wrong-mode'
   | 'wrong-version'
   | 'broken-link'
   | 'conflict'
-  | 'unmanaged'
-  | 'extra'
   | 'disabled';
 
 export interface StatusEntry {

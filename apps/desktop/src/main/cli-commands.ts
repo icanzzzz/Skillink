@@ -38,7 +38,6 @@ export function buildApplyArgs(request: ApplyRequest): string[] {
   return [
     'apply',
     ...(request.dryRun ? ['--dry-run'] : []),
-    ...(request.prune ? ['--prune'] : []),
     ...(request.targetId ? ['--target', request.targetId] : []),
     '--json',
   ];
