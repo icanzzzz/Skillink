@@ -691,7 +691,8 @@ NSIS 安装细节：
 
 - `oneClick: false`，允许用户选择安装目录；
 - 安装时执行 `skillink-path.ps1 add`，把 `$INSTDIR\resources\cli` 放到当前用户 PATH 前面；
-- 卸载时执行 `skillink-path.ps1 remove`，只移除该条目；
+- 安装时把 `resources\locales\zh-CN.json` 复制到 `%USERPROFILE%\.agents\skillink\locales\zh-cn.json`，目标已存在则不覆盖；应用启动时仍按 `settings.json` / 系统语言决定是否启用；
+- 卸载时执行 `skillink-path.ps1 remove`，只移除该条目；语言包属于用户数据，不随卸载删除；
 - 安装/卸载后广播 `WM_WININICHANGE`，新终端可直接识别 `skillink`。
 
 portable 细节：

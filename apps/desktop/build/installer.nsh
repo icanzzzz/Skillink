@@ -7,8 +7,19 @@
   Pop $1
 !macroend
 
+!macro InstallBundledLanguagePack
+  StrCpy $R0 "$PROFILE\.agents\skillink\locales"
+  IfFileExists "$R0\zh-cn.json" SkillinkLanguagePackDone
+  IfFileExists "$INSTDIR\resources\locales\zh-CN.json" 0 SkillinkLanguagePackDone
+  CreateDirectory "$PROFILE\.agents\skillink"
+  CreateDirectory "$R0"
+  CopyFiles /SILENT "$INSTDIR\resources\locales\zh-CN.json" "$R0\zh-cn.json"
+SkillinkLanguagePackDone:
+!macroend
+
 !macro customInstall
   !insertmacro RunCliPathScript add
+  !insertmacro InstallBundledLanguagePack
   SendMessage ${HWND_BROADCAST} ${WM_WININICHANGE} 0 "STR:Environment" /TIMEOUT=5000
 !macroend
 
