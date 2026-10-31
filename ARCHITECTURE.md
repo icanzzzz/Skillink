@@ -119,7 +119,15 @@ route.json
 ```text
 apps/
 ├─ cli/                      # CLI 入口、命令注册、人类/JSON 输出
-│  └─ src/{index,run}.ts
+│  └─ src/
+│     ├─ run.ts              # program 构建、runtime、错误映射
+│     ├─ cli-context.ts      # 输出与公共选项
+│     ├─ command-runtime.ts  # paths / ensureHome / mutate / exitCode
+│     ├─ mutation.ts         # 写命令加锁与自动提交
+│     ├─ commit-message.ts   # CLI scope 与提交信息
+│     ├─ bootstrap.ts        # init 编排
+│     ├─ specs.ts            # name@version 参数解析
+│     └─ commands/           # init/migrate/env/snapshot/locale/skill/package/target/route/lifecycle
 ├─ desktop/
 │  ├─ src/main/              # Electron 主进程：窗口、IPC、CLI 适配、错误本地化、内置语言包同步
 │  ├─ src/preload/           # contextBridge 白名单 API
@@ -783,7 +791,7 @@ env
 {"ok":false,"error":{"code":"SKILL_MD_REQUIRED","message":"...","details":{}}}
 ```
 
-退出码保持不变；`status` / `doctor` 在 unhealthy 时仍返回 1，所有 `SkillinkError` 也返回 1，调用方应先尝试解析 stdout 的 JSON 结果。
+退出码：`status` / `doctor` 在 unhealthy 时返回 1，所有 `SkillinkError` 也返回 1，调用方应先尝试解析 stdout 的 JSON 结果。
 
 **AI 调用闭环**
 

@@ -1,6 +1,9 @@
 import {
   getSkillinkPaths,
   type DoctorReport,
+  type PackageFile,
+  type RouteFile,
+  type SkillFile,
   type StatusReport,
   type SkillinkPaths,
 } from '@skillink/shared';
@@ -27,9 +30,9 @@ export async function doctor(
 ): Promise<DoctorReport> {
   const paths = input.paths ?? getSkillinkPaths(input.home);
 
-  let route;
-  let packageFile;
-  let skillFile;
+  let route: RouteFile;
+  let packageFile: PackageFile;
+  let skillFile: SkillFile;
   try {
     [route, packageFile, skillFile] = await Promise.all([
       readRouteConfig(paths),
@@ -55,7 +58,7 @@ export async function doctor(
     ...checkPackageGraph(ctx),
     ...checkPackageUsage(ctx),
     ...(await checkSkillContent(ctx)),
-    ...(await checkTargetLinks(ctx, currentStatus)),
+    ...checkTargetLinks(currentStatus),
   ];
 
   return {

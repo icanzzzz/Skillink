@@ -26,7 +26,12 @@ export interface InitializeHomeResult {
 async function pathExists(targetPath: string): Promise<boolean> {
   return stat(targetPath)
     .then(() => true)
-    .catch(() => false);
+    .catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+        return false;
+      }
+      throw error;
+    });
 }
 
 export async function initializeHome(

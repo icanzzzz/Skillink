@@ -109,7 +109,7 @@ export const LanguagePackSchema = z
 
 export type LanguagePack = z.infer<typeof LanguagePackSchema>;
 
-export const EN_LANGUAGE_SUMMARY: LanguagePackSummary = {
+export const EN_LANGUAGE_SUMMARY: LanguagePackSummary = Object.freeze({
   locale: 'en',
   name: 'English',
   nativeName: 'English',
@@ -118,7 +118,7 @@ export const EN_LANGUAGE_SUMMARY: LanguagePackSummary = {
   messageCount: Object.keys(EN_MESSAGES).length,
   coverage: 1,
   builtIn: true,
-};
+});
 
 export function summarizeLanguagePack(
   pack: LanguagePack,

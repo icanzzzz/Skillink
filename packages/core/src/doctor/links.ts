@@ -1,10 +1,8 @@
 import type { DoctorIssue, StatusReport } from '@skillink/shared';
-import type { DoctorContext } from './issues.js';
 
-export async function checkTargetLinks(
-  _ctx: DoctorContext,
+export function checkTargetLinks(
   statusReport: StatusReport,
-): Promise<DoctorIssue[]> {
+): DoctorIssue[] {
   const issues: DoctorIssue[] = [];
 
   for (const entry of statusReport.entries) {

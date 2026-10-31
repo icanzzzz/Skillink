@@ -71,7 +71,7 @@ plane files. Missing files yield empty defaults.
 - Failure with `--json` prints a single structured object to stderr:
   `{"ok":false,"error":{"code":"...","message":"...","details":{...}}}`.
 - Exit codes keep their current meaning. `status` and `doctor` still return 1
-  when unhealthy, and `apply` still returns 3 on conflicts; the adapter treats
+  when unhealthy, and every `SkillinkError` returns 1; the adapter treats
   valid JSON on stdout as data, not as a transport failure.
 - Human-readable output remains unchanged when `--json` is absent.
 
@@ -109,7 +109,7 @@ Renderer:
 
 Move CLI boundary DTOs into `@skillink/shared`:
 
-- `ApplyReport` and related operation/conflict types
+- `ApplyReport` and related operation types
 - `StatusReport` and related state/entry types
 - `DoctorReport` and related issue types
 - `GcReport` and related candidate/plan types

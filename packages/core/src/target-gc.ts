@@ -31,11 +31,7 @@ function ioError(
 export async function resolveTargetSkillNames(
   input: TargetGcInput,
 ): Promise<string[]> {
-  const roots = Object.entries(input.target.packages).map(
-    ([name, lock]) => ({ name, version: lock.resolved }),
-  );
-
-  if (roots.length === 0) {
+  if (Object.keys(input.target.packages).length === 0) {
     return [];
   }
 
@@ -76,11 +72,11 @@ export async function resolveTargetActiveSkillNames(
     return [];
   }
 
-  const roots = Object.entries(input.target.packages)
-    .filter(([, lock]) => lock.enabled !== false)
-    .map(([name, lock]) => ({ name, version: lock.resolved }));
-
-  if (roots.length === 0) {
+  if (
+    !Object.values(input.target.packages).some(
+      (lock) => lock.enabled !== false,
+    )
+  ) {
     return [];
   }
 

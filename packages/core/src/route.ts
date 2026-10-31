@@ -12,7 +12,6 @@ import { readPackageFile, resolvePackageVersion } from './package-store.js';
 import { readSkillFile } from './skill-store.js';
 import {
   computePackageIntegrity,
-  resolvePackageGraph,
 } from './package-graph.js';
 import { assertSafePackageName } from './package-name.js';
 import {
@@ -95,16 +94,7 @@ export async function addRouteEntry(
     },
   };
 
-  resolvePackageGraph(
-    packageFile,
-    skillFile,
-    Object.entries(candidate.packages)
-      .filter(([, packageLock]) => packageLock.enabled !== false)
-      .map(([packageName, packageLock]) => ({
-        name: packageName,
-        version: packageLock.resolved,
-      })),
-  );
+  resolveTargetGraph(packageFile, skillFile, candidate);
 
   route.targets[targetIndex] = candidate;
 
@@ -220,12 +210,9 @@ export async function removeRouteEntry(
   if (!input.force) {
     const packageFile = await readPackageFile(input.paths);
     const skillFile = await readSkillFile(input.paths);
-    const roots = Object.entries(target.packages)
-      .filter(([, lock]) => lock.enabled !== false)
-      .map(([name, lock]) => ({ name, version: lock.resolved }));
 
     try {
-      resolvePackageGraph(packageFile, skillFile, roots);
+      resolveTargetGraph(packageFile, skillFile, target);
     } catch (error) {
       throw new SkillinkError(
         'ROUTE_INVALID',
