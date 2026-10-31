@@ -109,6 +109,47 @@ export const LanguagePackSchema = z
 
 export type LanguagePack = z.infer<typeof LanguagePackSchema>;
 
+export const EN_LANGUAGE_SUMMARY: LanguagePackSummary = {
+  locale: 'en',
+  name: 'English',
+  nativeName: 'English',
+  version: '1.0.0',
+  direction: 'ltr',
+  messageCount: Object.keys(EN_MESSAGES).length,
+  coverage: 1,
+  builtIn: true,
+};
+
+export function summarizeLanguagePack(
+  pack: LanguagePack,
+): LanguagePackSummary {
+  const keys = Object.keys(pack.messages);
+  const knownKeys = keys.filter((key) => {
+    if (!Object.prototype.hasOwnProperty.call(EN_MESSAGES, key)) {
+      return false;
+    }
+    const value = pack.messages[key] as MessageValue | undefined;
+    if (value === undefined) {
+      return false;
+    }
+    return typeof value === 'string'
+      ? value.trim().length > 0
+      : value.other.trim().length > 0;
+  });
+  const total = Object.keys(EN_MESSAGES).length;
+
+  return {
+    locale: pack.locale,
+    name: pack.name,
+    nativeName: pack.nativeName,
+    version: pack.version,
+    direction: pack.direction,
+    messageCount: keys.length,
+    coverage: total === 0 ? 1 : knownKeys.length / total,
+    builtIn: false,
+  };
+}
+
 export const SettingsFileSchema = z
   .object({
     schemaVersion: z.literal(1),

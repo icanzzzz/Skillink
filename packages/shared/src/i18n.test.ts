@@ -8,6 +8,7 @@ import {
   formatDoctorIssue,
   formatErrorMessage,
   matchLocale,
+  summarizeLanguagePack,
 } from './i18n.js';
 import { EN_MESSAGES } from './i18n-en.js';
 import { getSkillinkPaths } from './paths.js';
@@ -211,5 +212,21 @@ describe('language packs', () => {
     expect(pack.locale).toBe('zh-CN');
     expect(pack.nativeName).toBe('简体中文');
     expect(pack.messages['skills.form.versionPlaceholder']).toBe('1.0.0');
+  });
+
+  it('summarizes a language pack against the English catalog', () => {
+    const summary = summarizeLanguagePack({
+      schemaVersion: 1,
+      locale: 'zh-CN',
+      name: '简体中文',
+      nativeName: '简体中文',
+      version: '1.0.0',
+      direction: 'ltr',
+      messages: { 'app.brand': 'Skillink' },
+    });
+
+    expect(summary.coverage).toBeGreaterThan(0);
+    expect(summary.coverage).toBeLessThan(1);
+    expect(summary.builtIn).toBe(false);
   });
 });

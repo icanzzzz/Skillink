@@ -31,11 +31,13 @@ export { stableStringify } from './json-store.js';
 export {
   getLanguageState,
   installLanguagePack,
-  readSettingsFile,
   removeLanguagePack,
   setActiveLocale,
-  writeSettingsFile,
 } from './language-store.js';
+export {
+  readSettingsFile,
+  writeSettingsFile,
+} from './settings-store.js';
 export { migrateV1ToV2 } from './migrate.js';
 export { checkPackageSkillReferences } from './package-check.js';
 export {

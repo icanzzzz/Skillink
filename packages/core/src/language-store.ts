@@ -11,20 +11,21 @@ import {
   LOCALE_PATTERN,
   LanguagePackSchema,
   MAX_LANGUAGE_PACK_BYTES,
-  SettingsFileSchema,
   SkillinkError,
   matchLocale,
+  summarizeLanguagePack,
+  EN_LANGUAGE_SUMMARY,
   type LanguagePack,
   type LanguagePackSummary,
   type LanguageState,
   type LocaleInstallReport,
   type MessageCatalog,
-  type MessageValue,
   type SettingsFile,
   type SkillinkPaths,
 } from '@skillink/shared';
-import { readJsonFile, writeJsonAtomic } from './json-store.js';
+import { writeJsonAtomic } from './json-store.js';
 import { isNodeError } from './node-error.js';
+import { readSettingsFile, writeSettingsFile } from './settings-store.js';
 
 export interface InstallLanguagePackOptions {
   sourcePath: string;
@@ -42,17 +43,6 @@ export interface RemoveLanguagePackResult {
   current: string;
 }
 
-const BUILTIN_EN: LanguagePackSummary = {
-  locale: 'en',
-  name: 'English',
-  nativeName: 'English',
-  version: '1.0.0',
-  direction: 'ltr',
-  messageCount: Object.keys(EN_MESSAGES).length,
-  coverage: 1,
-  builtIn: true,
-};
-
 function invalidPack(
   message: string,
   details?: Record<string, unknown>,
@@ -64,34 +54,6 @@ function invalidPack(
     details,
     cause === undefined ? undefined : { cause },
   );
-}
-
-function summarize(pack: LanguagePack): LanguagePackSummary {
-  const keys = Object.keys(pack.messages);
-  const knownKeys = keys.filter((key) => {
-    if (!Object.prototype.hasOwnProperty.call(EN_MESSAGES, key)) {
-      return false;
-    }
-    const value = pack.messages[key] as MessageValue | undefined;
-    if (value === undefined) {
-      return false;
-    }
-    return typeof value === 'string'
-      ? value.trim().length > 0
-      : value.other.trim().length > 0;
-  });
-  const total = Object.keys(EN_MESSAGES).length;
-
-  return {
-    locale: pack.locale,
-    name: pack.name,
-    nativeName: pack.nativeName,
-    version: pack.version,
-    direction: pack.direction,
-    messageCount: keys.length,
-    coverage: total === 0 ? 1 : knownKeys.length / total,
-    builtIn: false,
-  };
 }
 
 function packPath(paths: SkillinkPaths, locale: string): string {
@@ -107,25 +69,10 @@ async function readPackFile(filePath: string): Promise<LanguagePack | undefined>
   }
 }
 
-export async function readSettingsFile(
-  paths: SkillinkPaths,
-): Promise<SettingsFile> {
-  return readJsonFile(paths.settingsFile, SettingsFileSchema, {
-    schemaVersion: 1,
-  });
-}
-
-export async function writeSettingsFile(
-  paths: SkillinkPaths,
-  settings: SettingsFile,
-): Promise<void> {
-  await writeJsonAtomic(paths.settingsFile, settings, SettingsFileSchema);
-}
-
 export async function listLanguagePacks(
   paths: SkillinkPaths,
 ): Promise<LanguagePackSummary[]> {
-  const packs: LanguagePackSummary[] = [{ ...BUILTIN_EN }];
+  const packs: LanguagePackSummary[] = [{ ...EN_LANGUAGE_SUMMARY }];
   let entries;
 
   try {
@@ -162,7 +109,7 @@ export async function listLanguagePacks(
       continue;
     }
     seen.add(key);
-    installed.push(summarize(pack));
+    installed.push(summarizeLanguagePack(pack));
   }
 
   installed.sort((left, right) => {
@@ -278,7 +225,7 @@ export async function installLanguagePack(
   const state = await getLanguageState(paths);
 
   return {
-    pack: summarize(pack),
+    pack: summarizeLanguagePack(pack),
     missingKeys,
     extraKeys,
     active: state.current.toLowerCase() === pack.locale.toLowerCase(),

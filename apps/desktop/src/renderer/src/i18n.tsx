@@ -8,9 +8,9 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  EN_LANGUAGE_SUMMARY,
   EN_MESSAGES,
   createTranslator,
-  type LanguagePackSummary,
   type LanguageState,
   type LocaleInstallReport,
   type Translator,
@@ -32,21 +32,10 @@ export interface I18nContextValue {
   removeLanguage(locale: string): Promise<void>;
 }
 
-const ENGLISH_PACK: LanguagePackSummary = {
-  locale: 'en',
-  name: 'English',
-  nativeName: 'English',
-  version: '1.0.0',
-  direction: 'ltr',
-  messageCount: Object.keys(EN_MESSAGES).length,
-  coverage: 1,
-  builtIn: true,
-};
-
 const ENGLISH_STATE: LanguageState = {
   current: 'en',
   direction: 'ltr',
-  packs: [ENGLISH_PACK],
+  packs: [EN_LANGUAGE_SUMMARY],
   messages: EN_MESSAGES,
 };
 

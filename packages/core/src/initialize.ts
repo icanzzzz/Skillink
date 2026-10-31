@@ -1,6 +1,6 @@
 import { mkdir, stat } from 'node:fs/promises';
 import { SkillinkError, type SkillinkPaths } from '@skillink/shared';
-import { writeSettingsFile } from './language-store.js';
+import { writeSettingsFile } from './settings-store.js';
 import { isNodeError } from './node-error.js';
 import { readPackageFile, writePackageFile } from './package-store.js';
 import { readRouteFile, writeRouteFile } from './route.js';

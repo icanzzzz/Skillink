@@ -20,11 +20,13 @@ import {
   getLanguageState,
   installLanguagePack,
   listLanguagePacks,
-  readSettingsFile,
   removeLanguagePack,
   setActiveLocale,
-  writeSettingsFile,
 } from './language-store.js';
+import {
+  readSettingsFile,
+  writeSettingsFile,
+} from './settings-store.js';
 
 const tempDirs: string[] = [];
 
