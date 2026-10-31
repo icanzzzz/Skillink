@@ -136,7 +136,7 @@ export const EN_MESSAGES = {
   'targets.actions.disableRoute': 'Disable route',
   'targets.actions.removeRoute': 'Remove route',
   'targets.confirm.removeTarget':
-    'Remove target "{name}" from route.json?',
+    'Remove target "{name}"? Its route-resolved skill directories will be deleted from the target directory, even if they were not created by Skillink. Regular files and the target directory itself are kept.',
   'targets.confirm.removeRoute':
     'Remove package "{name}" from target "{target}"?',
   'targets.packages.empty': 'No packages assigned yet.',

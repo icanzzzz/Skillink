@@ -3,7 +3,7 @@
   "locale": "zh-CN",
   "name": "Chinese (Simplified)",
   "nativeName": "简体中文",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "direction": "ltr",
   "messages": {
     "app.brand": "Skillink",
@@ -126,7 +126,7 @@
     "targets.actions.enableRoute": "启用路由",
     "targets.actions.disableRoute": "禁用路由",
     "targets.actions.removeRoute": "移除路由",
-    "targets.confirm.removeTarget": "从 route.json 中移除目标“{name}”？",
+    "targets.confirm.removeTarget": "移除目标“{name}”？该目标 route 解析出的 skill 目录会从目标目录删除，即使不是 Skillink 创建的；普通文件和目标目录本身会保留。",
     "targets.confirm.removeRoute": "从目标“{target}”中移除包“{name}”？",
     "targets.packages.empty": "尚未分配包。",
     "targets.apply.eyebrow": "应用",
