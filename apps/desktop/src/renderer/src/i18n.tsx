@@ -72,6 +72,63 @@ export function useI18n(): I18nContextValue {
   return useContext(I18nContext);
 }
 
+export interface LanguageActions {
+  chooseLanguagePack(): Promise<string | null>;
+  installLanguagePack(
+    input: LanguageInstallRequest,
+  ): Promise<LocaleInstallReport>;
+  useLanguage(locale: string): Promise<void>;
+  removeLanguage(locale: string): Promise<void>;
+}
+
+/**
+ * Creates the state-updating language operations used by the provider.
+ * Every successful operation re-reads the authoritative language state so
+ * the UI switches immediately without a restart.
+ */
+export function createLanguageActions(
+  api: DesktopApi,
+  onState: (state: LanguageState) => void,
+): LanguageActions {
+  async function refresh(): Promise<void> {
+    onState(await api.getLanguageState());
+  }
+
+  return {
+    chooseLanguagePack: () => api.chooseLanguagePack(),
+    installLanguagePack: async (input) => {
+      const report = await api.installLanguagePack(input);
+      await refresh();
+      return report;
+    },
+    useLanguage: async (locale) => {
+      await api.useLanguage(locale);
+      await refresh();
+    },
+    removeLanguage: async (locale) => {
+      await api.removeLanguage(locale);
+      await refresh();
+    },
+  };
+}
+
+export async function installPickedLanguage(actions: {
+  chooseLanguagePack(): Promise<string | null>;
+  installLanguagePack(
+    input: LanguageInstallRequest,
+  ): Promise<LocaleInstallReport>;
+}): Promise<LocaleInstallReport | null> {
+  const selected = await actions.chooseLanguagePack();
+  if (!selected) {
+    return null;
+  }
+  return actions.installLanguagePack({
+    path: selected,
+    use: true,
+    force: true,
+  });
+}
+
 export interface I18nProviderProps {
   api?: DesktopApi;
   state?: LanguageState;
@@ -89,12 +146,10 @@ export function I18nProvider({
     providedState ?? ENGLISH_STATE,
   );
 
-  const refresh = useCallback(async (): Promise<void> => {
-    if (!resolvedApi) {
-      return;
-    }
-    setState(await resolvedApi.getLanguageState());
-  }, [resolvedApi]);
+  const actions = useMemo(
+    () => (resolvedApi ? createLanguageActions(resolvedApi, setState) : undefined),
+    [resolvedApi],
+  );
 
   useEffect(() => {
     if (providedState || !resolvedApi) {
@@ -130,41 +185,31 @@ export function I18nProvider({
   );
 
   const chooseLanguagePack = useCallback(async (): Promise<string | null> => {
-    return resolvedApi ? resolvedApi.chooseLanguagePack() : null;
-  }, [resolvedApi]);
+    return actions?.chooseLanguagePack() ?? null;
+  }, [actions]);
 
   const installLanguagePack = useCallback(
     async (input: LanguageInstallRequest): Promise<LocaleInstallReport> => {
-      if (!resolvedApi) {
+      if (!actions) {
         throw new Error(translator.t('language.unavailable'));
       }
-      const report = await resolvedApi.installLanguagePack(input);
-      await refresh();
-      return report;
+      return actions.installLanguagePack(input);
     },
-    [refresh, resolvedApi, translator],
+    [actions, translator],
   );
 
   const useLanguage = useCallback(
     async (locale: string): Promise<void> => {
-      if (!resolvedApi) {
-        return;
-      }
-      await resolvedApi.useLanguage(locale);
-      await refresh();
+      await actions?.useLanguage(locale);
     },
-    [refresh, resolvedApi],
+    [actions],
   );
 
   const removeLanguage = useCallback(
     async (locale: string): Promise<void> => {
-      if (!resolvedApi) {
-        return;
-      }
-      await resolvedApi.removeLanguage(locale);
-      await refresh();
+      await actions?.removeLanguage(locale);
     },
-    [refresh, resolvedApi],
+    [actions],
   );
 
   const value = useMemo<I18nContextValue>(

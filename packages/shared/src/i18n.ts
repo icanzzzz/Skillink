@@ -67,7 +67,12 @@ export const MESSAGE_KEY_PATTERN = /^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/;
 
 const LocaleSchema = z.string().regex(LOCALE_PATTERN, 'Invalid locale tag.');
 
-const MessageTextSchema = z.string().max(MAX_MESSAGE_LENGTH);
+const MessageTextSchema = z
+  .string()
+  .max(MAX_MESSAGE_LENGTH)
+  .refine((value) => value.trim().length > 0, {
+    message: 'Message text cannot be empty.',
+  });
 
 const PluralMessageSchema = z
   .object({
@@ -136,6 +141,20 @@ function isPluralValue(
   return typeof value === 'object' && value !== null;
 }
 
+function hasText(value: string | undefined): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isUsableValue(value: MessageValue | undefined): value is MessageValue {
+  if (value === undefined) {
+    return false;
+  }
+  if (typeof value === 'string') {
+    return hasText(value);
+  }
+  return hasText(value.other);
+}
+
 export function createTranslator(
   locale: string,
   messages: MessageCatalog,
@@ -174,8 +193,9 @@ export function createTranslator(
     params?: Record<string, string | number>,
     fallback?: string,
   ): string {
-    const value = hasOwn(messages, key)
-      ? messages[key]
+    const localValue = hasOwn(messages, key) ? messages[key] : undefined;
+    const value = isUsableValue(localValue)
+      ? localValue
       : hasOwn(EN_MESSAGES, key)
         ? (EN_MESSAGES as MessageCatalog)[key]
         : undefined;
@@ -185,7 +205,7 @@ export function createTranslator(
     }
 
     if (!isPluralValue(value)) {
-      return interpolate(value, params);
+      return hasText(value) ? interpolate(value, params) : (fallback ?? key);
     }
 
     const count = params?.count;
@@ -193,16 +213,25 @@ export function createTranslator(
       typeof count === 'number' && Number.isFinite(count)
         ? pluralRules.select(count)
         : 'other';
-    const template = value[category] ?? value.other;
+    const selected = value[category];
+    const template = hasText(selected)
+      ? selected
+      : hasText(value.other)
+        ? value.other
+        : undefined;
 
-    return interpolate(template, params);
+    return template === undefined
+      ? (fallback ?? key)
+      : interpolate(template, params);
   }
 
   return {
     locale,
     t,
     has(key) {
-      return hasOwn(messages, key);
+      return isUsableValue(
+        hasOwn(messages, key) ? messages[key] : undefined,
+      );
     },
     formatDate(value) {
       const date = value instanceof Date ? value : new Date(value);

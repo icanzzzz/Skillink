@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { useI18n } from './i18n.js';
+import { installPickedLanguage, useI18n } from './i18n.js';
 
 export interface LanguageDialogProps {
   open: boolean;
@@ -54,11 +54,7 @@ export function LanguageDialog({
 
   function install(): void {
     void run(async () => {
-      const selected = await chooseLanguagePack();
-      if (!selected) {
-        return;
-      }
-      await installLanguagePack({ path: selected, use: true, force: true });
+      await installPickedLanguage({ chooseLanguagePack, installLanguagePack });
     });
   }
 

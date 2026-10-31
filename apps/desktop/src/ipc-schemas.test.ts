@@ -7,6 +7,7 @@ import {
   GcRequestSchema,
   ImportSkillRequestSchema,
   LanguageInstallRequestSchema,
+  LanguageRemoveRequestSchema,
   LanguageUseRequestSchema,
   PackageRemoveRequestSchema,
   PackageTagRequestSchema,
@@ -242,5 +243,14 @@ describe('IPC request schemas', () => {
     expect(LanguageUseRequestSchema.parse({ locale: 'zh-CN' })).toEqual({
       locale: 'zh-CN',
     });
+    expect(
+      LanguageRemoveRequestSchema.safeParse({ locale: '../route' }).success,
+    ).toBe(false);
+    expect(
+      LanguageUseRequestSchema.safeParse({ locale: '..\\route' }).success,
+    ).toBe(false);
+    expect(
+      LanguageRemoveRequestSchema.parse({ locale: 'zh-CN' }),
+    ).toEqual({ locale: 'zh-CN' });
   });
 });

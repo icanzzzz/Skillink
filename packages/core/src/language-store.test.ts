@@ -240,6 +240,18 @@ describe('language store', () => {
     await expect(
       installLanguagePack(paths, { sourcePath: wrongVersion }),
     ).rejects.toMatchObject({ code: 'LANGUAGE_PACK_INVALID' });
+
+    const emptyMessage = await writePackSource(
+      'skillink-pack-invalid-',
+      languagePack({
+        messages: {
+          'app.nav.overview': '',
+        },
+      }),
+    );
+    await expect(
+      installLanguagePack(paths, { sourcePath: emptyMessage }),
+    ).rejects.toMatchObject({ code: 'LANGUAGE_PACK_INVALID' });
   });
 
   it('falls back to English for missing, damaged, or unreadable settings', async () => {
@@ -261,6 +273,9 @@ describe('language store', () => {
     await writeFile(paths.settingsFile, '{broken', 'utf8');
     expect(
       (await getLanguageState(paths, { systemLocale: 'en-US' })).current,
+    ).toBe('en');
+    expect(
+      (await getLanguageState(paths, { systemLocale: 'zh-CN' })).current,
     ).toBe('en');
   });
 
@@ -320,6 +335,24 @@ describe('language store', () => {
 
     expect(result.current).toBe('en');
     expect(await readdir(paths.localesDir)).toEqual([]);
+  });
+
+  it('rejects path traversal when removing a locale', async () => {
+    const paths = await setup();
+    await mkdir(paths.home, { recursive: true });
+    await writeFile(
+      paths.routeFile,
+      JSON.stringify({ schemaVersion: 2, targets: [] }),
+      'utf8',
+    );
+
+    for (const locale of ['../route', '..\\route', '../../victim', '']) {
+      await expect(removeLanguagePack(paths, locale)).rejects.toMatchObject({
+        code: 'LANGUAGE_PACK_NOT_FOUND',
+      });
+    }
+
+    expect(await readFile(paths.routeFile, 'utf8')).toContain('schemaVersion');
   });
 
   it('keeps settings when removing a non-current pack', async () => {

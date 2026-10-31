@@ -45,6 +45,46 @@ describe('language packs', () => {
     ).toBe(false);
   });
 
+  it('rejects empty message values', () => {
+    const base = {
+      schemaVersion: 1,
+      locale: 'zh-CN',
+      name: 'Chinese',
+      nativeName: '简体中文',
+      version: '1.0.0',
+    };
+
+    expect(
+      LanguagePackSchema.safeParse({
+        ...base,
+        messages: { 'app.nav.overview': '' },
+      }).success,
+    ).toBe(false);
+    expect(
+      LanguagePackSchema.safeParse({
+        ...base,
+        messages: { 'app.nav.overview': '   ' },
+      }).success,
+    ).toBe(false);
+    expect(
+      LanguagePackSchema.safeParse({
+        ...base,
+        messages: { 'overview.stats.skills': { other: '' } },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('treats empty translations as missing', () => {
+    const translator = createTranslator('zh-CN', {
+      'app.nav.overview': '',
+      'app.nav.targets': '   ',
+    });
+
+    expect(translator.has('app.nav.overview')).toBe(false);
+    expect(translator.t('app.nav.overview')).toBe('Overview');
+    expect(translator.t('app.nav.targets')).toBe('Targets');
+  });
+
   it('matches locale subtags and en fallback', () => {
     expect(matchLocale('zh-Hant-TW', ['zh-CN', 'en'])).toBe('en');
     expect(matchLocale('zh', ['zh-CN', 'en'])).toBe('zh-CN');

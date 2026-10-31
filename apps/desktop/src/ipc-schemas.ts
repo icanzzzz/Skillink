@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { TargetModeSchema } from '@skillink/shared';
+import { LOCALE_PATTERN, TargetModeSchema } from '@skillink/shared';
 
 const NonEmptyString = z.string().min(1);
+const LocaleString = z.string().regex(LOCALE_PATTERN, 'Invalid locale tag.');
 const OptionalNonEmptyString = NonEmptyString.optional();
 const DependencyMap = z.record(z.string(), NonEmptyString);
 
@@ -149,13 +150,13 @@ export const LanguageInstallRequestSchema = z
 
 export const LanguageUseRequestSchema = z
   .object({
-    locale: NonEmptyString,
+    locale: LocaleString,
   })
   .strict();
 
 export const LanguageRemoveRequestSchema = z
   .object({
-    locale: NonEmptyString,
+    locale: LocaleString,
   })
   .strict();
 

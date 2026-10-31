@@ -8,6 +8,7 @@ import {
 import path from 'node:path';
 import {
   EN_MESSAGES,
+  LOCALE_PATTERN,
   LanguagePackSchema,
   MAX_LANGUAGE_PACK_BYTES,
   SettingsFileSchema,
@@ -18,6 +19,7 @@ import {
   type LanguageState,
   type LocaleInstallReport,
   type MessageCatalog,
+  type MessageValue,
   type SettingsFile,
   type SkillinkPaths,
 } from '@skillink/shared';
@@ -69,9 +71,18 @@ function invalidPack(
 
 function summarize(pack: LanguagePack): LanguagePackSummary {
   const keys = Object.keys(pack.messages);
-  const knownKeys = keys.filter((key) =>
-    Object.prototype.hasOwnProperty.call(EN_MESSAGES, key),
-  );
+  const knownKeys = keys.filter((key) => {
+    if (!Object.prototype.hasOwnProperty.call(EN_MESSAGES, key)) {
+      return false;
+    }
+    const value = pack.messages[key] as MessageValue | undefined;
+    if (value === undefined) {
+      return false;
+    }
+    return typeof value === 'string'
+      ? value.trim().length > 0
+      : value.other.trim().length > 0;
+  });
   const total = Object.keys(EN_MESSAGES).length;
 
   return {
@@ -323,6 +334,13 @@ export async function removeLanguagePack(
   locale: string,
 ): Promise<RemoveLanguagePackResult> {
   const requested = locale.trim();
+  if (!LOCALE_PATTERN.test(requested)) {
+    throw new SkillinkError(
+      'LANGUAGE_PACK_NOT_FOUND',
+      `Language pack ${requested || locale} is not installed.`,
+      { locale: requested },
+    );
+  }
   if (requested.toLowerCase() === 'en') {
     throw new SkillinkError(
       'LANGUAGE_PACK_BUILTIN',
@@ -332,6 +350,16 @@ export async function removeLanguagePack(
   }
 
   const target = packPath(paths, requested);
+  if (
+    path.resolve(path.dirname(target)).toLowerCase() !==
+    path.resolve(paths.localesDir).toLowerCase()
+  ) {
+    throw new SkillinkError(
+      'LANGUAGE_PACK_NOT_FOUND',
+      `Language pack ${requested} is not installed.`,
+      { locale: requested },
+    );
+  }
 
   try {
     await stat(target);
@@ -405,10 +433,12 @@ export async function getLanguageState(
   const available = packs.map((pack) => pack.locale);
 
   let settings: SettingsFile | undefined;
+  let settingsInvalid = false;
   try {
     settings = await readSettingsFile(paths);
   } catch {
     settings = undefined;
+    settingsInvalid = true;
   }
 
   const env = options.env ?? process.env;
@@ -419,6 +449,8 @@ export async function getLanguageState(
     current = matchLocale(requestedEnv, available) ?? 'en';
   } else if (settings?.locale) {
     current = matchLocale(settings.locale, available) ?? 'en';
+  } else if (settingsInvalid) {
+    current = 'en';
   } else {
     const systemLocale =
       options.systemLocale ??
