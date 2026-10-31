@@ -484,4 +484,29 @@ describe('doctor', () => {
       false,
     );
   });
+
+  it('uses a provided status report instead of rescanning targets', async () => {
+    const { paths } = await setup();
+
+    const report = await doctor({
+      paths,
+      statusReport: {
+        healthy: false,
+        entries: [
+          {
+            targetId: 'project-a',
+            targetPath: paths.home,
+            name: 'fake-skill',
+            version: '1.0.0',
+            state: 'missing',
+            path: paths.home,
+          },
+        ],
+      },
+    });
+
+    expect(report.issues).toContainEqual(
+      expect.objectContaining({ code: 'LINK_ISSUE', name: 'fake-skill' }),
+    );
+  });
 });

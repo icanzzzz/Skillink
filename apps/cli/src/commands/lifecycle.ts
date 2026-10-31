@@ -45,21 +45,16 @@ export function registerLifecycleCommands(
     .option('--json', 'Print machine-readable JSON')
     .action(async (options: { json?: boolean }) => {
       const paths = runtime.paths();
-      const [
-        skills,
-        packages,
-        route,
-        statusReport,
-        doctorReport,
-        targetSkills,
-      ] = await Promise.all([
-        readSkillFile(paths),
-        readPackageFile(paths),
-        readRouteFile(paths),
-        status({ paths }),
-        doctor({ paths }),
-        summarizeTargetSkills({ paths }),
-      ]);
+      const statusReport = await status({ paths });
+
+      const [skills, packages, route, doctorReport, targetSkills] =
+        await Promise.all([
+          readSkillFile(paths),
+          readPackageFile(paths),
+          readRouteFile(paths),
+          doctor({ paths, statusReport }),
+          summarizeTargetSkills({ paths }),
+        ]);
 
       const snapshot = {
         home: paths.home,

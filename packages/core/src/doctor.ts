@@ -11,6 +11,7 @@ import {
   type RouteFile,
   type SkillFile,
   type SkillinkPaths,
+  type StatusReport,
 } from '@skillink/shared';
 import { readRouteFile } from './route.js';
 import { readPackageFile } from './package-store.js';
@@ -35,6 +36,7 @@ import { isNodeError } from './node-error.js';
 export interface DoctorInput {
   paths?: SkillinkPaths;
   home?: string;
+  statusReport?: StatusReport;
 }
 
 async function pathIsDirectory(targetPath: string): Promise<boolean> {
@@ -495,7 +497,7 @@ export async function doctor(input: DoctorInput = {}): Promise<DoctorReport> {
     }
   }
 
-  const currentStatus = await status({ paths });
+  const currentStatus = input.statusReport ?? (await status({ paths }));
   for (const entry of currentStatus.entries) {
     if (entry.state === 'ok' || entry.state === 'disabled') {
       continue;
