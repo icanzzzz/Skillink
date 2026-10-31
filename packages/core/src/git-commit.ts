@@ -1,4 +1,3 @@
-import { mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { SkillinkError, type SkillinkPaths } from '@skillink/shared';
 import {
@@ -14,18 +13,7 @@ import {
   gitTrackedFiles,
   type GitRepo,
 } from './git.js';
-import {
-  readPackageFile,
-  writePackageFile,
-} from './package-store.js';
-import {
-  readRouteFile,
-  writeRouteFile,
-} from './route.js';
-import {
-  readSkillFile,
-  writeSkillFile,
-} from './skill-store.js';
+import { ensureControlFiles, pathExists } from './initialize.js';
 
 const MAX_SUBJECT_LENGTH = 72;
 const MAX_CHANGED_FILES = 20;
@@ -154,12 +142,6 @@ export async function assertCleanControlRepo(
   }
 }
 
-async function pathExists(targetPath: string): Promise<boolean> {
-  return stat(targetPath)
-    .then(() => true)
-    .catch(() => false);
-}
-
 function isManagedControlFile(file: string): boolean {
   return CONTROL_TRACKED_PATHS.some(
     (managed) => file === managed || file.startsWith(`${managed}/`),
@@ -189,25 +171,6 @@ export async function controlPathspec(
   }
 
   return [...result].sort();
-}
-
-/**
- * Create the three control-plane config files if they are missing. Used before
- * a bootstrap commit so the first history entry is a complete control plane.
- */
-export async function ensureControlFiles(
-  paths: SkillinkPaths,
-): Promise<void> {
-  await mkdir(paths.localesDir, { recursive: true });
-  if (!(await pathExists(paths.routeFile))) {
-    await writeRouteFile(paths, await readRouteFile(paths));
-  }
-  if (!(await pathExists(paths.packageFile))) {
-    await writePackageFile(paths, await readPackageFile(paths));
-  }
-  if (!(await pathExists(paths.skillFile))) {
-    await writeSkillFile(paths, await readSkillFile(paths));
-  }
 }
 
 /**

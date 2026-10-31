@@ -1,5 +1,4 @@
 import { Command, CommanderError } from 'commander';
-import { mkdir, stat } from 'node:fs/promises';
 import {
   SkillinkError,
   getSkillinkPaths,
@@ -10,19 +9,15 @@ import {
   addRouteEntry,
   addTarget,
   apply,
-  assertCleanControlRepo,
   checkPackageSkillReferences,
-  commitRepoChanges,
   copyPackageVersion,
   createPackageVersion,
   doctor,
-  ensureControlRepo,
-  ensureSkillsRepo,
+  ensureDirectories,
+  ensureHome,
   gc,
   getLanguageState,
-  gitHead,
   gitLog,
-  gitRepoExists,
   importSkill,
   installLanguagePack,
   isGitAvailable,
@@ -44,14 +39,12 @@ import {
   setTargetEnabled,
   status,
   summarizeTargetSkills,
-  withHomeLock,
   writePackageFile,
   writeRouteFile,
-  writeSettingsFile,
   writeSkillFile,
 } from '@skillink/core';
 import { withCliMutation } from './mutation.js';
-import { buildCliCommitMessage } from './commit-message.js';
+import { initializeHome } from './bootstrap.js';
 
 export interface CliContext {
   home?: string;
@@ -116,73 +109,6 @@ function collectSpecs(
   }
 
   return result;
-}
-
-async function pathExists(target: string): Promise<boolean> {
-  return stat(target)
-    .then(() => true)
-    .catch((error: unknown) => {
-      if (
-        error instanceof Error &&
-        'code' in error &&
-        (error as NodeJS.ErrnoException).code === 'ENOENT'
-      ) {
-        return false;
-      }
-      throw error;
-    });
-}
-
-async function ensureDirectories(paths: ReturnType<typeof getSkillinkPaths>) {
-  await Promise.all([
-    mkdir(paths.home, { recursive: true }),
-    mkdir(paths.localesDir, { recursive: true }),
-    mkdir(paths.libraryDir, { recursive: true }),
-    mkdir(paths.cacheDir, { recursive: true }),
-    mkdir(paths.logsDir, { recursive: true }),
-    mkdir(paths.tmpDir, { recursive: true }),
-  ]);
-}
-
-async function ensureInitialFiles(
-  paths: ReturnType<typeof getSkillinkPaths>,
-): Promise<void> {
-  if (!(await pathExists(paths.routeFile))) {
-    await writeRouteFile(paths, await readRouteFile(paths));
-  }
-  if (!(await pathExists(paths.packageFile))) {
-    await writePackageFile(paths, await readPackageFile(paths));
-  }
-  if (!(await pathExists(paths.skillFile))) {
-    await writeSkillFile(paths, await readSkillFile(paths));
-  }
-}
-
-async function writeInitialSettings(
-  paths: ReturnType<typeof getSkillinkPaths>,
-): Promise<void> {
-  if (!(await pathExists(paths.settingsFile))) {
-    await writeSettingsFile(paths, { schemaVersion: 1 });
-  }
-}
-
-async function ensureHome(home?: string) {
-  const paths = getSkillinkPaths(home);
-  await ensureDirectories(paths);
-
-  if (
-    (await pathExists(paths.skillsFile)) &&
-    !(await pathExists(paths.skillFile))
-  ) {
-    throw new SkillinkError(
-      'IO_ERROR',
-      'Found v1 skills.json. Run "skillink init" or "skillink migrate" first.',
-      { home: paths.home },
-    );
-  }
-
-  await ensureInitialFiles(paths);
-  return paths;
 }
 
 async function runSkillAdd(
@@ -259,72 +185,7 @@ export async function runCli(
     .option('--json', 'Print machine-readable JSON')
     .action(async (options: { json?: boolean }) => {
       const paths = getSkillinkPaths(context.home);
-      const result = await withHomeLock(paths, async () => {
-        if (!(await isGitAvailable())) {
-          throw new SkillinkError(
-            'GIT_UNAVAILABLE',
-            'Initializing the control plane requires git on PATH.',
-            { home: paths.home },
-          );
-        }
-
-        await ensureDirectories(paths);
-
-        const hadControlRepo = await gitRepoExists(paths, 'control');
-        if (hadControlRepo && (await gitHead(paths, 'control'))) {
-          await assertCleanControlRepo(paths);
-        }
-
-        await writeInitialSettings(paths);
-
-        let migration = {
-          migrated: false,
-          skillCount: 0,
-          packageCount: 0,
-          targetCount: 0,
-        };
-
-        if (await pathExists(paths.skillsFile)) {
-          if (await pathExists(paths.skillFile)) {
-            await ensureInitialFiles(paths);
-          } else {
-            migration = await migrateV1ToV2(paths);
-          }
-        } else {
-          await ensureInitialFiles(paths);
-        }
-
-        await ensureControlRepo(paths);
-        await ensureSkillsRepo(paths);
-        await commitRepoChanges({
-          paths,
-          repo: 'control',
-          buildMessage: (changedFiles) =>
-            buildCliCommitMessage({
-              repo: 'control',
-              commandPath: 'init',
-              argv,
-              action: 'initialize',
-              summary: 'control plane',
-              changedFiles,
-            }),
-        });
-        await commitRepoChanges({
-          paths,
-          repo: 'skills',
-          buildMessage: (changedFiles) =>
-            buildCliCommitMessage({
-              repo: 'skills',
-              commandPath: 'init',
-              argv,
-              action: 'initialize',
-              summary: 'skills',
-              changedFiles,
-            }),
-        });
-
-        return migration;
-      });
+      const result = await initializeHome(paths, argv);
 
       if (options.json) {
         printJson(context, { ok: true, home: paths.home, ...result });
@@ -573,7 +434,8 @@ export async function runCli(
       .alias('ls')
       .description('List skills and versions in skill.json'),
   ).action(async (options: { json?: boolean }) => {
-    const paths = await ensureHome(context.home);
+    const paths = getSkillinkPaths(context.home);
+    await ensureHome(paths);
     const file = await readSkillFile(paths);
 
     if (options.json) {
@@ -649,7 +511,7 @@ export async function runCli(
         'add',
         (added) => `${added.name}@${added.version}`,
         async () => {
-          await ensureHome(context.home);
+          await ensureHome(getSkillinkPaths(context.home));
           return runSkillAdd(folder, options, context);
         },
         { skills: true },
@@ -680,7 +542,7 @@ export async function runCli(
         'add',
         (added) => `${added.name}@${added.version}`,
         async () => {
-          await ensureHome(context.home);
+          await ensureHome(getSkillinkPaths(context.home));
           return runSkillAdd(folder, options, context);
         },
         { skills: true },
@@ -704,7 +566,7 @@ export async function runCli(
       'tag',
       `${spec} as ${tag}`,
       async () => {
-        await ensureHome(context.home);
+        await ensureHome(getSkillinkPaths(context.home));
         return setSkillTag(paths, parsed.name, parsed.version, tag);
       },
     );
@@ -729,7 +591,7 @@ export async function runCli(
       'remove',
       spec,
       async () => {
-        await ensureHome(context.home);
+        await ensureHome(getSkillinkPaths(context.home));
         return removeSkillVersion(paths, parsed.name, parsed.version);
       },
       { skills: true },
@@ -751,7 +613,8 @@ export async function runCli(
       .alias('ls')
       .description('List package compositions'),
   ).action(async (options: { json?: boolean }) => {
-    const paths = await ensureHome(context.home);
+    const paths = getSkillinkPaths(context.home);
+    await ensureHome(paths);
     const file = await readPackageFile(paths);
 
     if (options.json) {
@@ -820,7 +683,7 @@ export async function runCli(
           'create',
           spec,
           async () => {
-            await ensureHome(context.home);
+            await ensureHome(getSkillinkPaths(context.home));
             return createPackageVersion({
               paths,
               name: parsed.name,
@@ -872,7 +735,7 @@ export async function runCli(
           'copy',
           `${sourceSpec} -> ${targetSpec}`,
           async () => {
-            await ensureHome(context.home);
+            await ensureHome(getSkillinkPaths(context.home));
             return copyPackageVersion({
               paths,
               sourceName: source.name,
@@ -910,7 +773,7 @@ export async function runCli(
         'tag',
         `${spec} as ${tag}`,
         async () => {
-          await ensureHome(context.home);
+          await ensureHome(getSkillinkPaths(context.home));
           return setPackageTag(paths, parsed.name, parsed.version, tag);
         },
       );
@@ -935,7 +798,7 @@ export async function runCli(
         'remove',
         spec,
         async () => {
-          await ensureHome(context.home);
+          await ensureHome(getSkillinkPaths(context.home));
           return removePackageVersion(paths, parsed.name, parsed.version);
         },
       );
@@ -960,7 +823,7 @@ export async function runCli(
       'check',
       '',
       async () => {
-        await ensureHome(context.home);
+        await ensureHome(getSkillinkPaths(context.home));
         return checkPackageSkillReferences(paths);
       },
       { commit: false },
@@ -1021,7 +884,7 @@ export async function runCli(
           'add',
           (result) => result.id,
           async () => {
-            await ensureHome(context.home);
+            await ensureHome(getSkillinkPaths(context.home));
             return addTarget({
               paths,
               id: options.id,
@@ -1042,7 +905,8 @@ export async function runCli(
   addCommonOptions(
     target.command('list').description('List target directories'),
   ).action(async (options: { json?: boolean }) => {
-    const paths = await ensureHome(context.home);
+    const paths = getSkillinkPaths(context.home);
+    await ensureHome(paths);
     const route = await readRouteFile(paths);
 
     if (options.json) {
@@ -1079,7 +943,7 @@ export async function runCli(
         'remove',
         id,
         async () => {
-          await ensureHome(context.home);
+          await ensureHome(getSkillinkPaths(context.home));
           return removeTarget({ paths, id });
         },
       );
@@ -1103,7 +967,7 @@ export async function runCli(
         'enable',
         id,
         async () => {
-          await ensureHome(context.home);
+          await ensureHome(getSkillinkPaths(context.home));
           return setTargetEnabled(paths, id, true);
         },
       );
@@ -1127,7 +991,7 @@ export async function runCli(
         'disable',
         id,
         async () => {
-          await ensureHome(context.home);
+          await ensureHome(getSkillinkPaths(context.home));
           return setTargetEnabled(paths, id, false);
         },
       );
@@ -1156,7 +1020,7 @@ export async function runCli(
           'add',
           `${targetId} ${spec}`,
           async () => {
-            await ensureHome(context.home);
+            await ensureHome(getSkillinkPaths(context.home));
             return addRouteEntry({
               paths,
               targetId,
@@ -1178,7 +1042,8 @@ export async function runCli(
   addCommonOptions(
     route.command('list').description('List route assignments'),
   ).action(async (options: { json?: boolean }) => {
-    const paths = await ensureHome(context.home);
+    const paths = getSkillinkPaths(context.home);
+    await ensureHome(paths);
     const file = await readRouteFile(paths);
 
     if (options.json) {
@@ -1222,7 +1087,7 @@ export async function runCli(
           'enable',
           `${targetId}/${name}`,
           async () => {
-            await ensureHome(context.home);
+            await ensureHome(getSkillinkPaths(context.home));
             return setPackageEnabled(paths, targetId, name, true);
           },
         );
@@ -1249,7 +1114,7 @@ export async function runCli(
           'disable',
           `${targetId}/${name}`,
           async () => {
-            await ensureHome(context.home);
+            await ensureHome(getSkillinkPaths(context.home));
             return setPackageEnabled(paths, targetId, name, false);
           },
         );
@@ -1281,7 +1146,7 @@ export async function runCli(
           'remove',
           `${targetId}/${name}`,
           async () => {
-            await ensureHome(context.home);
+            await ensureHome(getSkillinkPaths(context.home));
             return removeRouteEntry({
               paths,
               targetId,
@@ -1324,7 +1189,7 @@ export async function runCli(
               result.removed.length === 1 ? '' : 's'
             }`,
           async () => {
-            await ensureHome(context.home);
+            await ensureHome(getSkillinkPaths(context.home));
             const maxAgeDays =
               options.maxAgeDays === undefined
                 ? undefined
@@ -1392,7 +1257,7 @@ export async function runCli(
           'apply',
           '',
           async () => {
-            await ensureHome(context.home);
+            await ensureHome(getSkillinkPaths(context.home));
             return apply({
               paths,
               targetId: options.target,
@@ -1517,7 +1382,8 @@ export async function runCli(
       .description('Show target/link status')
       .option('--target <id>', 'Only inspect one target'),
   ).action(async (options: { target?: string; json?: boolean }) => {
-    const paths = await ensureHome(context.home);
+    const paths = getSkillinkPaths(context.home);
+    await ensureHome(paths);
     const report = await status({ paths, targetId: options.target });
 
     if (options.json) {
@@ -1544,7 +1410,8 @@ export async function runCli(
       .command('doctor')
       .description('Check skills, packages, routes, and targets'),
   ).action(async (options: { json?: boolean }) => {
-    const paths = await ensureHome(context.home);
+    const paths = getSkillinkPaths(context.home);
+    await ensureHome(paths);
     const report = await doctor({ paths });
 
     if (options.json) {

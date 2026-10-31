@@ -1,5 +1,10 @@
 export { apply } from './apply.js';
 export { doctor } from './doctor.js';
+export {
+  ensureDirectories,
+  ensureHome,
+  writeInitialSettings,
+} from './initialize.js';
 export { gc, planGc } from './gc.js';
 export {
   ensureControlRepo,
