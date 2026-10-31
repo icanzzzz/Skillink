@@ -20,15 +20,12 @@ import { resolvePackageGraph } from './package-graph.js';
 import { isPathInside } from './path-policy.js';
 import { withHistory } from './history.js';
 import { withFsRetry } from './fs-retry.js';
+import { isNodeError } from './node-error.js';
 
 export interface GcOptions {
   dryRun?: boolean;
   maxAgeDays?: number;
   keepTagged?: boolean;
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
 }
 
 async function directoryStat(

@@ -19,6 +19,7 @@ import { withHistory } from './history.js';
 import { collectPackageSkillRefs } from './package-graph.js';
 import { withFsRetry } from './fs-retry.js';
 import { assertSafePackageName } from './package-name.js';
+import { isNodeError } from './node-error.js';
 
 export async function readSkillFile(paths: SkillinkPaths): Promise<SkillFile> {
   return readJsonFile(paths.skillFile, SkillFileSchema, createEmptySkillFile());
@@ -180,10 +181,6 @@ export async function upsertSkillVersion(
     await writeSkillFile(paths, file);
   });
   return { created: true };
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
 }
 
 export async function createTrashDirectory(

@@ -13,6 +13,8 @@ import { getSkillinkPaths, type SkillinkPaths } from '@skillink/shared';
 const state = vi.hoisted(() => ({
   failRmPath: '',
   failRenameTo: '',
+  failUnlinkPath: '',
+  failStatPath: '',
 }));
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -38,11 +40,32 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       }
       return actual.rename(from, to);
     },
+    unlink: async (target: Parameters<typeof actual.unlink>[0]) => {
+      if (state.failUnlinkPath && String(target) === state.failUnlinkPath) {
+        throw Object.assign(new Error('EIO: simulated unlink failure'), {
+          code: 'EIO',
+        });
+      }
+      return actual.unlink(target);
+    },
+    stat: async (
+      target: Parameters<typeof actual.stat>[0],
+      options?: Parameters<typeof actual.stat>[1],
+    ) => {
+      if (state.failStatPath && String(target) === state.failStatPath) {
+        throw Object.assign(new Error('EIO: simulated stat failure'), {
+          code: 'EIO',
+        });
+      }
+      return actual.stat(target, options);
+    },
   };
 });
 
+import { getSkillDir } from '@skillink/shared';
 import { importSkill } from './import-skill.js';
 import { createPackageVersion } from './package-store.js';
+import { createDirectoryLink } from './links.js';
 import { addRouteEntry, readRouteFile } from './route.js';
 import { addTarget, removeTarget } from './target.js';
 
@@ -77,13 +100,19 @@ async function setup(): Promise<{
     version: '1.0.0',
     home,
   });
+  await importSkill({
+    sourceDir: source,
+    name: 'review',
+    version: '1.0.0',
+    home,
+  });
 
   const paths = getSkillinkPaths(home);
   await createPackageVersion({
     paths,
     name: 'frontend',
     version: '1.0.0',
-    skills: { pdf: '1.0.0' },
+    skills: { pdf: '1.0.0', review: '1.0.0' },
   });
   await addTarget({ paths, id: 'project-a', path: targetPath });
   await addRouteEntry({
@@ -98,6 +127,8 @@ async function setup(): Promise<{
 afterEach(async () => {
   state.failRmPath = '';
   state.failRenameTo = '';
+  state.failUnlinkPath = '';
+  state.failStatPath = '';
   await Promise.all(
     tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
   );
@@ -117,6 +148,60 @@ describe('target GC failure handling', () => {
 
     expect((await readRouteFile(paths)).targets).toHaveLength(1);
     expect(await pathExists(skillPath)).toBe(true);
+  });
+
+  it('keeps already-deleted entries deleted when a later skill fails', async () => {
+    const { paths, targetPath } = await setup();
+    const pdfPath = path.join(targetPath, 'pdf');
+    const reviewPath = path.join(targetPath, 'review');
+    await mkdir(pdfPath, { recursive: true });
+    await mkdir(reviewPath, { recursive: true });
+    await writeFile(path.join(pdfPath, 'note.txt'), 'copy', 'utf8');
+    await writeFile(path.join(reviewPath, 'note.txt'), 'copy', 'utf8');
+    state.failRmPath = reviewPath;
+
+    await expect(
+      removeTarget({ paths, id: 'project-a' }),
+    ).rejects.toMatchObject({ code: 'IO_ERROR' });
+
+    expect((await readRouteFile(paths)).targets).toHaveLength(1);
+    expect(await pathExists(pdfPath)).toBe(false);
+    expect(await pathExists(reviewPath)).toBe(true);
+  });
+
+  it('keeps route unchanged when deleting a resolved link fails', async () => {
+    const { paths, targetPath } = await setup();
+    const linkPath = path.join(targetPath, 'pdf');
+    await createDirectoryLink(
+      getSkillDir(paths, 'pdf', '1.0.0'),
+      linkPath,
+    );
+    state.failUnlinkPath = linkPath;
+
+    await expect(
+      removeTarget({ paths, id: 'project-a' }),
+    ).rejects.toMatchObject({ code: 'IO_ERROR' });
+
+    expect((await readRouteFile(paths)).targets).toHaveLength(1);
+    expect(await pathExists(linkPath)).toBe(true);
+  });
+
+  it('reports the target path when inspecting the target directory fails', async () => {
+    const { paths, targetPath } = await setup();
+    state.failStatPath = targetPath;
+
+    await expect(
+      removeTarget({ paths, id: 'project-a' }),
+    ).rejects.toMatchObject({
+      code: 'IO_ERROR',
+      details: {
+        targetId: 'project-a',
+        targetPath,
+        path: targetPath,
+      },
+    });
+
+    expect((await readRouteFile(paths)).targets).toHaveLength(1);
   });
 
   it('keeps route unchanged when writing route fails after cleanup', async () => {

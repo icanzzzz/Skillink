@@ -24,6 +24,7 @@ import {
   type SkillinkPaths,
 } from '@skillink/shared';
 import { readJsonFile, writeJsonAtomic } from './json-store.js';
+import { isNodeError } from './node-error.js';
 
 export interface InstallLanguagePackOptions {
   sourcePath: string;
@@ -51,10 +52,6 @@ const BUILTIN_EN: LanguagePackSummary = {
   coverage: 1,
   builtIn: true,
 };
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
-}
 
 function invalidPack(
   message: string,

@@ -12,14 +12,11 @@ import { resolvePackageGraph } from './package-graph.js';
 import { readPackageFile } from './package-store.js';
 import { readSkillFile } from './skill-store.js';
 import { assertSafeRealTargetPath } from './path-policy.js';
+import { isNodeError } from './node-error.js';
 
 export interface TargetGcInput {
   paths: SkillinkPaths;
   target: TargetRoute;
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
 }
 
 function ioError(
@@ -69,7 +66,7 @@ export async function gcTargetEntries(
     }
     throw ioError(
       `Failed to inspect target directory ${targetPath}.`,
-      { targetId: input.target.id, targetPath },
+      { targetId: input.target.id, targetPath, path: targetPath },
       error,
     );
   }

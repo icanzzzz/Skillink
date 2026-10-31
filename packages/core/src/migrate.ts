@@ -24,6 +24,7 @@ import {
 } from './package-graph.js';
 import { isSamePath } from './path-policy.js';
 import { writeJsonAtomic } from './json-store.js';
+import { isNodeError } from './node-error.js';
 
 const LegacyVersionSchema = z.object({
   integrity: z.string().min(1),
@@ -70,10 +71,6 @@ const LegacyRouteFileSchema = z.object({
 
 type LegacySkillsFile = z.infer<typeof LegacySkillsFileSchema>;
 type LegacyRouteFile = z.infer<typeof LegacyRouteFileSchema>;
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
-}
 
 async function pathExists(target: string): Promise<boolean> {
   return stat(target)

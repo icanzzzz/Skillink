@@ -32,6 +32,7 @@ import {
   computePackageIntegrity,
   resolvePackageGraph,
 } from './package-graph.js';
+import { isNodeError } from './node-error.js';
 
 export interface ApplyInput {
   paths?: SkillinkPaths;
@@ -57,10 +58,6 @@ type UndoAction =
   | { kind: 'remove-link'; path: string }
   | { kind: 'restore-link'; path: string; target: string }
   | { kind: 'remove-directory'; path: string };
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
-}
 
 async function inspectTargetDirectory(
   targetPath: string,

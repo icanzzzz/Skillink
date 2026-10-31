@@ -6,6 +6,7 @@ import {
   expandPath,
   type SkillinkPaths,
 } from '@skillink/shared';
+import { isNodeError } from './node-error.js';
 
 function normalizeForCompare(value: string): string {
   const resolved = path.resolve(value);
@@ -55,10 +56,6 @@ export function getSystemDirectories(): string[] {
     '/System',
     '/Library',
   ];
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
 }
 
 async function realPathWithMissing(target: string): Promise<string> {

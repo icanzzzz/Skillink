@@ -25,6 +25,7 @@ import {
   resolvePackageGraph,
   validateAllPackages,
 } from './package-graph.js';
+import { isNodeError } from './node-error.js';
 
 export interface ConfigSet {
   route: RouteFile;
@@ -104,10 +105,6 @@ const HistoryMetaSchema = z.object({
 
 const MAX_SNAPSHOTS = 50;
 const SAFE_SNAPSHOT_ID = /^[A-Za-z0-9._-]+$/;
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
-}
 
 function snapshotId(date: Date): string {
   return date.toISOString().replaceAll(':', '-');

@@ -28,14 +28,11 @@ import {
 } from './path-policy.js';
 import { findCaseInsensitiveDuplicates } from './package-name.js';
 import { status } from './status.js';
+import { isNodeError } from './node-error.js';
 
 export interface DoctorInput {
   paths?: SkillinkPaths;
   home?: string;
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
 }
 
 async function pathIsDirectory(targetPath: string): Promise<boolean> {

@@ -23,15 +23,12 @@ import {
   computePackageIntegrity,
   resolvePackageGraph,
 } from './package-graph.js';
+import { isNodeError } from './node-error.js';
 
 export interface StatusInput {
   paths?: SkillinkPaths;
   home?: string;
   targetId?: string;
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
 }
 
 function errorCode(error: unknown): SkillinkErrorCode | undefined {
