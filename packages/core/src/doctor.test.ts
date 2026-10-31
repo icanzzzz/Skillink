@@ -485,6 +485,36 @@ describe('doctor', () => {
     );
   });
 
+  it('reports every stale route lock', async () => {
+    const { paths } = await setup();
+    await createPackageVersion({
+      paths,
+      name: 'docs',
+      version: '1.0.0',
+      skills: { pdf: '1.0.0' },
+    });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'docs',
+      requested: '1.0.0',
+    });
+    const route = await readRouteFile(paths);
+    route.targets[0]!.packages.frontend!.integrity = 'sha256-wrong';
+    route.targets[0]!.packages.docs!.integrity = 'sha256-wrong';
+    await writeRouteFile(paths, route);
+
+    const report = await doctor({ paths });
+    const stale = report.issues.filter(
+      (issue) => issue.code === 'PACKAGE_INTEGRITY_MISMATCH',
+    );
+
+    expect(stale.map((issue) => issue.name).sort()).toEqual([
+      'docs',
+      'frontend',
+    ]);
+  });
+
   it('uses a provided status report instead of rescanning targets', async () => {
     const { paths } = await setup();
 

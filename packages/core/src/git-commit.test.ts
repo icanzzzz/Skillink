@@ -184,4 +184,12 @@ describe.skipIf(!gitReady)('repository commits', () => {
     ).toBeUndefined();
     expect(await gitLog(paths, 'control')).toHaveLength(2);
   });
+
+  it('rejects a commit without a message or buildMessage', async () => {
+    const paths = await seededHome();
+
+    await expect(
+      commitRepoChanges({ paths, repo: 'control' }),
+    ).rejects.toMatchObject({ code: 'IO_ERROR' });
+  });
 });

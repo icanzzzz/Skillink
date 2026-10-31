@@ -37,6 +37,7 @@ export function checkTargetPackageLocks(
     target,
     options.includeDisabled ?? false,
   )) {
+    const check: TargetLockCheck = { name, lock };
     try {
       const expected = computePackageIntegrity(packageFile, [
         { name, version: lock.resolved },
@@ -52,8 +53,9 @@ export function checkTargetPackageLocks(
       if (!(error instanceof SkillinkError)) {
         throw error;
       }
-      checks.push({ name, lock, error });
+      check.error = error;
     }
+    checks.push(check);
   }
 
   return checks;

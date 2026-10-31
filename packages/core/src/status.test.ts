@@ -344,4 +344,27 @@ describe('status', () => {
       ]),
     );
   });
+
+  it('reports every stale route lock', async () => {
+    const { paths } = await setup();
+    for (const name of ['combo', 'docs-pack']) {
+      await addRouteEntry({
+        paths,
+        targetId: 'project-a',
+        name,
+        requested: '1.0.0',
+      });
+    }
+    const route = await readRouteFile(paths);
+    route.targets[0]!.packages.combo!.integrity = 'sha256-wrong';
+    route.targets[0]!.packages['docs-pack']!.integrity = 'sha256-wrong';
+    await writeRouteFile(paths, route);
+
+    const report = await status({ paths });
+    const stale = report.entries.filter((entry) =>
+      entry.detail?.includes('PACKAGE_INTEGRITY_MISMATCH'),
+    );
+
+    expect(stale.map((entry) => entry.name)).toEqual(['combo', 'docs-pack']);
+  });
 });

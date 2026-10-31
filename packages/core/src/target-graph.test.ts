@@ -9,6 +9,7 @@ import {
   resolveTarget,
   resolveTargetGraph,
 } from './target-graph.js';
+import { computePackageIntegrity } from './package-graph.js';
 
 const skillFile: SkillFile = {
   schemaVersion: 2,
@@ -95,6 +96,25 @@ describe('target graph', () => {
 
     expect(checks.map((check) => check.name)).toEqual(['base', 'ui']);
     expect(checks[1]?.error?.code).toBe('PACKAGE_INTEGRITY_MISMATCH');
+  });
+
+  it('returns valid and invalid checks together', () => {
+    const validTarget: TargetRoute = {
+      ...target,
+      packages: {
+        base: {
+          ...target.packages.base!,
+          integrity: computePackageIntegrity(packageFile, [
+            { name: 'base', version: '1.0.0' },
+          ]),
+        },
+      },
+    };
+
+    const checks = checkTargetPackageLocks(packageFile, validTarget);
+
+    expect(checks.map((check) => check.name)).toEqual(['base']);
+    expect(checks[0]?.error).toBeUndefined();
   });
 
   it('rejects a lock mismatch from resolveTarget', () => {
