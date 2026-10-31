@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { GcReport } from '@skillink/shared';
 import type { SkillFile } from '@skillink/shared';
+import { useI18n } from './i18n.js';
 
 export interface ImportSkillFormInput {
   sourceDir: string;
@@ -50,6 +51,7 @@ export function SkillsView({
   onRemove,
   onGc,
 }: SkillsViewProps) {
+  const { t } = useI18n();
   const [sourceDir, setSourceDir] = useState('');
   const [name, setName] = useState('');
   const [version, setVersion] = useState('');
@@ -87,20 +89,20 @@ export function SkillsView({
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">SKILLS</p>
-            <h2>Installed skills</h2>
+            <p className="eyebrow">{t('skills.eyebrow')}</p>
+            <h2>{t('skills.heading')}</h2>
           </div>
           <span className="count">{entries.length}</span>
         </div>
 
         <form className="form-grid import-form" onSubmit={submitImport}>
           <label className="field field-wide">
-            <span>Source folder (must contain SKILL.md)</span>
+            <span>{t('skills.form.sourceFolder')}</span>
             <div className="input-row">
               <input
                 value={sourceDir}
                 onChange={(event) => setSourceDir(event.target.value)}
-                placeholder="C:/Projects/my-skill"
+                placeholder={t('skills.form.sourcePlaceholder')}
                 required
               />
               <button
@@ -109,24 +111,24 @@ export function SkillsView({
                 onClick={() => void browse()}
                 disabled={busy || !onBrowse}
               >
-                Browse
+                {t('common.browse')}
               </button>
             </div>
           </label>
           <label className="field">
-            <span>Skill name</span>
+            <span>{t('skills.form.name')}</span>
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="folder name"
+              placeholder={t('skills.form.namePlaceholder')}
             />
           </label>
           <label className="field">
-            <span>Version</span>
+            <span>{t('skills.form.version')}</span>
             <input
               value={version}
               onChange={(event) => setVersion(event.target.value)}
-              placeholder="0.0.0+hash"
+              placeholder={t('skills.form.versionPlaceholder')}
             />
           </label>
           <div className="form-actions">
@@ -135,7 +137,7 @@ export function SkillsView({
               type="submit"
               disabled={busy || !onImportSkill}
             >
-              Import skill
+              {t('skills.form.import')}
             </button>
           </div>
         </form>
@@ -143,9 +145,7 @@ export function SkillsView({
 
       {entries.length === 0 ? (
         <section className="panel">
-          <p className="empty">
-            No skills yet. Import a folder that contains SKILL.md.
-          </p>
+          <p className="empty">{t('skills.empty')}</p>
         </section>
       ) : (
         <section className="panel">
@@ -154,7 +154,7 @@ export function SkillsView({
               <article className="package-card" key={skillName}>
                 <div className="package-title">
                   <strong>{skillName}</strong>
-                  <span>skill</span>
+                  <span>{t('skills.badge')}</span>
                 </div>
                 {entry.description ? <p>{entry.description}</p> : null}
 
@@ -177,12 +177,17 @@ export function SkillsView({
                         <div className="version-block" key={skillVersion}>
                           <div className="version-row">
                             <code>{skillVersion}</code>
-                            <span>{info.fileCount} files</span>
+                            <span>
+                              {t('skills.files', { count: info.fileCount })}
+                            </span>
                             <span>{formatBytes(info.size)}</span>
                           </div>
                           <div className="version-actions">
                             <input
-                              aria-label={`Tag ${skillName}@${skillVersion}`}
+                              aria-label={t('skills.tagAriaLabel', {
+                                name: skillName,
+                                version: skillVersion,
+                              })}
                               value={tagDrafts[key] ?? ''}
                               onChange={(event) =>
                                 setTagDrafts((current) => ({
@@ -190,7 +195,7 @@ export function SkillsView({
                                   [key]: event.target.value,
                                 }))
                               }
-                              placeholder="tag"
+                              placeholder={t('skills.tagPlaceholder')}
                             />
                             <button
                               className="secondary"
@@ -208,7 +213,7 @@ export function SkillsView({
                                 })
                               }
                             >
-                              Tag
+                              {t('skills.tag')}
                             </button>
                             <button
                               className="danger"
@@ -221,7 +226,7 @@ export function SkillsView({
                                 })
                               }
                             >
-                              Remove
+                              {t('common.remove')}
                             </button>
                           </div>
                         </div>
@@ -238,8 +243,8 @@ export function SkillsView({
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">STORAGE</p>
-            <h2>Garbage collection</h2>
+            <p className="eyebrow">{t('skills.storage.eyebrow')}</p>
+            <h2>{t('skills.storage.title')}</h2>
           </div>
           <div className="row-actions">
             <button
@@ -248,7 +253,7 @@ export function SkillsView({
               onClick={() => onGc?.({ dryRun: true })}
               disabled={busy || !onGc}
             >
-              GC dry run
+              {t('skills.storage.dryRun')}
             </button>
             <button
               className="danger"
@@ -256,7 +261,7 @@ export function SkillsView({
               onClick={() => onGc?.({ dryRun: false })}
               disabled={busy || !onGc}
             >
-              Apply GC
+              {t('skills.storage.apply')}
             </button>
           </div>
         </div>
@@ -264,13 +269,17 @@ export function SkillsView({
         {gcReport ? (
           <div className="gc-report">
             <p>
-              {gcReport.dryRun ? 'Dry run' : 'Applied'} ·{' '}
-              {gcReport.candidates.length} candidates ·{' '}
-              {formatBytes(gcReport.freedBytes)}{' '}
-              {gcReport.dryRun ? 'reclaimable' : 'reclaimed'}
+              {gcReport.dryRun
+                ? t('skills.gc.dryRun')
+                : t('skills.gc.applied')}{' '}
+              · {t('skills.gc.candidates', { count: gcReport.candidates.length })}{' '}
+              · {formatBytes(gcReport.freedBytes)}{' '}
+              {gcReport.dryRun
+                ? t('skills.gc.reclaimable')
+                : t('skills.gc.reclaimed')}
             </p>
             {gcReport.candidates.length === 0 ? (
-              <p className="empty">No unreferenced skill versions found.</p>
+              <p className="empty">{t('skills.gc.empty')}</p>
             ) : (
               gcReport.candidates.map((candidate) => (
                 <div
