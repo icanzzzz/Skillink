@@ -209,6 +209,8 @@ $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
 pnpm setup:electron
 ```
 
+开发模式下按 `F12` 或 `Ctrl+Shift+I`（macOS 为 `Cmd+Option+I`）打开/关闭 Electron DevTools，查看渲染进程的 HTML 结构与 Console。打包后的应用不注册该快捷键。
+
 ## 打包桌面应用
 
 ```bash

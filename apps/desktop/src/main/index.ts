@@ -6,6 +6,7 @@ import {
   syncBundledLanguagePack,
 } from './bundled-language.js';
 import { createCliAdapter } from './cli-adapter.js';
+import { isDevToolsShortcut } from './devtools.js';
 import { registerIpcHandlers } from './ipc.js';
 
 let mainWindow: BrowserWindow | null = null;
@@ -60,6 +61,17 @@ function createWindow(): void {
       mainWindow = null;
     }
   });
+
+  if (!app.isPackaged) {
+    window.webContents.on('before-input-event', (event, input) => {
+      if (!isDevToolsShortcut(input)) {
+        return;
+      }
+
+      event.preventDefault();
+      window.webContents.toggleDevTools();
+    });
+  }
 
   if (process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL);
