@@ -14,7 +14,7 @@ import {
   type SkillinkPaths,
 } from '@skillink/shared';
 import { apply } from './apply.js';
-import { doctor } from './doctor.js';
+import { doctor } from './doctor/index.js';
 import { importSkill } from './import-skill.js';
 import { computePackageIntegrity } from './package-graph.js';
 import {

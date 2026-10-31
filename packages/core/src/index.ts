@@ -1,5 +1,5 @@
 export { apply } from './apply.js';
-export { doctor } from './doctor.js';
+export { doctor } from './doctor/index.js';
 export {
   ensureDirectories,
   ensureHome,

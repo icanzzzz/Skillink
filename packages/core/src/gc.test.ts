@@ -7,7 +7,7 @@ import {
   getSkillinkPaths,
   type SkillinkPaths,
 } from '@skillink/shared';
-import { doctor } from './doctor.js';
+import { doctor } from './doctor/index.js';
 import { gc, planGc } from './gc.js';
 import { importSkill } from './import-skill.js';
 import { createPackageVersion, readPackageFile } from './package-store.js';
