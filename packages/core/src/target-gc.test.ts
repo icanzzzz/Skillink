@@ -15,6 +15,7 @@ import { importSkill } from './import-skill.js';
 import { createPackageVersion } from './package-store.js';
 import {
   gcTargetEntries,
+  removeObsoleteTargetSkills,
   resolvePackageSkillNames,
   resolveTargetActiveSkillNames,
   resolveTargetSkillNames,
@@ -207,5 +208,105 @@ describe('target GC', () => {
     await expect(
       gcTargetEntries({ paths, target, skillNames: ['pdf'] }),
     ).resolves.toEqual([]);
+  });
+});
+
+describe('removeObsoleteTargetSkills', () => {
+  async function importReview(home: string): Promise<void> {
+    const source = await tempDir('skillink-target-gc-review-');
+    await writeFile(path.join(source, 'SKILL.md'), '# review', 'utf8');
+    await importSkill({
+      sourceDir: source,
+      name: 'review',
+      version: '1.0.0',
+      home,
+    });
+  }
+
+  it('removes only skills that are no longer required', async () => {
+    const { paths, target, targetPath } = await setup();
+    await importReview(paths.home);
+    await createPackageVersion({
+      paths,
+      name: 'ui',
+      version: '1.0.0',
+      skills: { review: '1.0.0' },
+    });
+
+    await createDirectoryLink(
+      path.join(paths.libraryDir, 'pdf', '1.0.0'),
+      path.join(targetPath, 'pdf'),
+    );
+    await createDirectoryLink(
+      path.join(paths.libraryDir, 'review', '1.0.0'),
+      path.join(targetPath, 'review'),
+    );
+
+    const activeTarget: TargetRoute = {
+      ...target,
+      packages: {
+        ...target.packages,
+        ui: {
+          requested: '1.0.0',
+          resolved: '1.0.0',
+          integrity: 'sha256-test',
+          enabled: true,
+        },
+      },
+    };
+
+    const removed = await removeObsoleteTargetSkills({
+      paths,
+      target: activeTarget,
+      previousSkillNames: ['pdf', 'review'],
+    });
+
+    expect(removed).toEqual(['pdf']);
+    expect(await pathExists(path.join(targetPath, 'review'))).toBe(true);
+    expect(await pathExists(path.join(targetPath, 'pdf'))).toBe(false);
+  });
+
+  it('skips projection deletion when the remaining graph cannot resolve', async () => {
+    const { paths, target, targetPath } = await setup();
+    const brokenTarget: TargetRoute = {
+      ...target,
+      packages: {
+        frontend: {
+          ...target.packages.frontend!,
+          resolved: '9.9.9',
+          enabled: true,
+        },
+      },
+    };
+
+    await createDirectoryLink(
+      path.join(paths.libraryDir, 'pdf', '1.0.0'),
+      path.join(targetPath, 'pdf'),
+    );
+
+    const removed = await removeObsoleteTargetSkills({
+      paths,
+      target: brokenTarget,
+      previousSkillNames: ['pdf'],
+    });
+
+    expect(removed).toEqual([]);
+    expect(await pathExists(path.join(brokenTarget.path, 'pdf'))).toBe(true);
+  });
+
+  it('removes all previous skills for a disabled target', async () => {
+    const { paths, target, targetPath } = await setup();
+    const librarySkill = path.join(paths.libraryDir, 'pdf', '1.0.0');
+
+    await createDirectoryLink(librarySkill, path.join(targetPath, 'pdf'));
+    await createDirectoryLink(librarySkill, path.join(targetPath, 'review'));
+
+    const removed = await removeObsoleteTargetSkills({
+      paths,
+      target: { ...target, enabled: false },
+      previousSkillNames: ['pdf', 'review'],
+    });
+
+    expect(removed).toEqual(['pdf', 'review']);
   });
 });

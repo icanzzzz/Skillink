@@ -16,10 +16,8 @@ import {
 } from './package-graph.js';
 import { assertSafePackageName } from './package-name.js';
 import {
-  gcTargetEntries,
+  removeObsoleteTargetSkills,
   resolvePackageSkillNames,
-  resolveTargetActiveSkillNames,
-  subtractSkillNames,
 } from './target-gc.js';
 import {
   assertTargetPackageLocks,
@@ -108,28 +106,13 @@ export async function addRouteEntry(
       })),
   );
 
-  let removedSkills: string[] = [];
-  if (previousSkills.length > 0) {
-    try {
-      const nextSkills = await resolveTargetActiveSkillNames({
-        paths: input.paths,
-        target: candidate,
-      });
-      removedSkills = subtractSkillNames(previousSkills, nextSkills);
-    } catch {
-      removedSkills = [];
-    }
-  }
-
   route.targets[targetIndex] = candidate;
 
-  if (removedSkills.length > 0) {
-    await gcTargetEntries({
-      paths: input.paths,
-      target: candidate,
-      skillNames: removedSkills,
-    });
-  }
+  await removeObsoleteTargetSkills({
+    paths: input.paths,
+    target: candidate,
+    previousSkillNames: previousSkills,
+  });
   await writeRouteFile(input.paths, route);
 
   return lock;
@@ -187,22 +170,14 @@ export async function setPackageEnabled(
     await validateTargetRoute(paths, target);
   }
 
-  let removeSkills: string[] = [];
   if (!enabled && removedSkills.length > 0) {
-    try {
-      const remainingSkills = await resolveTargetActiveSkillNames({
-        paths,
-        target,
-      });
-      removeSkills = subtractSkillNames(removedSkills, remainingSkills);
-    } catch {
-      removeSkills = [];
-    }
+    await removeObsoleteTargetSkills({
+      paths,
+      target,
+      previousSkillNames: removedSkills,
+    });
   }
 
-  if (removeSkills.length > 0) {
-    await gcTargetEntries({ paths, target, skillNames: removeSkills });
-  }
   await writeRouteFile(paths, route);
 
   return lock;
@@ -267,26 +242,11 @@ export async function removeRouteEntry(
     }
   }
 
-  let removeSkills: string[] = [];
-  if (removedSkills.length > 0) {
-    try {
-      const remainingSkills = await resolveTargetActiveSkillNames({
-        paths: input.paths,
-        target,
-      });
-      removeSkills = subtractSkillNames(removedSkills, remainingSkills);
-    } catch {
-      removeSkills = [];
-    }
-  }
-
-  if (removeSkills.length > 0) {
-    await gcTargetEntries({
-      paths: input.paths,
-      target,
-      skillNames: removeSkills,
-    });
-  }
+  await removeObsoleteTargetSkills({
+    paths: input.paths,
+    target,
+    previousSkillNames: removedSkills,
+  });
   await writeRouteFile(input.paths, route);
   return true;
 }

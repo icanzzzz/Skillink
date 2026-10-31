@@ -100,6 +100,45 @@ export function subtractSkillNames(
   return names.filter((name) => !keepSet.has(name));
 }
 
+export interface RemoveObsoleteTargetSkillsInput {
+  paths: SkillinkPaths;
+  target: TargetRoute;
+  previousSkillNames: Iterable<string>;
+}
+
+export async function removeObsoleteTargetSkills(
+  input: RemoveObsoleteTargetSkillsInput,
+): Promise<string[]> {
+  const previousSkillNames = [...input.previousSkillNames];
+  if (previousSkillNames.length === 0) {
+    return [];
+  }
+
+  let remainingSkillNames: string[];
+  try {
+    remainingSkillNames = await resolveTargetActiveSkillNames({
+      paths: input.paths,
+      target: input.target,
+    });
+  } catch {
+    return [];
+  }
+
+  const removedSkills = subtractSkillNames(
+    previousSkillNames,
+    remainingSkillNames,
+  );
+  if (removedSkills.length === 0) {
+    return [];
+  }
+
+  return gcTargetEntries({
+    paths: input.paths,
+    target: input.target,
+    skillNames: removedSkills,
+  });
+}
+
 export async function gcTargetEntries(
   input: TargetGcInput & { skillNames: string[] },
 ): Promise<string[]> {
