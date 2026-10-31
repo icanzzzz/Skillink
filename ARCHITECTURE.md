@@ -682,7 +682,7 @@ apps/desktop/release/
 | 形式 | 安装向导，可选择安装目录 | 单文件自解压，运行即用 |
 | 系统写入 | 开始菜单、卸载项、Add/Remove Programs、用户 PATH | 基本不写；删除 exe 即可 |
 | CLI 入口 | `resources\cli` 加入 HKCU PATH，`skillink` 可直接调用 | 不修改 PATH；CLI 文件在包内，但 GUI 优先 |
-| 卸载 | 控制面板/开始菜单卸载，自动移除 PATH 条目 | 删除 exe |
+| 卸载 | 控制面板/开始菜单卸载，自动移除 PATH 条目；可选删除 `%USERPROFILE%\.agents\skillink\` 用户数据 | 删除 exe |
 | 管理员权限 | 默认 `perMachine: false`，按当前用户安装，一般不需要管理员 | 不需要 |
 | 升级 | 运行新安装包覆盖 | 替换 exe |
 | 适用场景 | 日常使用，需要 GUI + CLI 双入口 | 试用、便携、不想安装 |
@@ -692,13 +692,17 @@ NSIS 安装细节：
 - `oneClick: false`，允许用户选择安装目录；
 - 安装时执行 `skillink-path.ps1 add`，把 `$INSTDIR\resources\cli` 放到当前用户 PATH 前面；
 - 安装时把 `resources\locales\zh-CN.json` 复制到 `%USERPROFILE%\.agents\skillink\locales\zh-cn.json`，目标已存在则不覆盖；应用启动时仍按 `settings.json` / 系统语言决定是否启用；
-- 卸载时执行 `skillink-path.ps1 remove`，只移除该条目；语言包属于用户数据，不随卸载删除；
+- 卸载时执行 `skillink-path.ps1 remove`，只移除该条目；
+- 卸载向导提供“Delete Skillink data and configuration”复选框，默认不勾选；勾选后删除 `%USERPROFILE%\.agents\skillink\`（包括 `skills/`、三个数据配置、`history/`、`settings.json` 和语言包）；
+- 静默卸载可传 `--delete-app-data`（兼容 electron-builder）或 `--delete-skillink-data`，效果等同勾选；覆盖安装/升级时即使带参数也不会删除用户数据；
+- 卸载程序只处理默认路径；使用 `SKILLINK_HOME` 自定义控制面时，需要手动删除自定义目录；
 - 安装/卸载后广播 `WM_WININICHANGE`，新终端可直接识别 `skillink`。
 
 portable 细节：
 
 - electron-builder 生成单文件自解压 exe，运行时会解压到临时目录；
 - 不会创建开始菜单、卸载项或 PATH 条目；
+- 没有卸载向导；删除 exe 后如需清理数据，手动删除 `%USERPROFILE%\.agents\skillink\`；
 - CLI bundle 仍在包内，但不像 NSIS 安装包那样暴露为稳定的 `skillink` 命令；
 - 需要 GUI + CLI 双入口时，应使用 NSIS 安装包。
 

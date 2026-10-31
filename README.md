@@ -231,6 +231,14 @@ NSIS 安装包会把 CLI 注册到 PATH；portable 版以 GUI 为主，CLI 文�
 
 CLI bundle 位于 `resources/cli/skillink.mjs`，启动器是 `resources/cli/skillink.cmd`。NSIS 安装时会把 `resources\cli` 加入当前用户 PATH；卸载时移除。启动器通过 `ELECTRON_RUN_AS_NODE=1` 使用安装包自带的 Electron 运行 CLI，因此不需要另外安装 Node.js。
 
+卸载时卸载向导会显示“Delete Skillink data and configuration”复选框，默认不勾选；勾选后删除 `%USERPROFILE%\.agents\skillink\`，包括 skills、三个数据配置、history、settings 和语言包。静默卸载可传 `--delete-app-data`（兼容 electron-builder）或 `--delete-skillink-data` 直接删除；覆盖安装/升级不会删除用户数据：
+
+```powershell
+& "<install-dir>\Uninstall Skillink.exe" /S --delete-app-data
+```
+
+如果通过 `SKILLINK_HOME` 自定义了控制面，卸载程序只处理默认目录，需要手动删除自定义目录。
+
 GUI 和 CLI 共用同一个控制面：
 
 ```text
