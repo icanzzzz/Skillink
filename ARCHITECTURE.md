@@ -395,19 +395,37 @@ skillink package copy <source>@<version> <target>@<version> \
 
 ```text
 选择文件夹
-  -> 根目录必须有 SKILL.md，否则 SKILL_MD_REQUIRED
-  -> 扫描、哈希、复制到 skills/<name>/<version>/
+  -> 单个导入：根目录必须有 SKILL.md，否则 SKILL_MD_REQUIRED
+  -> 批量导入：递归查找包含 SKILL.md 的包目录，停止进入已命中的包
+  -> 每个包独立确认，再扫描、哈希、复制到 skills/<name>/<version>/
   -> 原子更新 skill.json
 ```
 
 规则：
 
-- 默认名：文件夹名；默认版本：`0.0.0+<hash8>`；
+- 批量扫描不跟随目录链接，但会记录包内目录链接的绝对路径；
+- GUI 在点击确认时检测目录链接，命中则提示链接路径、取消该包安装，其他包不受影响；
+- 默认名/版本：源目录名为 `<name>@<version>` 时解析并分别使用；显式 `--name` / `--version` 优先；
+- 目录名缺少名称时，GUI 要求用户手动填写；名称仍缺失时批量扫描回退 `SKILL.md` frontmatter 的 name；CLI 回退文件夹名；
+- 版本缺失或不是合法 semver 时回退 `0.0.0+<hash8>`；
 - 同 name@version + 同 integrity：复用；
 - 同 name@version + 不同 integrity：拒绝；
-- 源目录中的符号链接 MVP 直接拒绝；
+- 导入扫描直接拒绝源目录中的符号链接和目录联接（junction），错误信息与 `details.path` 包含绝对路径；
 - 保留空目录、隐藏文件、普通文件；
 - 导入不自动创建 package，也不自动修改 route。
+
+批量扫描接口：
+
+```text
+skillink skill scan <folder> --json
+  -> { rootDir, packages: [{ sourceDir, name?, version?, description?, directoryLinks[] }] }
+```
+
+- `rootDir` 是展开并解析后的扫描根目录；
+- `packages` 按目录遍历顺序返回；递归命中 `SKILL.md` 后不再进入该包；
+- `directoryLinks` 只记录包内目录符号链接/junction 的绝对路径，不跟随、不读取链接目标；
+- 名称优先取源目录名中的 `<name>`，缺失时回退 `SKILL.md` frontmatter 的 `name`；版本优先取 `<name>@<version>` 中的 version；
+- CLI 输出人类可读列表；桌面端通过 `skillink:scan-skills` IPC 获取同一份 JSON 报告。
 
 ### 6.2 创建 package
 
@@ -550,7 +568,7 @@ ok | missing | wrong-version | broken-link | conflict | unmanaged | extra | disa
 ```text
 skillink init
 skillink migrate
-skillink skill add|list|tag|remove
+skillink skill add|scan|list|tag|remove
 skillink package create|copy|list|tag|remove
 skillink target add|list|remove|enable|disable
 skillink route add|remove|list|enable|disable
@@ -568,7 +586,7 @@ skillink locale list|install|use|remove
 ```text
 init
 migrate
-skill list|add|tag|remove
+skill list|add|scan|tag|remove
 package list|create|copy|tag|remove
 target list|add|remove|enable|disable
 route list|add|remove|enable|disable
@@ -625,7 +643,7 @@ drift / missing       -> apply
 
 - **Overview**：skills、packages、targets、links、doctor；
 - **Targets**：target 列表、package 数、解析后的 skill 数、分配 package、target/package enable/disable、删除 target/route、apply 预览（dry-run）、prune、apply 结果；
-- **Skills**：导入 skill、标签、删除、GC；
+- **Skills**：选择目录批量扫描 `SKILL.md`，逐个确认安装；确认时检测包内目录链接，命中则提示绝对路径并取消该包安装；标签、删除、GC；
 - **Packages**：创建/复制 package、组合列表、标签、删除；
 - **History**：三文件快照与回滚；
 - **Doctor**：健康检查；
@@ -769,14 +787,14 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 
 ## 10. 测试策略
 
-当前验证：43 个测试文件、368 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
+当前验证：45 个测试文件、394 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
 
 | 层级 | 内容 |
 |---|---|
 | 单元测试 | schema、package 图、环检测、skill 冲突、路径策略、链接计划、历史、GC、迁移 |
 | 集成测试 | 临时目录、真实 junction/symlink、冲突、崩溃恢复 |
-| CLI 测试 | 完整 skill -> package -> route -> apply 闭环、迁移、回滚 |
-| GUI 测试 | IPC schema、页面渲染、空状态、组合展示、target/route 生命周期、apply 预览 |
+| CLI 测试 | 完整 skill -> package -> route -> apply 闭环、迁移、回滚、批量扫描 |
+| GUI 测试 | IPC schema、页面渲染、空状态、组合展示、target/route 生命周期、apply 预览、批量安装与目录链接警告 |
 | 安全测试 | 恶意源文件夹、路径穿越、断链、只读文件、同名冲突、内容篡改、非受信 IPC |
 | 兼容测试 | Windows 11 本地主验收；Windows/Ubuntu/macOS CI 矩阵 |
 
@@ -797,7 +815,9 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 13. 删除最后一个 skill 版本和 GC 后不留下空 orphan 目录；
 14. 重复/不安全/嵌套 target 被 doctor/addTarget 拒绝；
 15. CLI 重复 `--skill`/`--package` 和 drop 选项可用；
-16. 迁移和 skill 删除在写入失败时回滚内容/旧文件。
+16. 迁移和 skill 删除在写入失败时回滚内容/旧文件；
+17. 批量扫描只把包含根 `SKILL.md` 的目录识别为包，嵌套 `SKILL.md` 归入包内容；
+18. 批量扫描不跟随目录链接，返回包内链接的绝对路径；GUI 确认该包时取消安装并保留其他包。
 
 ### 10.1 已知限制
 
@@ -841,13 +861,14 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 20. `target add --mode copy` 返回 `COPY_MODE_UNSUPPORTED`，doctor 能诊断遗留 copy target；
 21. `route remove` 默认校验剩余图，`--force` 可修复；target/package enable/disable 可用；
 22. GUI 能删除 target/route、切换 enable、预览/执行 apply/prune，并显示解析后的 skill 数；
-23. `locale` 命令能安装、切换、列出、删除语言包；缺失/损坏语言包回退英文；`zh-CN` 覆盖全部英文 key。
+23. `locale` 命令能安装、切换、列出、删除语言包；缺失/损坏语言包回退英文；`zh-CN` 覆盖全部英文 key；
+24. `skill scan` 能批量发现技能包；每个包独立确认安装；包含目录链接的包提示绝对路径并取消该包安装，其余包不受影响。
 
 ---
 
 ### 11.1 当前实现验证
 
-- `pnpm test`：43 个测试文件、368 个测试通过；
+- `pnpm test`：45 个测试文件、394 个测试通过；
 - `pnpm typecheck`：通过；
 - `pnpm build`：CLI 与 Electron 桌面端构建成功；
 - 真实 CLI E2E：skill 安装、package 创建/复制、target/route、apply、status/doctor、冲突修复、history/rollback、gc dry-run 均跑通；

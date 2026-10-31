@@ -849,6 +849,83 @@ button {
   border-bottom: 1px solid var(--line-soft);
 }
 
+.scan-form {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.install-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.install-card {
+  padding: 15px 16px;
+}
+
+.install-card-blocked {
+  border-color: var(--danger-line);
+  background: linear-gradient(180deg, #fdf8f3, #faeee7);
+}
+
+.install-card-installed {
+  border-color: var(--accent-line);
+}
+
+.install-path {
+  margin: 4px 0 0 !important;
+  overflow-wrap: anywhere;
+}
+
+.install-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.install-alert {
+  margin: 12px 0 0;
+}
+
+.install-alert strong {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.install-alert p {
+  margin: 6px 0 8px;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.install-link-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.install-link-list code {
+  overflow-wrap: anywhere;
+}
+
+.install-result {
+  margin: 10px 0 0;
+  color: var(--accent-strong) !important;
+  font-size: 11px !important;
+}
+
+.install-actions {
+  margin-top: 12px;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -1382,6 +1459,11 @@ button {
 
   .split,
   .import-form {
+    grid-template-columns: 1fr;
+  }
+
+  .scan-form,
+  .install-fields {
     grid-template-columns: 1fr;
   }
 

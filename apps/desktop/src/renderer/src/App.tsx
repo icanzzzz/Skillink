@@ -3,7 +3,9 @@ import type {
   ApplyReport,
   GcReport,
   HistoryEntry,
+  ImportSkillResult,
   MessageKey,
+  SkillPackageScanReport,
 } from '@skillink/shared';
 import type {
   AddTargetRequest,
@@ -210,10 +212,39 @@ export function App({ api }: AppProps) {
     });
   }
 
-  function importSkill(input: ImportSkillRequest): void {
-    void runAction(async () => {
-      await client!.importSkill(input);
-    });
+  async function scanSkills(
+    sourceDir: string,
+  ): Promise<SkillPackageScanReport> {
+    if (!client) {
+      throw new Error(t('app.errors.bridgeUnavailable'));
+    }
+
+    setBusy(true);
+    setError(null);
+    try {
+      return await client.scanSkills({ sourceDir });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importSkill(
+    input: ImportSkillRequest,
+  ): Promise<ImportSkillResult> {
+    if (!client) {
+      throw new Error(t('app.errors.bridgeUnavailable'));
+    }
+
+    setBusy(true);
+    setApplyReport(null);
+    setError(null);
+    try {
+      const result = await client.importSkill(input);
+      await refresh();
+      return result;
+    } finally {
+      setBusy(false);
+    }
   }
 
   function createPackage(input: CreatePackageRequest): void {
@@ -366,6 +397,7 @@ export function App({ api }: AppProps) {
               gcReport={gcReport}
               busy={busy}
               onBrowse={() => client?.chooseFolder() ?? null}
+              onScanSkills={scanSkills}
               onImportSkill={importSkill}
               onTag={skillTag}
               onRemove={skillRemove}

@@ -10,6 +10,7 @@ import {
   buildLanguageRemoveArgs,
   buildLanguageUseArgs,
   buildRouteAddArgs,
+  buildScanSkillsArgs,
 } from './cli-commands.js';
 
 describe('CLI argv builders', () => {
@@ -109,6 +110,9 @@ describe('CLI argv builders', () => {
       '1.0.0',
       '--json',
     ]);
+    expect(
+      buildScanSkillsArgs({ sourceDir: 'C:/Skills/collection' }),
+    ).toEqual(['skill', 'scan', 'C:/Skills/collection', '--json']);
     expect(
       buildRouteAddArgs({
         targetId: 'project-a',

@@ -14,6 +14,12 @@ export const ImportSkillRequestSchema = z
   })
   .strict();
 
+export const ScanSkillsRequestSchema = z
+  .object({
+    sourceDir: NonEmptyString,
+  })
+  .strict();
+
 export const AddTargetRequestSchema = z
   .object({
     path: NonEmptyString,
@@ -161,6 +167,7 @@ export const LanguageRemoveRequestSchema = z
   .strict();
 
 export type ImportSkillRequest = z.infer<typeof ImportSkillRequestSchema>;
+export type ScanSkillsRequest = z.infer<typeof ScanSkillsRequestSchema>;
 export type AddTargetRequest = z.infer<typeof AddTargetRequestSchema>;
 export type RouteAddRequest = z.infer<typeof RouteAddRequestSchema>;
 export type RouteRemoveRequest = z.infer<typeof RouteRemoveRequestSchema>;

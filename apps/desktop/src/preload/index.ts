@@ -5,6 +5,7 @@ const api: DesktopApi = {
   getSnapshot: () => ipcRenderer.invoke('skillink:snapshot'),
   apply: (options = {}) => ipcRenderer.invoke('skillink:apply', options),
   chooseFolder: () => ipcRenderer.invoke('skillink:choose-folder'),
+  scanSkills: (input) => ipcRenderer.invoke('skillink:scan-skills', input),
   importSkill: (input) => ipcRenderer.invoke('skillink:import-skill', input),
   createPackage: (input) => ipcRenderer.invoke('skillink:create-package', input),
   copyPackage: (input) => ipcRenderer.invoke('skillink:copy-package', input),

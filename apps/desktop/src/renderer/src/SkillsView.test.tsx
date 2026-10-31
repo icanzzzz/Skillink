@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { createEmptySkillFile } from '@skillink/shared';
 import { renderWithMessages } from './i18n.test-utils.js';
-import { SkillsView } from './SkillsView.js';
+import { SkillBatchCard, SkillsView } from './SkillsView.js';
 
 describe('SkillsView', () => {
   it('renders the empty state', () => {
@@ -12,9 +12,11 @@ describe('SkillsView', () => {
 
     expect(html).toContain('No skills yet');
     expect(html).toContain('SKILL.md');
+    expect(html).toContain('Install skill packages');
+    expect(html).toContain('Scan folder');
   });
 
-  it('renders skill names, versions, tags, and the import button', () => {
+  it('renders skill names, versions, tags, and the scan controls', () => {
     const html = renderToStaticMarkup(
       <SkillsView
         skills={{
@@ -47,7 +49,7 @@ describe('SkillsView', () => {
     expect(html).toContain('1.1.0');
     expect(html).toContain('stable');
     expect(html).toContain('latest');
-    expect(html).toContain('Import skill');
+    expect(html).toContain('Scan folder');
   });
 
   it('renders translated skill headings and empty state', () => {
@@ -114,5 +116,47 @@ describe('SkillsView', () => {
     expect(html).toContain('1 file');
     expect(html).toContain('2 files');
     expect(html).toContain('2 candidates');
+  });
+
+  it('renders a pending install panel for each scanned package', () => {
+    const html = renderWithMessages(
+      <SkillBatchCard
+        item={{
+          sourceDir: 'C:/Skills/linked@1.0.0',
+          name: 'linked',
+          version: '1.0.0',
+          description: 'Linked skill',
+          directoryLinks: [],
+          status: 'pending',
+        }}
+      />,
+      {},
+    );
+
+    expect(html).toContain('linked');
+    expect(html).toContain('1.0.0');
+    expect(html).toContain('C:/Skills/linked@1.0.0');
+    expect(html).toContain('Linked skill');
+    expect(html).toContain('Confirm install');
+  });
+
+  it('shows the directory link path and cancels that package install', () => {
+    const html = renderWithMessages(
+      <SkillBatchCard
+        item={{
+          sourceDir: 'C:/Skills/linked@1.0.0',
+          name: 'linked',
+          version: '1.0.0',
+          directoryLinks: ['C:/Skills/linked@1.0.0/assets'],
+          status: 'blocked',
+        }}
+      />,
+      {},
+    );
+
+    expect(html).toContain('Directory link detected');
+    expect(html).toContain('C:/Skills/linked@1.0.0/assets');
+    expect(html).toContain('Installation cancelled');
+    expect(html).not.toContain('Confirm install');
   });
 });

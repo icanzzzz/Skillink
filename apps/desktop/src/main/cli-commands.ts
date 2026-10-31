@@ -12,6 +12,7 @@ import type {
   RouteAddRequest,
   RouteEnableRequest,
   RouteRemoveRequest,
+  ScanSkillsRequest,
   SkillRemoveRequest,
   SkillTagRequest,
   TargetEnableRequest,
@@ -52,6 +53,10 @@ export function buildImportSkillArgs(request: ImportSkillRequest): string[] {
     ...(request.version ? ['--version', request.version] : []),
     '--json',
   ];
+}
+
+export function buildScanSkillsArgs(request: ScanSkillsRequest): string[] {
+  return ['skill', 'scan', request.sourceDir, '--json'];
 }
 
 export function buildCreatePackageArgs(

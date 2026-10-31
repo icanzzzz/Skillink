@@ -15,6 +15,7 @@ import {
   RouteAddRequestSchema,
   RouteEnableRequestSchema,
   RouteRemoveRequestSchema,
+  ScanSkillsRequestSchema,
   SkillRemoveRequestSchema,
   SkillTagRequestSchema,
   TargetEnableRequestSchema,
@@ -39,6 +40,19 @@ describe('IPC request schemas', () => {
     );
     expect(
       ImportSkillRequestSchema.safeParse({ sourceDir: '' }).success,
+    ).toBe(false);
+  });
+
+  it('accepts a valid skill scan request', () => {
+    expect(
+      ScanSkillsRequestSchema.parse({ sourceDir: 'C:/Projects/skills' }),
+    ).toEqual({ sourceDir: 'C:/Projects/skills' });
+    expect(ScanSkillsRequestSchema.safeParse({ sourceDir: '' }).success).toBe(
+      false,
+    );
+    expect(
+      ScanSkillsRequestSchema.safeParse({ sourceDir: 'C:/skills', extra: true })
+        .success,
     ).toBe(false);
   });
 

@@ -81,8 +81,8 @@ export async function scanFolder(
       if (entry.isSymbolicLink() || info.isSymbolicLink()) {
         throw new SkillinkError(
           'UNSAFE_PATH',
-          `Source folder contains a symbolic link: ${relativePath}`,
-          { relativePath },
+          `Source folder contains a directory link (symbolic link or junction): ${fullPath}`,
+          { path: fullPath, relativePath },
         );
       }
 

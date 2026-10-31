@@ -42,6 +42,18 @@ async function makeSource(withSkillMd = true): Promise<string> {
   return source;
 }
 
+async function makeNamedSource(folderName: string): Promise<string> {
+  const root = await tempDir('skillink-skill-source-');
+  const source = path.join(root, folderName);
+  await mkdir(source, { recursive: true });
+  await writeFile(
+    path.join(source, 'SKILL.md'),
+    '---\nname: demo\ndescription: Demo skill\n---\n',
+    'utf8',
+  );
+  return source;
+}
+
 async function pathExists(target: string): Promise<boolean> {
   return stat(target)
     .then(() => true)
@@ -394,6 +406,56 @@ metadata:
     ).rejects.toThrow(/already exists|different content/i);
   });
 
+  it('derives the name and version from a name@version folder name', async () => {
+    const source = await makeNamedSource('demo@1.2.0');
+    const home = await tempDir('skillink-skill-home-');
+
+    const result = await importSkill({ sourceDir: source, home });
+
+    expect(result).toMatchObject({
+      name: 'demo',
+      version: '1.2.0',
+      created: true,
+    });
+  });
+
+  it('lets explicit values override parts of the folder name', async () => {
+    const source = await makeNamedSource('demo@1.2.0');
+    const home = await tempDir('skillink-skill-home-');
+
+    const result = await importSkill({
+      sourceDir: source,
+      name: 'pdf',
+      version: '2.0.0',
+      home,
+    });
+
+    expect(result).toMatchObject({ name: 'pdf', version: '2.0.0' });
+  });
+
+  it('keeps the folder-name and auto-version fallbacks for incomplete folder names', async () => {
+    const source = await makeNamedSource('demo');
+    const home = await tempDir('skillink-skill-home-');
+
+    const result = await importSkill({ sourceDir: source, home });
+
+    expect(result.name).toBe('demo');
+    expect(result.version).toMatch(/^0\.0\.0\+[0-9a-f]{8}$/);
+  });
+
+  it('uses a version from a version-only folder name when the name is supplied', async () => {
+    const source = await makeNamedSource('@1.2.0');
+    const home = await tempDir('skillink-skill-home-');
+
+    const result = await importSkill({
+      sourceDir: source,
+      name: 'demo',
+      home,
+    });
+
+    expect(result).toMatchObject({ name: 'demo', version: '1.2.0' });
+  });
+
   it('generates an auto version when version is omitted', async () => {
     const source = await makeSource();
     const home = await tempDir('skillink-skill-home-');
@@ -407,12 +469,13 @@ metadata:
     expect(result.version).toMatch(/^0\.0\.0\+[0-9a-f]{8}$/);
   });
 
-  it('rejects symlinks inside the source folder', async () => {
+  it('rejects directory links inside the source folder with their path', async () => {
     const source = await makeSource();
     const target = await tempDir('skillink-skill-symlink-target-');
+    const linkPath = path.join(source, 'linked');
     await symlink(
       target,
-      path.join(source, 'linked'),
+      linkPath,
       process.platform === 'win32' ? 'junction' : 'dir',
     );
     const home = await tempDir('skillink-skill-home-');
@@ -424,7 +487,13 @@ metadata:
         version: '1.0.0',
         home,
       }),
-    ).rejects.toThrow(/symbolic link|symlink/i);
+    ).rejects.toMatchObject({
+      code: 'UNSAFE_PATH',
+      details: {
+        path: linkPath,
+        relativePath: 'linked',
+      },
+    });
   });
 
   it('does not create package.json or route.json', async () => {

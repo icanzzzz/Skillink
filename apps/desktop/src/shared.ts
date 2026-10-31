@@ -6,6 +6,7 @@ import type {
   LocaleInstallReport,
   PackageLock,
   PackageVersion,
+  SkillPackageScanReport,
   SnapshotReport,
   TargetRoute,
 } from '@skillink/shared';
@@ -23,6 +24,7 @@ import type {
   RouteAddRequest,
   RouteEnableRequest,
   RouteRemoveRequest,
+  ScanSkillsRequest,
   SkillRemoveRequest,
   SkillTagRequest,
   TargetEnableRequest,
@@ -35,6 +37,7 @@ export interface DesktopApi {
   getSnapshot(): Promise<DesktopSnapshot>;
   apply(options?: ApplyRequest): Promise<ApplyReport>;
   chooseFolder(): Promise<string | null>;
+  scanSkills(input: ScanSkillsRequest): Promise<SkillPackageScanReport>;
   importSkill(input: ImportSkillRequest): Promise<ImportSkillResult>;
   createPackage(input: CreatePackageRequest): Promise<PackageVersion>;
   copyPackage(input: CopyPackageRequest): Promise<PackageVersion>;

@@ -129,6 +129,19 @@ export interface ImportSkillResult {
   created: boolean;
 }
 
+export interface SkillPackageCandidate {
+  sourceDir: string;
+  name?: string;
+  version?: string;
+  description?: string;
+  directoryLinks: string[];
+}
+
+export interface SkillPackageScanReport {
+  rootDir: string;
+  packages: SkillPackageCandidate[];
+}
+
 export interface TargetSkillSummary {
   targetId: string;
   skills: Array<{ name: string; version: string }>;

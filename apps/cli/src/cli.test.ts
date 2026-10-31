@@ -136,6 +136,69 @@ describe('CLI', () => {
     expect(skillFile.skills.demo.versions['1.0.0'].source).toBeUndefined();
   });
 
+  it('derives name and version from a name@version folder', async () => {
+    const home = await tempDir('skillink-cli-');
+    const root = await tempDir('skillink-cli-source-');
+    const source = path.join(root, 'demo@1.2.0');
+    await mkdir(source, { recursive: true });
+    await writeFile(path.join(source, 'SKILL.md'), '# demo', 'utf8');
+    const ctx = context(home);
+    await runCli(['init'], ctx);
+
+    expect(await runCli(['skill', 'add', source], ctx)).toBe(0);
+    expect(ctx.out.join('\n')).toContain('demo@1.2.0');
+
+    const skillFile = await readJson(path.join(home, 'skill.json'));
+    expect(skillFile.skills.demo.versions['1.2.0']).toBeDefined();
+  });
+
+  it('auto-generates a version for a plain folder', async () => {
+    const home = await tempDir('skillink-cli-');
+    const source = await makeSkillSource();
+    const ctx = context(home);
+    await runCli(['init'], ctx);
+
+    expect(await runCli(['skill', 'add', source, '--name', 'demo'], ctx)).toBe(
+      0,
+    );
+
+    const skillFile = await readJson(path.join(home, 'skill.json'));
+    const versions = Object.keys(skillFile.skills.demo.versions);
+    expect(versions).toHaveLength(1);
+    expect(versions[0]).toMatch(/^0\.0\.0\+[0-9a-f]{8}$/);
+  });
+
+  it('scans a folder for multiple skill packages', async () => {
+    const home = await tempDir('skillink-cli-');
+    const root = await tempDir('skillink-cli-scan-');
+    const alpha = path.join(root, 'alpha@1.0.0');
+    const beta = path.join(root, 'nested', 'beta');
+    await mkdir(alpha, { recursive: true });
+    await mkdir(beta, { recursive: true });
+    await writeFile(path.join(alpha, 'SKILL.md'), '# alpha', 'utf8');
+    await writeFile(path.join(beta, 'SKILL.md'), '# beta', 'utf8');
+    await mkdir(path.join(root, 'plain'));
+    const ctx = context(home);
+
+    expect(await runCli(['skill', 'scan', root, '--json'], ctx)).toBe(0);
+
+    const report = JSON.parse(ctx.out.join('\n'));
+    expect(report.rootDir).toBe(path.resolve(root));
+    expect(report.packages).toEqual([
+      {
+        sourceDir: alpha,
+        name: 'alpha',
+        version: '1.0.0',
+        directoryLinks: [],
+      },
+      {
+        sourceDir: beta,
+        name: 'beta',
+        directoryLinks: [],
+      },
+    ]);
+  });
+
   it('runs the skill -> package -> route -> apply workflow', async () => {
     const root = await tempDir('skillink-cli-');
     const home = path.join(root, 'home');

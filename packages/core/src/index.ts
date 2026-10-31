@@ -16,6 +16,7 @@ export * from './path-policy.js';
 export * from './route.js';
 export * from './skill-integrity.js';
 export * from './skill-md.js';
+export * from './skill-scan.js';
 export * from './skill-store.js';
 export * from './status.js';
 export * from './target.js';
@@ -34,6 +35,8 @@ export type {
   GcReport,
   HistoryEntry,
   ImportSkillResult,
+  SkillPackageCandidate,
+  SkillPackageScanReport,
   SnapshotReport,
   StatusEntry,
   StatusReport,

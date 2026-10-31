@@ -9,6 +9,7 @@ import type {
   LocaleInstallReport,
   PackageLock,
   PackageVersion,
+  SkillPackageScanReport,
   TargetRoute,
 } from '@skillink/shared';
 import {
@@ -27,6 +28,7 @@ import {
   RouteAddRequestSchema,
   RouteEnableRequestSchema,
   RouteRemoveRequestSchema,
+  ScanSkillsRequestSchema,
   SkillRemoveRequestSchema,
   SkillTagRequestSchema,
   TargetEnableRequestSchema,
@@ -52,6 +54,7 @@ import {
   buildRouteAddArgs,
   buildRouteEnableArgs,
   buildRouteRemoveArgs,
+  buildScanSkillsArgs,
   buildSkillRemoveArgs,
   buildSkillTagArgs,
   buildTargetEnableArgs,
@@ -157,6 +160,11 @@ export function registerIpcHandlers(
   handle('skillink:apply', async (_event, input: unknown) => {
     const request = ApplyRequestSchema.parse(input ?? {});
     return cli.invoke<ApplyReport>(buildApplyArgs(request));
+  });
+
+  handle('skillink:scan-skills', async (_event, input: unknown) => {
+    const request = ScanSkillsRequestSchema.parse(input);
+    return cli.invoke<SkillPackageScanReport>(buildScanSkillsArgs(request));
   });
 
   handle('skillink:import-skill', async (_event, input: unknown) => {

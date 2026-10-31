@@ -15,6 +15,7 @@ import {
   expandPath,
   getSkillDir,
   getSkillinkPaths,
+  parseSkillDirectoryName,
   type ImportSkillResult,
 } from '@skillink/shared';
 import {
@@ -87,9 +88,15 @@ export async function importSkill(
   };
   const description = frontmatter?.description;
 
-  const name = assertSafePackageName(input.name ?? path.basename(sourceDir));
+  const folderName = path.basename(sourceDir);
+  const folderSpec = parseSkillDirectoryName(folderName);
+  const name = assertSafePackageName(
+    input.name?.trim() || folderSpec?.name || folderName,
+  );
   const version =
-    normalizeVersion(input.version) ?? createAutoVersion(scan.manifestHash);
+    normalizeVersion(input.version) ??
+    folderSpec?.version ??
+    createAutoVersion(scan.manifestHash);
   const skillDir = getSkillDir(paths, name, version);
   const skillFile = await readSkillFile(paths);
   assertNoCaseInsensitiveCollision(Object.keys(skillFile.skills), name, 'skill');

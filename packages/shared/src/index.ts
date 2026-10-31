@@ -6,3 +6,4 @@ export * from './paths.js';
 export * from './reports.js';
 export * from './safe-path.js';
 export * from './schemas.js';
+export * from './skill-directory.js';

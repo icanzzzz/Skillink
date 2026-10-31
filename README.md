@@ -46,7 +46,11 @@ target -> package -> skill -> 实体内容
 pnpm dev:cli -- init
 
 # 导入 skill；文件夹根目录必须有 SKILL.md
-pnpm dev:cli -- skill add <folder-with-SKILL.md> --name pdf --version 1.0.0
+# 目录名形如 pdf@1.0.0 时自动解析名称和版本
+pnpm dev:cli -- skill add <folder>/pdf@1.0.0
+
+# 普通目录：手动指定名称；版本省略时自动生成 0.0.0+hash
+pnpm dev:cli -- skill add <folder-with-SKILL.md> --name pdf
 
 # 创建 package：组合 skill 和其他 package
 pnpm dev:cli -- package create base@1.0.0 --skill pdf@1.0.0
@@ -111,6 +115,7 @@ skillink init [--json]
 skillink migrate [--json]
 
 skillink skill add <folder> [--name <name>] [--version <version>] [--json]
+skillink skill scan <folder> [--json]
 skillink skill list [--json]
 skillink skill tag <skill@version> <tag> [--json]
 skillink skill remove <skill@version> [--json]
@@ -161,7 +166,7 @@ GUI 页面：
 
 - **Overview**：skills、packages、targets、links、doctor 概览；
 - **Targets**：添加/删除 target、分配/删除 package、target/package enable/disable、显示 package 数与解析后的 skill 数、apply 预览（dry-run）、prune、apply 结果；
-- **Skills**：导入 skill（必须 `SKILL.md`）、标签、删除、GC；
+- **Skills**：选择一个目录批量扫描 `SKILL.md`，逐个确认安装；确认时检测目录链接，命中则提示链接路径并跳过该包；标签、删除、GC；
 - **Packages**：创建/复制 package、查看组合、标签、删除；
 - **History**：查看三文件快照并回滚；
 - **Doctor**：健康问题与重新 apply；

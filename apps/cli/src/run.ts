@@ -28,6 +28,7 @@ import {
   removeSkillVersion,
   removeTarget,
   restoreHistorySnapshot,
+  scanSkillPackages,
   setActiveLocale,
   setPackageEnabled,
   setPackageTag,
@@ -470,13 +471,44 @@ export async function runCli(
     }
   });
 
+  addCommonOptions(
+    skill
+      .command('scan')
+      .description('Find skill packages in a folder by locating SKILL.md')
+      .argument('<folder>', 'Folder to scan'),
+  ).action(async (folder: string, options: { json?: boolean }) => {
+    const report = await scanSkillPackages(folder);
+
+    if (options.json) {
+      printJson(context, report);
+      return;
+    }
+
+    if (report.packages.length === 0) {
+      context.stdout('No skill packages found.');
+      return;
+    }
+
+    for (const candidate of report.packages) {
+      const spec =
+        `${candidate.name ?? '(unnamed)'}@${candidate.version ?? 'auto'}`;
+      context.stdout(`${spec}  ${candidate.sourceDir}`);
+      for (const linkPath of candidate.directoryLinks) {
+        context.stdout(`  directory link  ${linkPath}`);
+      }
+    }
+  });
+
   const skillAdd = addCommonOptions(
     skill
       .command('add')
       .description('Import a local skill folder; it must contain SKILL.md')
       .argument('<folder>', 'Skill folder')
-      .option('--name <name>', 'Skill name (default: folder name)')
-      .option('--version <version>', 'Skill version (default: 0.0.0+hash)'),
+      .option('--name <name>', 'Skill name (default: <name>@<version> folder name)')
+      .option(
+        '--version <version>',
+        'Skill version (default: <name>@<version> folder name or 0.0.0+hash)',
+      ),
   );
 
   skillAdd.action(
@@ -494,8 +526,11 @@ export async function runCli(
       .command('add')
       .description('Alias for "skill add"')
       .argument('<folder>', 'Skill folder')
-      .option('--name <name>', 'Skill name (default: folder name)')
-      .option('--version <version>', 'Skill version (default: 0.0.0+hash)'),
+      .option('--name <name>', 'Skill name (default: <name>@<version> folder name)')
+      .option(
+        '--version <version>',
+        'Skill version (default: <name>@<version> folder name or 0.0.0+hash)',
+      ),
   ).action(
     async (
       folder: string,
