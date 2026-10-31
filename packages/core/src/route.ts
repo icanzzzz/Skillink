@@ -1,13 +1,13 @@
 import {
   RouteFileSchema,
   SkillinkError,
-  createEmptyRouteFile,
   type PackageLock,
   type RouteFile,
   type SkillinkPaths,
   type TargetRoute,
 } from '@skillink/shared';
-import { readJsonFile, writeJsonAtomic } from './json-store.js';
+import { writeJsonAtomic } from './json-store.js';
+import { readRouteConfig } from './config-store.js';
 import { readPackageFile, resolvePackageVersion } from './package-store.js';
 import { readSkillFile } from './skill-store.js';
 import {
@@ -25,7 +25,7 @@ import {
 } from './target-graph.js';
 
 export async function readRouteFile(paths: SkillinkPaths): Promise<RouteFile> {
-  return readJsonFile(paths.routeFile, RouteFileSchema, createEmptyRouteFile());
+  return readRouteConfig(paths);
 }
 
 export async function writeRouteFile(

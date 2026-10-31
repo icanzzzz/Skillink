@@ -1,27 +1,27 @@
 import { rm, rmdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
-  PackageFileSchema,
-  RouteFileSchema,
   SkillFileSchema,
   SkillinkError,
   assertSafeVersion,
-  createEmptyPackageFile,
-  createEmptyRouteFile,
-  createEmptySkillFile,
   getSkillDir,
   type SkillFile,
   type SkillVersion,
   type SkillinkPaths,
 } from '@skillink/shared';
-import { readJsonFile, writeJsonAtomic } from './json-store.js';
+import { writeJsonAtomic } from './json-store.js';
+import {
+  readPackageConfig,
+  readRouteConfig,
+  readSkillConfig,
+} from './config-store.js';
 import { collectPackageSkillRefs } from './package-graph.js';
 import { withFsRetry } from './fs-retry.js';
 import { assertSafePackageName } from './package-name.js';
 import { isNodeError } from './node-error.js';
 
 export async function readSkillFile(paths: SkillinkPaths): Promise<SkillFile> {
-  return readJsonFile(paths.skillFile, SkillFileSchema, createEmptySkillFile());
+  return readSkillConfig(paths);
 }
 
 export async function writeSkillFile(
@@ -269,16 +269,10 @@ export async function removeSkillVersion(
     );
   }
 
-  const route = await readJsonFile(
-    paths.routeFile,
-    RouteFileSchema,
-    createEmptyRouteFile(),
-  );
-  const packages = await readJsonFile(
-    paths.packageFile,
-    PackageFileSchema,
-    createEmptyPackageFile(),
-  );
+  const [route, packages] = await Promise.all([
+    readRouteConfig(paths),
+    readPackageConfig(paths),
+  ]);
   const roots = route.targets.flatMap((target) =>
     Object.entries(target.packages).map(([packageName, lock]) => ({
       name: packageName,

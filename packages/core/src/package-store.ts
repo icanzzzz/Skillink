@@ -1,16 +1,14 @@
 import semver from 'semver';
 import {
   PackageFileSchema,
-  RouteFileSchema,
   SkillinkError,
-  createEmptyPackageFile,
-  createEmptyRouteFile,
   type PackageEntry,
   type PackageFile,
   type PackageVersion,
   type SkillinkPaths,
 } from '@skillink/shared';
-import { readJsonFile, writeJsonAtomic } from './json-store.js';
+import { writeJsonAtomic } from './json-store.js';
+import { readPackageConfig, readRouteConfig } from './config-store.js';
 import { assertSkillContent, readSkillFile } from './skill-store.js';
 import {
   resolvePackageGraph,
@@ -25,11 +23,7 @@ import {
 export async function readPackageFile(
   paths: SkillinkPaths,
 ): Promise<PackageFile> {
-  return readJsonFile(
-    paths.packageFile,
-    PackageFileSchema,
-    createEmptyPackageFile(),
-  );
+  return readPackageConfig(paths);
 }
 
 export async function writePackageFile(
@@ -407,11 +401,7 @@ export async function removePackageVersion(
     );
   }
 
-  const route = await readJsonFile(
-    paths.routeFile,
-    RouteFileSchema,
-    createEmptyRouteFile(),
-  );
+  const route = await readRouteConfig(paths);
   const routeReference = route.targets.find(
     (target) =>
       Object.hasOwn(target.packages, safeName) &&
