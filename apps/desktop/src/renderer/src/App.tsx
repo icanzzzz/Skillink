@@ -3,6 +3,7 @@ import type {
   ApplyReport,
   GcReport,
   HistoryEntry,
+  MessageKey,
 } from '@skillink/shared';
 import type {
   AddTargetRequest,
@@ -22,6 +23,7 @@ import type {
 import type { DesktopApi, DesktopSnapshot } from '../../shared.js';
 import { DoctorView } from './DoctorView.js';
 import { HistoryView } from './HistoryView.js';
+import { useI18n } from './i18n.js';
 import { PackagesView } from './PackagesView.js';
 import { SkillsView } from './SkillsView.js';
 import { SnapshotView } from './SnapshotView.js';
@@ -35,24 +37,24 @@ type ViewId =
   | 'history'
   | 'doctor';
 
-const NAV_ITEMS: Array<{ id: ViewId; label: string }> = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'targets', label: 'Targets' },
-  { id: 'skills', label: 'Skills' },
-  { id: 'packages', label: 'Packages' },
-  { id: 'history', label: 'History' },
-  { id: 'doctor', label: 'Doctor' },
+const NAV_ITEMS: Array<{ id: ViewId; labelKey: MessageKey }> = [
+  { id: 'overview', labelKey: 'app.nav.overview' },
+  { id: 'targets', labelKey: 'app.nav.targets' },
+  { id: 'skills', labelKey: 'app.nav.skills' },
+  { id: 'packages', labelKey: 'app.nav.packages' },
+  { id: 'history', labelKey: 'app.nav.history' },
+  { id: 'doctor', labelKey: 'app.nav.doctor' },
 ];
 
 const BRAND_ICON = new URL('./assets/icon.png', import.meta.url).href;
 
-const VIEW_TITLES: Record<ViewId, string> = {
-  overview: 'Overview',
-  targets: 'Targets',
-  skills: 'Installed skills',
-  packages: 'Package compositions',
-  history: 'History',
-  doctor: 'Doctor',
+const VIEW_TITLES: Record<ViewId, MessageKey> = {
+  overview: 'app.titles.overview',
+  targets: 'app.titles.targets',
+  skills: 'app.titles.skills',
+  packages: 'app.titles.packages',
+  history: 'app.titles.history',
+  doctor: 'app.titles.doctor',
 };
 
 function NavIcon({ view }: { view: ViewId }) {
@@ -124,6 +126,7 @@ export interface AppProps {
 export function App({ api }: AppProps) {
   const client =
     api ?? (typeof window !== 'undefined' ? window.skillink : undefined);
+  const { t } = useI18n();
   const [view, setView] = useState<ViewId>('overview');
   const [snapshot, setSnapshot] = useState<DesktopSnapshot | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -134,7 +137,7 @@ export function App({ api }: AppProps) {
 
   async function refresh(): Promise<void> {
     if (!client) {
-      setError('Skillink IPC bridge is unavailable.');
+      setError(t('app.errors.bridgeUnavailable'));
       return;
     }
 
@@ -286,13 +289,13 @@ export function App({ api }: AppProps) {
         <div className="brand">
           <img className="brand-mark" src={BRAND_ICON} alt="" />
           <div>
-            <strong>Skillink</strong>
-            <span>skill &amp; package manager</span>
+            <strong>{t('app.brand')}</strong>
+            <span>{t('app.tagline')}</span>
           </div>
         </div>
 
-        <nav className="nav" aria-label="Primary">
-          <p className="nav-label">Navigate</p>
+        <nav className="nav" aria-label={t('app.nav.ariaLabel')}>
+          <p className="nav-label">{t('app.nav.label')}</p>
           {NAV_ITEMS.map((item) => (
             <button
               aria-current={view === item.id ? 'page' : undefined}
@@ -302,13 +305,13 @@ export function App({ api }: AppProps) {
               onClick={() => setView(item.id)}
             >
               <NavIcon view={item.id} />
-              <span>{item.label}</span>
+              <span>{t(item.labelKey)}</span>
             </button>
           ))}
         </nav>
 
         <div className="sidebar-foot">
-          <span>Control plane</span>
+          <span>{t('app.controlPlane')}</span>
           <code>{snapshot?.home ?? '~/.agents/skillink'}</code>
         </div>
       </aside>
@@ -316,17 +319,17 @@ export function App({ api }: AppProps) {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">WORKSPACE</p>
-            <h2>{VIEW_TITLES[view]}</h2>
+            <p className="eyebrow">{t('app.eyebrow')}</p>
+            <h2>{t(VIEW_TITLES[view])}</h2>
           </div>
           <div className="topbar-actions">
-            {busy ? <span className="busy">Working…</span> : null}
+            {busy ? <span className="busy">{t('app.status.working')}</span> : null}
             <button
               className="primary"
               onClick={() => applyRoutes()}
               disabled={busy}
             >
-              Apply routes
+              {t('app.actions.applyRoutes')}
             </button>
           </div>
         </header>
@@ -384,7 +387,7 @@ export function App({ api }: AppProps) {
             />
           )
         ) : (
-          <div className="loading">Loading Skillink…</div>
+          <div className="loading">{t('app.loading')}</div>
         )}
       </section>
     </div>
