@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process';
 import {
   lstat,
   mkdir,
@@ -8,15 +9,26 @@ import {
 } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import type { ApplyReport } from '@skillink/shared';
-import { isGitAvailable } from '@skillink/core';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createCliAdapter,
   type CliRunner,
 } from './cli-adapter.js';
 
-const gitReady = await isGitAvailable();
+const execFileAsync = promisify(execFile);
+
+async function gitAvailable(): Promise<boolean> {
+  try {
+    await execFileAsync('git', ['--version']);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const gitReady = await gitAvailable();
 
 function runnerReturning(output: {
   code: number;
