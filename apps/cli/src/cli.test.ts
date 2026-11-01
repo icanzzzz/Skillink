@@ -5,14 +5,19 @@ import {
   readFile,
   rm,
   stat,
+  unlink,
   writeFile,
 } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { runCli, type CliContext } from './index.js';
+import { gitAddAll, gitCommit, isGitAvailable, stableStringify } from '@skillink/core';
+import { getSkillinkPaths } from '@skillink/shared';
+import { runCli, type CliContext } from './run.js';
 
 const tempDirs: string[] = [];
+const gitReady = await isGitAvailable();
 
 async function tempDir(prefix: string): Promise<string> {
   const dir = await mkdtemp(path.join(os.tmpdir(), prefix));
@@ -57,7 +62,7 @@ afterEach(async () => {
   );
 });
 
-describe('CLI', () => {
+describe.skipIf(!gitReady)('CLI', () => {
   it('prints help and exits zero', async () => {
     const ctx = context(await tempDir('skillink-cli-'));
 
@@ -79,6 +84,29 @@ describe('CLI', () => {
     expect(await readJson(path.join(home, 'route.json'))).toEqual({
       schemaVersion: 2,
       targets: [],
+    });
+  });
+
+  it('prints init and migrate results as JSON', async () => {
+    const home = await tempDir('skillink-cli-');
+    const ctx = context(home);
+
+    expect(await runCli(['init', '--json'], ctx)).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({
+      ok: true,
+      home: path.resolve(home),
+      migrated: false,
+    });
+
+    ctx.out.length = 0;
+    expect(await runCli(['migrate', '--json'], ctx)).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({
+      ok: true,
+      home: path.resolve(home),
+      migrated: false,
+      skillCount: 0,
+      packageCount: 0,
+      targetCount: 0,
     });
   });
 
@@ -110,6 +138,69 @@ describe('CLI', () => {
     const skillFile = await readJson(path.join(home, 'skill.json'));
     expect(skillFile.skills.demo.versions['1.0.0']).toBeDefined();
     expect(skillFile.skills.demo.versions['1.0.0'].source).toBeUndefined();
+  });
+
+  it('derives name and version from a name@version folder', async () => {
+    const home = await tempDir('skillink-cli-');
+    const root = await tempDir('skillink-cli-source-');
+    const source = path.join(root, 'demo@1.2.0');
+    await mkdir(source, { recursive: true });
+    await writeFile(path.join(source, 'SKILL.md'), '# demo', 'utf8');
+    const ctx = context(home);
+    await runCli(['init'], ctx);
+
+    expect(await runCli(['skill', 'add', source], ctx)).toBe(0);
+    expect(ctx.out.join('\n')).toContain('demo@1.2.0');
+
+    const skillFile = await readJson(path.join(home, 'skill.json'));
+    expect(skillFile.skills.demo.versions['1.2.0']).toBeDefined();
+  });
+
+  it('auto-generates a version for a plain folder', async () => {
+    const home = await tempDir('skillink-cli-');
+    const source = await makeSkillSource();
+    const ctx = context(home);
+    await runCli(['init'], ctx);
+
+    expect(await runCli(['skill', 'add', source, '--name', 'demo'], ctx)).toBe(
+      0,
+    );
+
+    const skillFile = await readJson(path.join(home, 'skill.json'));
+    const versions = Object.keys(skillFile.skills.demo.versions);
+    expect(versions).toHaveLength(1);
+    expect(versions[0]).toMatch(/^1\.0\.0\+[0-9a-f]{8}$/);
+  });
+
+  it('scans a folder for multiple skill packages', async () => {
+    const home = await tempDir('skillink-cli-');
+    const root = await tempDir('skillink-cli-scan-');
+    const alpha = path.join(root, 'alpha@1.0.0');
+    const beta = path.join(root, 'nested', 'beta');
+    await mkdir(alpha, { recursive: true });
+    await mkdir(beta, { recursive: true });
+    await writeFile(path.join(alpha, 'SKILL.md'), '# alpha', 'utf8');
+    await writeFile(path.join(beta, 'SKILL.md'), '# beta', 'utf8');
+    await mkdir(path.join(root, 'plain'));
+    const ctx = context(home);
+
+    expect(await runCli(['skill', 'scan', root, '--json'], ctx)).toBe(0);
+
+    const report = JSON.parse(ctx.out.join('\n'));
+    expect(report.rootDir).toBe(path.resolve(root));
+    expect(report.packages).toEqual([
+      {
+        sourceDir: alpha,
+        name: 'alpha',
+        version: '1.0.0',
+        directoryLinks: [],
+      },
+      {
+        sourceDir: beta,
+        name: 'beta',
+        directoryLinks: [],
+      },
+    ]);
   });
 
   it('runs the skill -> package -> route -> apply workflow', async () => {
@@ -166,9 +257,12 @@ describe('CLI', () => {
     );
   });
 
-  it('copies a package with a skill override', async () => {
-    const home = await tempDir('skillink-cli-');
+  it('removes route-resolved skill directories on target remove', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
     const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
     const ctx = context(home);
 
     await runCli(['init'], ctx);
@@ -177,35 +271,81 @@ describe('CLI', () => {
       ctx,
     );
     await runCli(
-      ['skill', 'add', source, '--name', 'pdf', '--version', '1.1.0'],
+      ['package', 'create', 'demo@1.0.0', '--skill', 'pdf@1.0.0'],
+      ctx,
+    );
+    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
+    await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
+    await runCli(['apply'], ctx);
+
+    // 把 apply 创建的链接换成真实目录，证明 route 解析结果优先。
+    await unlink(path.join(targetPath, 'pdf'));
+    await mkdir(path.join(targetPath, 'pdf'), { recursive: true });
+    await writeFile(
+      path.join(targetPath, 'pdf', 'note.txt'),
+      'copy',
+      'utf8',
+    );
+    await writeFile(path.join(targetPath, 'keep.txt'), 'keep', 'utf8');
+
+    expect(await runCli(['target', 'remove', 'project-a'], ctx)).toBe(0);
+
+    expect(await pathExists(path.join(targetPath, 'pdf'))).toBe(false);
+    expect(await readFile(path.join(targetPath, 'keep.txt'), 'utf8')).toBe(
+      'keep',
+    );
+    expect(
+      await pathExists(path.join(home, 'skills', 'pdf', '1.0.0')),
+    ).toBe(true);
+    expect(await pathExists(targetPath)).toBe(true);
+    expect((await readJson(path.join(home, 'route.json'))).targets).toEqual([]);
+    expect(ctx.out.join('\n')).toContain('Removed target project-a');
+  });
+
+  it('checks package skill references and cleans affected target projections', async () => {
+    const root = await tempDir('skillink-cli-check-');
+    const home = path.join(root, 'home');
+    const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    await runCli(
+      ['skill', 'add', source, '--name', 'pdf', '--version', '1.0.0'],
       ctx,
     );
     await runCli(
       ['package', 'create', 'demo@1.0.0', '--skill', 'pdf@1.0.0'],
       ctx,
     );
+    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
+    await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
+    await runCli(['apply'], ctx);
 
-    expect(
-      await runCli(
-        [
-          'package',
-          'copy',
-          'demo@1.0.0',
-          'demo@1.1.0',
-          '--skill',
-          'pdf@1.1.0',
-        ],
-        ctx,
-      ),
-    ).toBe(0);
+    await rm(path.join(home, 'skills', 'pdf', '1.0.0'), {
+      recursive: true,
+      force: true,
+    });
 
-    const packageFile = await readJson(path.join(home, 'package.json'));
-    expect(
-      packageFile.packages.demo.versions['1.1.0'].skills.pdf,
-    ).toBe('1.1.0');
+    ctx.out.length = 0;
+    expect(await runCli(['package', 'check', '--json'], ctx)).toBe(0);
+    const report = JSON.parse(ctx.out.join('\n')) as {
+      brokenReferences: unknown[];
+      targets: Array<{ targetId: string; removed: string[] }>;
+    };
+    expect(report.brokenReferences).toHaveLength(1);
+    expect(report.targets).toEqual([
+      {
+        targetId: 'project-a',
+        skillNames: ['pdf'],
+        removed: ['pdf'],
+      },
+    ]);
+    expect(await pathExists(path.join(targetPath, 'pdf'))).toBe(false);
   });
 
-  it('parses repeated skill/package options and drop options', async () => {
+  it('parses repeated skill/package options', async () => {
     const home = await tempDir('skillink-cli-');
     const source = await makeSkillSource();
     const ctx = context(home);
@@ -243,28 +383,6 @@ describe('CLI', () => {
     expect(packageFile.packages.frontend.versions['1.0.0']).toEqual({
       packages: { base: '1.0.0' },
       skills: { pdf: '1.0.0', review: '1.0.0' },
-    });
-
-    expect(
-      await runCli(
-        [
-          'package',
-          'copy',
-          'frontend@1.0.0',
-          'frontend@1.1.0',
-          '--drop-skill',
-          'review',
-          '--drop-package',
-          'base',
-        ],
-        ctx,
-      ),
-    ).toBe(0);
-
-    const copied = await readJson(path.join(home, 'package.json'));
-    expect(copied.packages.frontend.versions['1.1.0']).toEqual({
-      packages: {},
-      skills: { pdf: '1.0.0' },
     });
   });
 
@@ -379,7 +497,10 @@ describe('CLI', () => {
     const packagePath = path.join(home, 'package.json');
     const packageFile = await readJson(packagePath);
     packageFile.packages.old.versions['1.0.0'].skills.pdf = '9.9.9';
-    await writeFile(packagePath, JSON.stringify(packageFile), 'utf8');
+    await writeFile(packagePath, stableStringify(packageFile), 'utf8');
+    const paths = getSkillinkPaths(home);
+    await gitAddAll(paths, 'control');
+    await gitCommit(paths, 'control', 'test: corrupt package graph');
 
     expect(await runCli(['route', 'remove', 'project-a', 'new'], ctx)).toBe(1);
     expect(ctx.err.join('\n')).toContain('ROUTE_INVALID');
@@ -395,9 +516,12 @@ describe('CLI', () => {
       ],
     });
 
-    expect(
-      await runCli(['route', 'remove', 'project-a', 'new', '--force'], ctx),
-    ).toBe(0);
+    ctx.err.length = 0;
+    const forceCode = await runCli(
+      ['route', 'remove', 'project-a', 'new', '--force'],
+      ctx,
+    );
+    expect(forceCode).toBe(0);
     const routeFile = await readJson(path.join(home, 'route.json'));
     expect(routeFile.targets[0].packages.new).toBeUndefined();
   });
@@ -439,40 +563,6 @@ describe('CLI', () => {
     const packageFile = await readJson(path.join(home, 'package.json'));
     expect(packageFile.packages['demo-pack'].versions['1.0.0']).toBeUndefined();
     expect(packageFile.packages['demo-pack'].tags?.stable).toBeUndefined();
-  });
-
-  it('lists history and rolls back all three config files', async () => {
-    const root = await tempDir('skillink-cli-');
-    const home = path.join(root, 'home');
-    const source = await makeSkillSource();
-    const targetPath = path.join(root, 'target');
-    await mkdir(targetPath, { recursive: true });
-    const ctx = context(home);
-
-    await runCli(['init'], ctx);
-    await runCli(
-      ['skill', 'add', source, '--name', 'pdf', '--version', '1.0.0'],
-      ctx,
-    );
-    await runCli(
-      ['package', 'create', 'demo@1.0.0', '--skill', 'pdf@1.0.0'],
-      ctx,
-    );
-    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
-
-    ctx.out.length = 0;
-    expect(await runCli(['history', '--json'], ctx)).toBe(0);
-    const entries = JSON.parse(ctx.out.join('\n')) as Array<{ id: string }>;
-    const snapshotId = entries[0]!.id;
-
-    await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
-    expect(
-      (await readJson(path.join(home, 'route.json'))).targets[0].packages.demo,
-    ).toBeDefined();
-
-    expect(await runCli(['rollback', snapshotId, '--apply'], ctx)).toBe(0);
-    const restoredRoute = await readJson(path.join(home, 'route.json'));
-    expect(restoredRoute.targets).toEqual([]);
   });
 
   it('runs gc as a dry run by default and applies with --apply', async () => {
@@ -593,5 +683,424 @@ describe('CLI', () => {
     expect(invalidCtx.err.join('\n')).toContain('demo');
     expect(await pathExists(path.join(invalidHome, 'skills.json'))).toBe(true);
     expect(await pathExists(path.join(invalidHome, 'skill.json'))).toBe(false);
+  });
+
+  it('returns one read-only snapshot containing config, health, and target skills', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    await runCli(
+      ['skill', 'add', source, '--name', 'pdf', '--version', '1.0.0'],
+      ctx,
+    );
+    await runCli(
+      ['package', 'create', 'demo@1.0.0', '--skill', 'pdf@1.0.0'],
+      ctx,
+    );
+    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
+    await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
+    await runCli(['apply'], ctx);
+
+    ctx.out.length = 0;
+    expect(await runCli(['snapshot', '--json'], ctx)).toBe(0);
+    const snapshot = JSON.parse(ctx.out.join('\n')) as {
+      home: string;
+      skills: { skills: Record<string, unknown> };
+      packages: { packages: Record<string, unknown> };
+      route: { targets: Array<{ id: string }> };
+      status: { entries: Array<{ name: string; state: string }> };
+      doctor: { ok: boolean };
+      targetSkills: Array<{
+        targetId: string;
+        skills: Array<{ name: string; version: string }>;
+      }>;
+    };
+
+    expect(snapshot.home).toBe(path.resolve(home));
+    expect(snapshot.skills.skills.pdf).toBeDefined();
+    expect(snapshot.packages.packages.demo).toBeDefined();
+    expect(snapshot.route.targets[0]?.id).toBe('project-a');
+    expect(snapshot.status.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'pdf', state: 'ok' }),
+      ]),
+    );
+    expect(snapshot.doctor.ok).toBe(true);
+    expect(snapshot.targetSkills).toEqual([
+      { targetId: 'project-a', skills: [{ name: 'pdf', version: '1.0.0' }] },
+    ]);
+  });
+
+  it('does not create control-plane files when snapshotting a missing home', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'missing-home');
+    const ctx = context(home);
+
+    expect(await runCli(['snapshot', '--json'], ctx)).toBe(0);
+    expect(await pathExists(home)).toBe(false);
+    for (const name of ['route.json', 'package.json', 'skill.json']) {
+      expect(await pathExists(path.join(home, name))).toBe(false);
+    }
+  });
+
+  it('prints import, target, and route mutation results as JSON', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+
+    ctx.out.length = 0;
+    expect(
+      await runCli(
+        [
+          'skill',
+          'add',
+          source,
+          '--name',
+          'pdf',
+          '--version',
+          '1.0.0',
+          '--json',
+        ],
+        ctx,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({
+      name: 'pdf',
+      version: '1.0.0',
+      created: true,
+    });
+
+    ctx.out.length = 0;
+    expect(
+      await runCli(
+        ['package', 'create', 'demo@1.0.0', '--skill', 'pdf@1.0.0', '--json'],
+        ctx,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({
+      skills: { pdf: '1.0.0' },
+    });
+
+    ctx.out.length = 0;
+    expect(
+      await runCli(
+        ['target', 'add', targetPath, '--id', 'project-a', '--json'],
+        ctx,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({
+      id: 'project-a',
+      enabled: true,
+    });
+
+    ctx.out.length = 0;
+    expect(
+      await runCli(['route', 'add', 'project-a', 'demo@1.0.0', '--json'], ctx),
+    ).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({
+      resolved: '1.0.0',
+      enabled: true,
+    });
+  });
+
+  it('prints one structured JSON error when a JSON command fails', async () => {
+    const home = await tempDir('skillink-cli-');
+    const source = await makeSkillSource(false);
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    ctx.err.length = 0;
+    expect(
+      await runCli(
+        ['skill', 'add', source, '--name', 'broken', '--json'],
+        ctx,
+      ),
+    ).toBe(1);
+
+    const error = JSON.parse(ctx.err.join('\n')) as {
+      ok: boolean;
+      error: { code: string; message: string };
+    };
+    expect(error.ok).toBe(false);
+    expect(error.error.code).toBe('SKILL_MD_REQUIRED');
+    expect(error.error.message).toContain('SKILL.md');
+  });
+
+  it('adds a copy target and lists its mode', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    ctx.out.length = 0;
+    expect(
+      await runCli(
+        ['target', 'add', targetPath, '--mode', 'copy', '--json'],
+        ctx,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({
+      id: 'target',
+      mode: 'copy',
+    });
+
+    ctx.out.length = 0;
+    expect(await runCli(['target', 'list', '--json'], ctx)).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toEqual([
+      expect.objectContaining({ mode: 'copy' }),
+    ]);
+
+    ctx.out.length = 0;
+    expect(await runCli(['target', 'list'], ctx)).toBe(0);
+    expect(ctx.out.join('\n')).toContain('copy');
+  });
+
+  it('rejects an unknown target mode', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    ctx.err.length = 0;
+    expect(
+      await runCli(
+        ['target', 'add', targetPath, '--mode', 'zip', '--json'],
+        ctx,
+      ),
+    ).toBe(1);
+    expect(JSON.parse(ctx.err.join('\n'))).toMatchObject({
+      ok: false,
+      error: { code: 'ROUTE_INVALID' },
+    });
+  });
+
+  it('keeps status JSON on stdout when the report is unhealthy', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    await runCli(
+      ['skill', 'add', source, '--name', 'pdf', '--version', '1.0.0'],
+      ctx,
+    );
+    await runCli(
+      ['package', 'create', 'demo@1.0.0', '--skill', 'pdf@1.0.0'],
+      ctx,
+    );
+    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
+    await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
+
+    ctx.out.length = 0;
+    ctx.err.length = 0;
+    expect(await runCli(['status', '--json'], ctx)).toBe(1);
+    const report = JSON.parse(ctx.out.join('\n')) as {
+      healthy: boolean;
+      entries: Array<{ name: string; state: string }>;
+    };
+    expect(report.healthy).toBe(false);
+    expect(report.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'pdf', state: 'missing' }),
+      ]),
+    );
+    expect(ctx.err.join('\n')).toBe('');
+  });
+
+  it('replaces a same-name real directory during apply', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
+    await mkdir(path.join(targetPath, 'pdf'), { recursive: true });
+    await writeFile(path.join(targetPath, 'pdf', 'unmanaged.txt'), 'keep', 'utf8');
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    await runCli(
+      ['skill', 'add', source, '--name', 'pdf', '--version', '1.0.0'],
+      ctx,
+    );
+    await runCli(
+      ['package', 'create', 'demo@1.0.0', '--skill', 'pdf@1.0.0'],
+      ctx,
+    );
+    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
+    await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
+
+    ctx.out.length = 0;
+    ctx.err.length = 0;
+    expect(await runCli(['apply', '--json'], ctx)).toBe(0);
+    const report = JSON.parse(ctx.out.join('\n')) as {
+      ok: boolean;
+    };
+    expect(report.ok).toBe(true);
+    expect(report).not.toHaveProperty('conflicts');
+    expect(ctx.err.join('\n')).toBe('');
+    expect((await lstat(path.join(targetPath, 'pdf'))).isSymbolicLink()).toBe(
+      true,
+    );
+    await expect(
+      readFile(path.join(targetPath, 'pdf', 'unmanaged.txt'), 'utf8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('initializes settings.json without overwriting existing settings', async () => {
+    const home = await tempDir('skillink-cli-');
+    const ctx = context(home);
+
+    expect(await runCli(['init'], ctx)).toBe(0);
+    expect(await readJson(path.join(home, 'settings.json'))).toEqual({
+      schemaVersion: 1,
+    });
+
+    await writeFile(
+      path.join(home, 'settings.json'),
+      JSON.stringify({ schemaVersion: 1, locale: 'en' }),
+      'utf8',
+    );
+    ctx.out.length = 0;
+    expect(await runCli(['init'], ctx)).toBe(0);
+    expect(await readJson(path.join(home, 'settings.json'))).toEqual({
+      schemaVersion: 1,
+      locale: 'en',
+    });
+  });
+
+  it('installs, selects, lists, and removes a language pack', async () => {
+    const home = await tempDir('skillink-cli-');
+    const ctx = context(home);
+    const packPath = path.join(await tempDir('skillink-lang-'), 'zh-CN.json');
+    await writeFile(
+      packPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        locale: 'zh-CN',
+        name: 'Chinese (Simplified)',
+        nativeName: '简体中文',
+        version: '1.0.0',
+        messages: { 'app.nav.overview': '概览' },
+      }),
+      'utf8',
+    );
+
+    await runCli(['init'], ctx);
+    ctx.out.length = 0;
+    expect(
+      await runCli(['locale', 'install', packPath, '--use', '--json'], ctx),
+    ).toBe(0);
+
+    const installed = JSON.parse(ctx.out.join('\n'));
+    expect(installed.pack).toMatchObject({
+      locale: 'zh-CN',
+      nativeName: '简体中文',
+    });
+    expect(installed.active).toBe(true);
+    expect(await pathExists(path.join(home, 'locales', 'zh-cn.json'))).toBe(
+      true,
+    );
+    expect(await readJson(path.join(home, 'settings.json'))).toEqual({
+      schemaVersion: 1,
+      locale: 'zh-CN',
+    });
+
+    ctx.out.length = 0;
+    expect(await runCli(['locale', 'list', '--json'], ctx)).toBe(0);
+    const state = JSON.parse(ctx.out.join('\n'));
+    expect(state.current).toBe('zh-CN');
+    expect(state.messages['app.nav.overview']).toBe('概览');
+
+    ctx.out.length = 0;
+    expect(await runCli(['locale', 'use', 'en', '--json'], ctx)).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({ current: 'en' });
+
+    ctx.out.length = 0;
+    expect(await runCli(['locale', 'remove', 'zh-CN', '--json'], ctx)).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({
+      removed: 'zh-CN',
+      current: 'en',
+    });
+  });
+
+  it('rejects an invalid language pack', async () => {
+    const home = await tempDir('skillink-cli-');
+    const ctx = context(home);
+    const packPath = path.join(await tempDir('skillink-lang-'), 'invalid.json');
+    await writeFile(packPath, '{not json', 'utf8');
+
+    await runCli(['init'], ctx);
+    ctx.err.length = 0;
+    expect(await runCli(['locale', 'install', packPath], ctx)).toBe(1);
+    expect(ctx.err.join('\n')).toContain('LANGUAGE_PACK_INVALID');
+  });
+
+  it('prints a human-readable language install report', async () => {
+    const home = await tempDir('skillink-cli-');
+    const ctx = context(home);
+    const packPath = path.join(await tempDir('skillink-lang-'), 'zh-CN.json');
+    await writeFile(
+      packPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        locale: 'zh-CN',
+        name: 'Chinese (Simplified)',
+        nativeName: '简体中文',
+        version: '1.0.0',
+        messages: { 'app.nav.overview': '概览' },
+      }),
+      'utf8',
+    );
+
+    await runCli(['init'], ctx);
+    ctx.out.length = 0;
+    expect(await runCli(['locale', 'install', packPath], ctx)).toBe(0);
+    expect(ctx.out.join('\n')).toContain('Installed');
+    expect(ctx.out.join('\n')).toContain('Chinese (Simplified)');
+  });
+
+  it('installs the repository Simplified Chinese pack end to end', async () => {
+    const home = await tempDir('skillink-cli-');
+    const ctx = context(home);
+    const packPath = fileURLToPath(
+      new URL('../../../locales/zh-CN.json', import.meta.url),
+    );
+
+    await runCli(['init'], ctx);
+    ctx.out.length = 0;
+    expect(
+      await runCli(['locale', 'install', packPath, '--use', '--json'], ctx),
+    ).toBe(0);
+    const report = JSON.parse(ctx.out.join('\n'));
+    expect(report.pack).toMatchObject({
+      locale: 'zh-CN',
+      coverage: 1,
+    });
+
+    ctx.out.length = 0;
+    expect(await runCli(['locale', 'list', '--json'], ctx)).toBe(0);
+    const state = JSON.parse(ctx.out.join('\n'));
+    expect(state.current).toBe('zh-CN');
+    expect(state.messages['app.nav.overview']).toBe('概览');
+
+    ctx.out.length = 0;
+    expect(await runCli(['locale', 'remove', 'zh-CN', '--json'], ctx)).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({ current: 'en' });
   });
 });

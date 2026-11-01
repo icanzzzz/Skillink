@@ -1,24 +1,30 @@
 import {
   RouteFileSchema,
   SkillinkError,
-  createEmptyRouteFile,
   type PackageLock,
   type RouteFile,
   type SkillinkPaths,
   type TargetRoute,
 } from '@skillink/shared';
-import { readJsonFile, writeJsonAtomic } from './json-store.js';
+import { writeJsonAtomic } from './json-store.js';
+import { readRouteConfig } from './config-store.js';
 import { readPackageFile, resolvePackageVersion } from './package-store.js';
 import { readSkillFile } from './skill-store.js';
 import {
   computePackageIntegrity,
-  resolvePackageGraph,
 } from './package-graph.js';
-import { withHistory } from './history.js';
 import { assertSafePackageName } from './package-name.js';
+import {
+  removeObsoleteTargetSkills,
+  resolvePackageSkillNames,
+} from './target-gc.js';
+import {
+  assertTargetPackageLocks,
+  resolveTargetGraph,
+} from './target-graph.js';
 
 export async function readRouteFile(paths: SkillinkPaths): Promise<RouteFile> {
-  return readJsonFile(paths.routeFile, RouteFileSchema, createEmptyRouteFile());
+  return readRouteConfig(paths);
 }
 
 export async function writeRouteFile(
@@ -63,6 +69,13 @@ export async function addRouteEntry(
   const packageFile = await readPackageFile(input.paths);
   const skillFile = await readSkillFile(input.paths);
   const resolved = resolvePackageVersion(packageFile, name, input.requested);
+  const previousLock = target.packages[name];
+  const previousSkills = previousLock
+    ? await resolvePackageSkillNames({
+        paths: input.paths,
+        packageRef: { name, version: previousLock.resolved },
+      }).catch(() => [])
+    : [];
 
   const lock: PackageLock = {
     requested: input.requested,
@@ -81,22 +94,16 @@ export async function addRouteEntry(
     },
   };
 
-  resolvePackageGraph(
-    packageFile,
-    skillFile,
-    Object.entries(candidate.packages)
-      .filter(([, packageLock]) => packageLock.enabled !== false)
-      .map(([packageName, packageLock]) => ({
-        name: packageName,
-        version: packageLock.resolved,
-      })),
-  );
+  resolveTargetGraph(packageFile, skillFile, candidate);
 
   route.targets[targetIndex] = candidate;
 
-  await withHistory(input.paths, 'add-route-entry', async () => {
-    await writeRouteFile(input.paths, route);
+  await removeObsoleteTargetSkills({
+    paths: input.paths,
+    target: candidate,
+    previousSkillNames: previousSkills,
   });
+  await writeRouteFile(input.paths, route);
 
   return lock;
 }
@@ -107,27 +114,9 @@ export async function validateTargetRoute(
 ): Promise<void> {
   const packageFile = await readPackageFile(paths);
   const skillFile = await readSkillFile(paths);
-  const roots = Object.entries(target.packages)
-    .filter(([, lock]) => lock.enabled !== false)
-    .map(([name, lock]) => ({ name, version: lock.resolved }));
 
-  for (const [name, lock] of Object.entries(target.packages)) {
-    if (lock.enabled === false) {
-      continue;
-    }
-    const expected = computePackageIntegrity(packageFile, [
-      { name, version: lock.resolved },
-    ]);
-    if (expected !== lock.integrity) {
-      throw new SkillinkError(
-        'PACKAGE_INTEGRITY_MISMATCH',
-        `Route lock for ${name}@${lock.resolved} does not match package.json.`,
-        { name, version: lock.resolved, expected, actual: lock.integrity },
-      );
-    }
-  }
-
-  resolvePackageGraph(packageFile, skillFile, roots);
+  assertTargetPackageLocks(packageFile, target);
+  resolveTargetGraph(packageFile, skillFile, target);
 }
 
 export async function setPackageEnabled(
@@ -157,17 +146,29 @@ export async function setPackageEnabled(
   }
 
   const lock = target.packages[name]!;
+  const wasEnabled = lock.enabled !== false;
+  const removedSkills =
+    !enabled && wasEnabled && target.enabled
+      ? await resolvePackageSkillNames({
+          paths,
+          packageRef: { name, version: lock.resolved },
+        }).catch(() => [])
+      : [];
+
   lock.enabled = enabled;
   if (enabled) {
     await validateTargetRoute(paths, target);
   }
-  await withHistory(
-    paths,
-    enabled ? 'enable-route-package' : 'disable-route-package',
-    async () => {
-      await writeRouteFile(paths, route);
-    },
-  );
+
+  if (!enabled && removedSkills.length > 0) {
+    await removeObsoleteTargetSkills({
+      paths,
+      target,
+      previousSkillNames: removedSkills,
+    });
+  }
+
+  await writeRouteFile(paths, route);
 
   return lock;
 }
@@ -198,17 +199,20 @@ export async function removeRouteEntry(
     return false;
   }
 
+  const removedLock = target.packages[name]!;
+  const removedSkills = await resolvePackageSkillNames({
+    paths: input.paths,
+    packageRef: { name, version: removedLock.resolved },
+  }).catch(() => []);
+
   delete target.packages[name];
 
   if (!input.force) {
     const packageFile = await readPackageFile(input.paths);
     const skillFile = await readSkillFile(input.paths);
-    const roots = Object.entries(target.packages)
-      .filter(([, lock]) => lock.enabled !== false)
-      .map(([name, lock]) => ({ name, version: lock.resolved }));
 
     try {
-      resolvePackageGraph(packageFile, skillFile, roots);
+      resolveTargetGraph(packageFile, skillFile, target);
     } catch (error) {
       throw new SkillinkError(
         'ROUTE_INVALID',
@@ -225,8 +229,11 @@ export async function removeRouteEntry(
     }
   }
 
-  await withHistory(input.paths, 'remove-route-entry', async () => {
-    await writeRouteFile(input.paths, route);
+  await removeObsoleteTargetSkills({
+    paths: input.paths,
+    target,
+    previousSkillNames: removedSkills,
   });
+  await writeRouteFile(input.paths, route);
   return true;
 }

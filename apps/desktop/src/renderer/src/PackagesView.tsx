@@ -1,5 +1,13 @@
 import { useState, type FormEvent } from 'react';
-import type { PackageFile, SkillFile } from '@skillink/shared';
+import {
+  parseNameVersionSpec,
+  type PackageFile,
+  type SkillFile,
+} from '@skillink/shared';
+import { useConfirm } from './Feedback.js';
+import { useI18n } from './i18n.js';
+import { compositionText } from './format.js';
+import { Modal } from './Modal.js';
 
 export interface CreatePackageFormInput {
   name: string;
@@ -7,18 +15,6 @@ export interface CreatePackageFormInput {
   description?: string;
   skills: Record<string, string>;
   packages: Record<string, string>;
-}
-
-export interface CopyPackageFormInput {
-  sourceName: string;
-  sourceVersion: string;
-  targetName: string;
-  targetVersion: string;
-  description?: string;
-  skillOverrides?: Record<string, string>;
-  packageOverrides?: Record<string, string>;
-  dropSkills?: string[];
-  dropPackages?: string[];
 }
 
 export interface PackageTagFormInput {
@@ -36,8 +32,9 @@ export interface PackagesViewProps {
   packages: PackageFile;
   skills: SkillFile;
   busy?: boolean;
-  onCreatePackage?: (input: CreatePackageFormInput) => void;
-  onCopyPackage?: (input: CopyPackageFormInput) => void;
+  onCreatePackage?: (
+    input: CreatePackageFormInput,
+  ) => Promise<boolean> | boolean | void;
   onTag?: (input: PackageTagFormInput) => void;
   onRemove?: (input: PackageVersionInput) => void;
 }
@@ -50,69 +47,51 @@ function parseDependencies(value: string): Record<string, string> {
     if (!spec) {
       continue;
     }
-    const separator = spec.lastIndexOf('@');
-    if (separator <= 0 || separator === spec.length - 1) {
+    const parsed = parseNameVersionSpec(spec);
+    if (!parsed) {
       continue;
     }
-    result[spec.slice(0, separator)] = spec.slice(separator + 1);
+    result[parsed.name] = parsed.version;
   }
 
   return result;
 }
 
-function parseNames(value: string): string[] {
-  return value
-    .split(/[\s,]+/)
-    .map((name) => name.trim())
-    .filter(Boolean);
+function formatDependencies(dependencies: Record<string, string>): string {
+  return Object.entries(dependencies)
+    .map(([name, version]) => `${name}@${version}`)
+    .join('\n');
 }
 
-function compositionText(value: {
-  skills: Record<string, string>;
-  packages: Record<string, string>;
-}): string {
-  const parts: string[] = [];
-  if (Object.keys(value.skills).length > 0) {
-    parts.push(
-      `skills: ${Object.entries(value.skills)
-        .map(([name, version]) => `${name}@${version}`)
-        .join(', ')}`,
-    );
-  }
-  if (Object.keys(value.packages).length > 0) {
-    parts.push(
-      `packages: ${Object.entries(value.packages)
-        .map(([name, version]) => `${name}@${version}`)
-        .join(', ')}`,
-    );
-  }
-  return parts.join('; ');
+export interface CreatePackageDialogProps {
+  open: boolean;
+  busy?: boolean;
+  skills: SkillFile;
+  preset?: CreatePackageFormInput;
+  onClose: () => void;
+  onCreatePackage?: (
+    input: CreatePackageFormInput,
+  ) => Promise<boolean> | boolean | void;
 }
 
-export function PackagesView({
-  packages,
-  skills,
+export function CreatePackageDialog({
+  open,
   busy = false,
+  skills,
+  preset,
+  onClose,
   onCreatePackage,
-  onCopyPackage,
-  onTag,
-  onRemove,
-}: PackagesViewProps) {
-  const [name, setName] = useState('');
-  const [version, setVersion] = useState('');
-  const [description, setDescription] = useState('');
-  const [skillsText, setSkillsText] = useState('');
-  const [packagesText, setPackagesText] = useState('');
-  const [copySource, setCopySource] = useState({ name: '', version: '' });
-  const [copyTargetName, setCopyTargetName] = useState('');
-  const [copyTargetVersion, setCopyTargetVersion] = useState('');
-  const [copyDescription, setCopyDescription] = useState('');
-  const [copySkillsText, setCopySkillsText] = useState('');
-  const [copyPackagesText, setCopyPackagesText] = useState('');
-  const [dropSkills, setDropSkills] = useState('');
-  const [dropPackages, setDropPackages] = useState('');
-  const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
-  const entries = Object.entries(packages.packages);
+}: CreatePackageDialogProps) {
+  const { t } = useI18n();
+  const [name, setName] = useState(preset?.name ?? '');
+  const [version, setVersion] = useState(preset?.version ?? '');
+  const [description, setDescription] = useState(preset?.description ?? '');
+  const [skillsText, setSkillsText] = useState(() =>
+    formatDependencies(preset?.skills ?? {}),
+  );
+  const [packagesText, setPackagesText] = useState(() =>
+    formatDependencies(preset?.packages ?? {}),
+  );
   const skillVersions = Object.entries(skills.skills).flatMap(
     ([skillName, entry]) =>
       Object.keys(entry.versions).map(
@@ -126,59 +105,159 @@ export function PackagesView({
     name.trim() !== '' &&
     version.trim() !== '' &&
     Object.keys(createSkills).length + Object.keys(createPackages).length > 0;
-  const canCopy =
-    copySource.name.trim() !== '' &&
-    copySource.version.trim() !== '' &&
-    copyTargetName.trim() !== '' &&
-    copyTargetVersion.trim() !== '';
 
-  function submitCreate(event: FormEvent<HTMLFormElement>): void {
+  function submit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
     if (!onCreatePackage || !canCreate) {
       return;
     }
 
-    onCreatePackage({
+    const input: CreatePackageFormInput = {
       name: name.trim(),
       version: version.trim(),
       description: description.trim() || undefined,
       skills: createSkills,
       packages: createPackages,
-    });
-    setName('');
-    setVersion('');
-    setDescription('');
-    setSkillsText('');
-    setPackagesText('');
+    };
+    void (async () => {
+      const result = await onCreatePackage(input);
+      if (result !== false) {
+        onClose();
+      }
+    })();
   }
 
-  function submitCopy(event: FormEvent<HTMLFormElement>): void {
-    event.preventDefault();
-    if (!onCopyPackage || !canCopy) {
-      return;
-    }
+  return (
+    <Modal
+      open={open}
+      title={t('packages.create')}
+      eyebrow={t('packages.eyebrow')}
+      closeLabel={t('common.close')}
+      onClose={onClose}
+    >
+      <p className="hint">
+        {preset
+          ? t('packages.copyHint', {
+              name: preset.name,
+              version: preset.version,
+            })
+          : t('packages.hint')}
+      </p>
+      <form className="form-grid" onSubmit={submit}>
+        <label className="field">
+          <span>{t('packages.form.name')}</span>
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder={t('common.required')}
+            required
+            data-autofocus
+          />
+        </label>
+        <label className="field">
+          <span>{t('packages.form.version')}</span>
+          <input
+            value={version}
+            onChange={(event) => setVersion(event.target.value)}
+            placeholder={t('common.required')}
+            required
+          />
+        </label>
+        <label className="field field-wide">
+          <span>{t('packages.form.description')}</span>
+          <input
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            placeholder={t('common.optional')}
+          />
+        </label>
+        <label className="field field-wide">
+          <span>{t('packages.form.skills')}</span>
+          <textarea
+            value={skillsText}
+            onChange={(event) => setSkillsText(event.target.value)}
+            placeholder={t('common.optional')}
+            rows={3}
+          />
+        </label>
+        <label className="field field-wide">
+          <span>{t('packages.form.packages')}</span>
+          <textarea
+            value={packagesText}
+            onChange={(event) => setPackagesText(event.target.value)}
+            placeholder={t('common.optional')}
+            rows={3}
+          />
+        </label>
+        {skillVersions.length > 0 ? (
+          <p className="empty field-wide">
+            {t('packages.availableSkills')}{' '}
+            <code>{skillVersions.join(', ')}</code>
+          </p>
+        ) : null}
+        <div className="form-actions field-wide">
+          <button
+            className="secondary"
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            className="primary"
+            type="submit"
+            disabled={busy || !onCreatePackage || !canCreate}
+          >
+            {t('packages.create')}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
 
-    onCopyPackage({
-      sourceName: copySource.name.trim(),
-      sourceVersion: copySource.version.trim(),
-      targetName: copyTargetName.trim(),
-      targetVersion: copyTargetVersion.trim(),
-      description: copyDescription.trim() || undefined,
-      skillOverrides: parseDependencies(copySkillsText),
-      packageOverrides: parseDependencies(copyPackagesText),
-      dropSkills: parseNames(dropSkills),
-      dropPackages: parseNames(dropPackages),
-    });
-    setCopyTargetVersion('');
-    setCopyDescription('');
-    setCopySkillsText('');
-    setCopyPackagesText('');
-    setDropSkills('');
-    setDropPackages('');
-  }
+export function PackagesView({
+  packages,
+  skills,
+  busy = false,
+  onCreatePackage,
+  onTag,
+  onRemove,
+}: PackagesViewProps) {
+  const { t } = useI18n();
+  const confirm = useConfirm();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createPreset, setCreatePreset] = useState<CreatePackageFormInput>();
+  const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
+  const entries = Object.entries(packages.packages);
 
   function tagKey(packageName: string, packageVersion: string): string {
     return `${packageName}@${packageVersion}`;
+  }
+
+  function openCreate(preset?: CreatePackageFormInput): void {
+    setCreatePreset(preset);
+    setCreateOpen(true);
+  }
+
+  async function removePackage(
+    packageName: string,
+    packageVersion: string,
+  ): Promise<void> {
+    const confirmed = await confirm({
+      title: t('packages.confirm.removeTitle'),
+      message: t('packages.confirm.remove', {
+        name: packageName,
+        version: packageVersion,
+      }),
+      confirmLabel: t('common.remove'),
+      cancelLabel: t('common.cancel'),
+      tone: 'danger',
+    });
+    if (confirmed) {
+      onRemove?.({ name: packageName, version: packageVersion });
+    }
   }
 
   return (
@@ -186,205 +265,32 @@ export function PackagesView({
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">PACKAGES</p>
-            <h2>Package compositions</h2>
+            <p className="eyebrow">{t('packages.eyebrow')}</p>
+            <h2>{t('packages.heading')}</h2>
           </div>
-          <span className="count">{entries.length}</span>
-        </div>
-        <p className="empty">
-          A package is configuration only. It groups skills and other packages;
-          the target installs the resolved skills.
-        </p>
-
-        <form className="form-grid" onSubmit={submitCreate}>
-          <label className="field">
-            <span>Package name</span>
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="frontend"
-              required
-            />
-          </label>
-          <label className="field">
-            <span>Version</span>
-            <input
-              value={version}
-              onChange={(event) => setVersion(event.target.value)}
-              placeholder="1.0.0"
-              required
-            />
-          </label>
-          <label className="field field-wide">
-            <span>Description</span>
-            <input
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="Frontend baseline"
-            />
-          </label>
-          <label className="field field-wide">
-            <span>Skills (one skill@version per line)</span>
-            <textarea
-              value={skillsText}
-              onChange={(event) => setSkillsText(event.target.value)}
-              placeholder="pdf@1.0.0"
-              rows={3}
-            />
-          </label>
-          <label className="field field-wide">
-            <span>Packages (one package@version per line)</span>
-            <textarea
-              value={packagesText}
-              onChange={(event) => setPackagesText(event.target.value)}
-              placeholder="base@2.0.0"
-              rows={3}
-            />
-          </label>
-          <div className="form-actions">
+          <div className="panel-heading-tools">
+            <span className="count">{entries.length}</span>
             <button
               className="primary"
-              type="submit"
-              disabled={busy || !onCreatePackage || !canCreate}
+              type="button"
+              onClick={() => openCreate()}
+              disabled={busy || !onCreatePackage}
             >
-              Create package
+              {t('packages.create')}
             </button>
-          </div>
-        </form>
-        {skillVersions.length > 0 ? (
-          <p className="empty">
-            Available skills: <code>{skillVersions.join(', ')}</code>
-          </p>
-        ) : null}
-      </section>
-
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">COPY</p>
-            <h2>Copy package</h2>
           </div>
         </div>
-        <p className="empty">
-          Copy a package version and override its direct dependencies to resolve
-          skill version conflicts.
-        </p>
+        <p className="hint">{t('packages.hint')}</p>
 
-        <form className="form-grid" onSubmit={submitCopy}>
-          <label className="field">
-            <span>Source package</span>
-            <input
-              value={copySource.name}
-              onChange={(event) =>
-                setCopySource((current) => ({
-                  ...current,
-                  name: event.target.value,
-                }))
-              }
-              placeholder="frontend"
-              required
-            />
-          </label>
-          <label className="field">
-            <span>Source version</span>
-            <input
-              value={copySource.version}
-              onChange={(event) =>
-                setCopySource((current) => ({
-                  ...current,
-                  version: event.target.value,
-                }))
-              }
-              placeholder="1.0.0"
-              required
-            />
-          </label>
-          <label className="field">
-            <span>Target package</span>
-            <input
-              value={copyTargetName}
-              onChange={(event) => setCopyTargetName(event.target.value)}
-              placeholder="frontend"
-              required
-            />
-          </label>
-          <label className="field">
-            <span>Target version</span>
-            <input
-              value={copyTargetVersion}
-              onChange={(event) => setCopyTargetVersion(event.target.value)}
-              placeholder="1.1.0"
-              required
-            />
-          </label>
-          <label className="field field-wide">
-            <span>Skill overrides (one skill@version per line)</span>
-            <textarea
-              value={copySkillsText}
-              onChange={(event) => setCopySkillsText(event.target.value)}
-              placeholder="pdf@1.1.0"
-              rows={2}
-            />
-          </label>
-          <label className="field field-wide">
-            <span>Package overrides (one package@version per line)</span>
-            <textarea
-              value={copyPackagesText}
-              onChange={(event) => setCopyPackagesText(event.target.value)}
-              placeholder="base@2.1.0"
-              rows={2}
-            />
-          </label>
-          <label className="field">
-            <span>Drop skills (comma separated)</span>
-            <input
-              value={dropSkills}
-              onChange={(event) => setDropSkills(event.target.value)}
-              placeholder="review"
-            />
-          </label>
-          <label className="field">
-            <span>Drop packages (comma separated)</span>
-            <input
-              value={dropPackages}
-              onChange={(event) => setDropPackages(event.target.value)}
-              placeholder="base"
-            />
-          </label>
-          <label className="field field-wide">
-            <span>Description</span>
-            <input
-              value={copyDescription}
-              onChange={(event) => setCopyDescription(event.target.value)}
-              placeholder="Optional"
-            />
-          </label>
-          <div className="form-actions">
-            <button
-              className="primary"
-              type="submit"
-              disabled={busy || !onCopyPackage || !canCopy}
-            >
-              Copy package
-            </button>
-          </div>
-        </form>
-      </section>
-
-      {entries.length === 0 ? (
-        <section className="panel">
-          <p className="empty">
-            No packages yet. Create a package from installed skills.
-          </p>
-        </section>
-      ) : (
-        <section className="panel">
+        {entries.length === 0 ? (
+          <p className="empty">{t('packages.empty')}</p>
+        ) : (
           <div className="package-grid">
             {entries.map(([packageName, entry]) => (
               <article className="package-card" key={packageName}>
                 <div className="package-title">
                   <strong>{packageName}</strong>
-                  <span>package</span>
+                  <span>{t('packages.badge')}</span>
                 </div>
                 {entry.description ? <p>{entry.description}</p> : null}
 
@@ -407,11 +313,19 @@ export function PackagesView({
                         <div className="version-block" key={packageVersion}>
                           <div className="version-row">
                             <code>{packageVersion}</code>
-                            <span>{compositionText(value)}</span>
+                            <span>
+                              {compositionText(value, t, {
+                                skills: 'packages.composition.skills',
+                                packages: 'packages.composition.packages',
+                              })}
+                            </span>
                           </div>
                           <div className="version-actions">
                             <input
-                              aria-label={`Tag ${packageName}@${packageVersion}`}
+                              aria-label={t('packages.tagAriaLabel', {
+                                name: packageName,
+                                version: packageVersion,
+                              })}
                               value={tagDrafts[key] ?? ''}
                               onChange={(event) =>
                                 setTagDrafts((current) => ({
@@ -419,7 +333,7 @@ export function PackagesView({
                                   [key]: event.target.value,
                                 }))
                               }
-                              placeholder="tag"
+                              placeholder={t('common.required')}
                             />
                             <button
                               className="secondary"
@@ -429,42 +343,48 @@ export function PackagesView({
                                 !onTag ||
                                 !(tagDrafts[key] ?? '').trim()
                               }
-                              onClick={() =>
+                              onClick={() => {
                                 onTag?.({
                                   name: packageName,
                                   version: packageVersion,
                                   tag: (tagDrafts[key] ?? '').trim(),
-                                })
-                              }
+                                });
+                                setTagDrafts((current) => ({
+                                  ...current,
+                                  [key]: '',
+                                }));
+                              }}
                             >
-                              Tag
+                              {t('packages.tag')}
                             </button>
                             <button
                               className="secondary"
                               type="button"
-                              disabled={busy || !onCopyPackage}
-                              onClick={() => {
-                                setCopySource({
+                              disabled={busy || !onCreatePackage}
+                              onClick={() =>
+                                openCreate({
                                   name: packageName,
                                   version: packageVersion,
-                                });
-                                setCopyTargetName(packageName);
-                              }}
+                                  description: entry.description,
+                                  skills: value.skills,
+                                  packages: value.packages,
+                                })
+                              }
                             >
-                              Copy
+                              {t('packages.actions.copy')}
                             </button>
                             <button
                               className="danger"
                               type="button"
                               disabled={busy || !onRemove}
                               onClick={() =>
-                                onRemove?.({
-                                  name: packageName,
-                                  version: packageVersion,
-                                })
+                                void removePackage(
+                                  packageName,
+                                  packageVersion,
+                                )
                               }
                             >
-                              Remove
+                              {t('common.remove')}
                             </button>
                           </div>
                         </div>
@@ -475,8 +395,24 @@ export function PackagesView({
               </article>
             ))}
           </div>
-        </section>
-      )}
+        )}
+      </section>
+
+      {createOpen ? (
+        <CreatePackageDialog
+          key={
+            createPreset
+              ? `${createPreset.name}@${createPreset.version}`
+              : 'new'
+          }
+          open
+          busy={busy}
+          skills={skills}
+          preset={createPreset}
+          onClose={() => setCreateOpen(false)}
+          onCreatePackage={onCreatePackage}
+        />
+      ) : null}
     </main>
   );
 }

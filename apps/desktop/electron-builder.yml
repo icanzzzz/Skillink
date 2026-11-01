@@ -13,6 +13,8 @@ extraResources:
     to: cli/skillink.cmd
   - from: build/cli/skillink-path.ps1
     to: cli/skillink-path.ps1
+  - from: ../../locales/zh-CN.json
+    to: locales/zh-CN.json
 asar: true
 win:
   icon: build/icon.ico

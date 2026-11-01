@@ -2,16 +2,18 @@ import { describe, expect, it } from 'vitest';
 import {
   AddTargetRequestSchema,
   ApplyRequestSchema,
-  CopyPackageRequestSchema,
   CreatePackageRequestSchema,
   GcRequestSchema,
   ImportSkillRequestSchema,
+  LanguageInstallRequestSchema,
+  LanguageRemoveRequestSchema,
+  LanguageUseRequestSchema,
   PackageRemoveRequestSchema,
   PackageTagRequestSchema,
-  RollbackRequestSchema,
   RouteAddRequestSchema,
   RouteEnableRequestSchema,
   RouteRemoveRequestSchema,
+  ScanSkillsRequestSchema,
   SkillRemoveRequestSchema,
   SkillTagRequestSchema,
   TargetEnableRequestSchema,
@@ -39,6 +41,19 @@ describe('IPC request schemas', () => {
     ).toBe(false);
   });
 
+  it('accepts a valid skill scan request', () => {
+    expect(
+      ScanSkillsRequestSchema.parse({ sourceDir: 'C:/Projects/skills' }),
+    ).toEqual({ sourceDir: 'C:/Projects/skills' });
+    expect(ScanSkillsRequestSchema.safeParse({ sourceDir: '' }).success).toBe(
+      false,
+    );
+    expect(
+      ScanSkillsRequestSchema.safeParse({ sourceDir: 'C:/skills', extra: true })
+        .success,
+    ).toBe(false);
+  });
+
   it('rejects an invalid target mode', () => {
     expect(
       AddTargetRequestSchema.safeParse({
@@ -57,7 +72,7 @@ describe('IPC request schemas', () => {
     });
   });
 
-  it('validates package creation and copy requests', () => {
+  it('validates package creation requests', () => {
     expect(
       CreatePackageRequestSchema.parse({
         name: 'frontend',
@@ -81,29 +96,6 @@ describe('IPC request schemas', () => {
         name: 'frontend',
         version: '1.0.0',
         skills: { pdf: '' },
-      }).success,
-    ).toBe(false);
-
-    expect(
-      CopyPackageRequestSchema.parse({
-        sourceName: 'frontend',
-        sourceVersion: '1.0.0',
-        targetName: 'frontend',
-        targetVersion: '1.1.0',
-        skillOverrides: { pdf: '1.1.0' },
-        dropSkills: ['review'],
-      }),
-    ).toMatchObject({
-      sourceName: 'frontend',
-      targetName: 'frontend',
-      skillOverrides: { pdf: '1.1.0' },
-      dropSkills: ['review'],
-    });
-    expect(
-      CopyPackageRequestSchema.safeParse({
-        sourceVersion: '1.0.0',
-        targetName: 'frontend',
-        targetVersion: '1.1.0',
       }).success,
     ).toBe(false);
   });
@@ -192,14 +184,6 @@ describe('IPC request schemas', () => {
     ).toBe(false);
   });
 
-  it('rejects a rollback request without an id', () => {
-    expect(RollbackRequestSchema.safeParse({}).success).toBe(false);
-    expect(RollbackRequestSchema.safeParse({ id: '' }).success).toBe(false);
-    expect(
-      RollbackRequestSchema.parse({ id: '2026-10-30T12-00-00-000Z' }),
-    ).toEqual({ id: '2026-10-30T12-00-00-000Z' });
-  });
-
   it('accepts optional booleans and numbers for gc', () => {
     expect(GcRequestSchema.parse({})).toEqual({});
     expect(
@@ -209,10 +193,45 @@ describe('IPC request schemas', () => {
   });
 
   it('accepts apply options with only known fields', () => {
-    expect(ApplyRequestSchema.parse({ dryRun: true, prune: false })).toEqual({
+    expect(ApplyRequestSchema.parse({ dryRun: true })).toEqual({
       dryRun: true,
-      prune: false,
     });
     expect(ApplyRequestSchema.safeParse({ unknown: true }).success).toBe(false);
+    expect(ApplyRequestSchema.safeParse({ prune: true }).success).toBe(false);
+  });
+
+  it('validates language pack requests', () => {
+    expect(
+      LanguageInstallRequestSchema.parse({
+        path: 'C:/packs/zh-CN.json',
+        use: true,
+        force: true,
+      }),
+    ).toEqual({
+      path: 'C:/packs/zh-CN.json',
+      use: true,
+      force: true,
+    });
+    expect(LanguageInstallRequestSchema.safeParse({ path: '' }).success).toBe(
+      false,
+    );
+    expect(
+      LanguageInstallRequestSchema.parse({ path: 'C:/packs/zh-CN.json' }),
+    ).toEqual({ path: 'C:/packs/zh-CN.json' });
+    expect(LanguageUseRequestSchema.safeParse({ locale: '' }).success).toBe(
+      false,
+    );
+    expect(LanguageUseRequestSchema.parse({ locale: 'zh-CN' })).toEqual({
+      locale: 'zh-CN',
+    });
+    expect(
+      LanguageRemoveRequestSchema.safeParse({ locale: '../route' }).success,
+    ).toBe(false);
+    expect(
+      LanguageUseRequestSchema.safeParse({ locale: '..\\route' }).success,
+    ).toBe(false);
+    expect(
+      LanguageRemoveRequestSchema.parse({ locale: 'zh-CN' }),
+    ).toEqual({ locale: 'zh-CN' });
   });
 });

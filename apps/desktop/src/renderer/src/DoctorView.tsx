@@ -1,4 +1,6 @@
-import type { DoctorReport } from '@skillink/core';
+import { formatDoctorIssue } from '@skillink/shared';
+import type { DoctorReport } from '@skillink/shared';
+import { useI18n } from './i18n.js';
 
 export interface DoctorViewProps {
   report: DoctorReport;
@@ -13,17 +15,21 @@ export function DoctorView({
   onRefresh,
   onApply,
 }: DoctorViewProps) {
+  const { t, translator } = useI18n();
+
   return (
     <main className="view">
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">DIAGNOSTICS</p>
-            <h2>Doctor</h2>
+            <p className="eyebrow">{t('doctor.eyebrow')}</p>
+            <h2>{t('doctor.heading')}</h2>
           </div>
           <div className="row-actions">
             <span className={report.ok ? 'health ok' : 'health warn'}>
-              {report.ok ? 'healthy' : `${report.issues.length} issues`}
+              {report.ok
+                ? t('status.healthy')
+                : t('doctor.issues', { count: report.issues.length })}
             </span>
             <button
               className="secondary"
@@ -31,7 +37,7 @@ export function DoctorView({
               onClick={onRefresh}
               disabled={busy || !onRefresh}
             >
-              Refresh
+              {t('doctor.refresh')}
             </button>
             <button
               className="primary"
@@ -39,22 +45,19 @@ export function DoctorView({
               onClick={onApply}
               disabled={busy || !onApply}
             >
-              Apply routes
+              {t('app.actions.applyRoutes')}
             </button>
           </div>
         </div>
 
         {report.issues.length === 0 ? (
-          <p className="empty">
-            No issues found. route.json, package.json, skill.json, the skill
-            library, and links are consistent.
-          </p>
+          <p className="empty">{t('doctor.empty')}</p>
         ) : (
           <div className="issues">
             {report.issues.map((issue, index) => (
               <div className="issue-row" key={`${issue.code}-${index}`}>
                 <code>{issue.code}</code>
-                <span>{issue.message}</span>
+                <span>{formatDoctorIssue(issue, translator)}</span>
                 {issue.path ? <span className="path-value">{issue.path}</span> : null}
               </div>
             ))}

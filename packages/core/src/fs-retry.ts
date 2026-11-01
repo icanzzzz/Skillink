@@ -1,3 +1,5 @@
+import { isNodeError } from './node-error.js';
+
 export interface FsRetryOptions {
   retries?: number;
   baseDelayMs?: number;
@@ -6,10 +8,6 @@ export interface FsRetryOptions {
 }
 
 const DEFAULT_RETRY_CODES = ['EBUSY', 'EPERM', 'EACCES', 'ENOTEMPTY'];
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
-}
 
 function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => {

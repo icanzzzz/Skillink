@@ -1,4 +1,4 @@
-import { copyFile, readFile, rm, stat } from 'node:fs/promises';
+import { readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import {
@@ -16,7 +16,6 @@ import {
   type SkillinkPaths,
   type TargetRoute,
 } from '@skillink/shared';
-import { createTrashDirectory } from './skill-store.js';
 import {
   computePackageIntegrity,
   resolvePackageGraph,
@@ -24,6 +23,7 @@ import {
 } from './package-graph.js';
 import { isSamePath } from './path-policy.js';
 import { writeJsonAtomic } from './json-store.js';
+import { isNodeError } from './node-error.js';
 
 const LegacyVersionSchema = z.object({
   integrity: z.string().min(1),
@@ -70,10 +70,6 @@ const LegacyRouteFileSchema = z.object({
 
 type LegacySkillsFile = z.infer<typeof LegacySkillsFileSchema>;
 type LegacyRouteFile = z.infer<typeof LegacyRouteFileSchema>;
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
-}
 
 async function pathExists(target: string): Promise<boolean> {
   return stat(target)
@@ -338,15 +334,10 @@ export async function migrateV1ToV2(
     );
   }
 
-  const trashDirectory = await createTrashDirectory(paths);
-  const backupSkills = path.join(trashDirectory, 'skills.json');
-  const backupRoute = path.join(trashDirectory, 'route.v1.json');
   const hadRoute = await pathExists(paths.routeFile);
-
-  await copyFile(paths.skillsFile, backupSkills);
-  if (hadRoute) {
-    await copyFile(paths.routeFile, backupRoute);
-  }
+  const previousRoute = hadRoute
+    ? await readFile(paths.routeFile, 'utf8')
+    : undefined;
 
   try {
     await writeJsonAtomic(paths.skillFile, skillFile, SkillFileSchema);
@@ -357,8 +348,8 @@ export async function migrateV1ToV2(
     await rm(paths.skillFile, { force: true });
     await rm(paths.packageFile, { force: true });
 
-    if (hadRoute) {
-      await copyFile(backupRoute, paths.routeFile);
+    if (hadRoute && previousRoute !== undefined) {
+      await writeFile(paths.routeFile, previousRoute, 'utf8');
     } else {
       await rm(paths.routeFile, { force: true });
     }

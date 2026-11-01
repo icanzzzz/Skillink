@@ -1,75 +1,63 @@
 import { BrowserWindow, app, dialog, ipcMain } from 'electron';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import {
-  addRouteEntry,
-  addTarget,
-  apply,
-  copyPackageVersion,
-  createPackageVersion,
-  doctor,
-  gc,
-  importSkill,
-  listHistory,
-  readPackageFile,
-  readRouteFile,
-  readSkillFile,
-  removePackageVersion,
-  removeRouteEntry,
-  removeSkillVersion,
-  removeTarget,
-  restoreHistorySnapshot,
-  setPackageEnabled,
-  setPackageTag,
-  setSkillTag,
-  setTargetEnabled,
-  status,
-  summarizeTargetSkills,
-} from '@skillink/core';
-import { getSkillinkPaths } from '@skillink/shared';
+import type {
+  ApplyReport,
+  GcReport,
+  ImportSkillResult,
+  LanguageState,
+  LocaleInstallReport,
+  PackageLock,
+  PackageVersion,
+  SkillPackageScanReport,
+  TargetRoute,
+} from '@skillink/shared';
 import {
   AddTargetRequestSchema,
   ApplyRequestSchema,
-  CopyPackageRequestSchema,
   CreatePackageRequestSchema,
   GcRequestSchema,
   ImportSkillRequestSchema,
+  LanguageInstallRequestSchema,
+  LanguageRemoveRequestSchema,
+  LanguageUseRequestSchema,
   PackageRemoveRequestSchema,
   PackageTagRequestSchema,
-  RollbackRequestSchema,
   RouteAddRequestSchema,
   RouteEnableRequestSchema,
   RouteRemoveRequestSchema,
+  ScanSkillsRequestSchema,
   SkillRemoveRequestSchema,
   SkillTagRequestSchema,
   TargetEnableRequestSchema,
   TargetRemoveRequestSchema,
 } from '../ipc-schemas.js';
-import type { DesktopSnapshot } from '../shared.js';
+import { createCliAdapter } from './cli-adapter.js';
+import { localizeError } from './error-localization.js';
+import {
+  buildAddTargetArgs,
+  buildApplyArgs,
+  buildCreatePackageArgs,
+  buildGcArgs,
+  buildImportSkillArgs,
+  buildLanguageInstallArgs,
+  buildLanguageListArgs,
+  buildLanguageRemoveArgs,
+  buildLanguageUseArgs,
+  buildPackageRemoveArgs,
+  buildPackageTagArgs,
+  buildRemoveTargetArgs,
+  buildRouteAddArgs,
+  buildRouteEnableArgs,
+  buildRouteRemoveArgs,
+  buildScanSkillsArgs,
+  buildSkillRemoveArgs,
+  buildSkillTagArgs,
+  buildTargetEnableArgs,
+} from './cli-commands.js';
 import { assertTrustedSender, type SenderPolicy } from './sender-policy.js';
 
-async function getSnapshot(): Promise<DesktopSnapshot> {
-  const paths = getSkillinkPaths();
-  const [skills, packages, route, statusReport, doctorReport, targetSkills] =
-    await Promise.all([
-      readSkillFile(paths),
-      readPackageFile(paths),
-      readRouteFile(paths),
-      status({ paths }),
-      doctor({ paths }),
-      summarizeTargetSkills({ paths }),
-    ]);
-
-  return {
-    home: paths.home,
-    skills,
-    packages,
-    route,
-    status: statusReport,
-    doctor: doctorReport,
-    targetSkills,
-  };
-}
+const cli = createCliAdapter();
 
 async function chooseFolder(
   event: Electron.IpcMainInvokeEvent,
@@ -77,6 +65,21 @@ async function chooseFolder(
   const window = BrowserWindow.fromWebContents(event.sender);
   const options: Electron.OpenDialogOptions = {
     properties: ['openDirectory'],
+  };
+  const result = window
+    ? await dialog.showOpenDialog(window, options)
+    : await dialog.showOpenDialog(options);
+
+  return result.canceled ? null : (result.filePaths[0] ?? null);
+}
+
+async function chooseLanguagePack(
+  event: Electron.IpcMainInvokeEvent,
+): Promise<string | null> {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  const options: Electron.OpenDialogOptions = {
+    properties: ['openFile'],
+    filters: [{ name: 'Skillink language pack', extensions: ['json'] }],
   };
   const result = window
     ? await dialog.showOpenDialog(window, options)
@@ -95,6 +98,12 @@ function senderPolicy(): SenderPolicy {
   };
 }
 
+async function localizeIpcError(error: unknown): Promise<Error> {
+  return localizeError(error, () =>
+    cli.invoke<LanguageState>(buildLanguageListArgs()),
+  );
+}
+
 export function registerIpcHandlers(
   getMainWindow: () => BrowserWindow | null,
 ): void {
@@ -105,167 +114,118 @@ export function registerIpcHandlers(
       ...args: unknown[]
     ) => unknown,
   ): void => {
-    ipcMain.handle(channel, (event, ...args) => {
+    ipcMain.handle(channel, async (event, ...args) => {
       assertTrustedSender(event, getMainWindow(), senderPolicy());
-      return listener(event, ...args);
+      try {
+        return await listener(event, ...args);
+      } catch (error) {
+        if (channel === 'skillink:language-state') {
+          throw error;
+        }
+        throw await localizeIpcError(error);
+      }
     });
   };
 
-  handle('skillink:snapshot', () => getSnapshot());
+  handle('skillink:snapshot', () => cli.snapshot());
+  handle('skillink:runtime-status', () => cli.runtimeStatus());
   handle('skillink:choose-folder', (event) => chooseFolder(event));
+  handle('skillink:language-state', () =>
+    cli.invoke<LanguageState>(buildLanguageListArgs()),
+  );
+  handle('skillink:choose-language-pack', (event) =>
+    chooseLanguagePack(event),
+  );
+
+  handle('skillink:language-install', async (_event, input: unknown) => {
+    const request = LanguageInstallRequestSchema.parse(input);
+    return cli.invoke<LocaleInstallReport>(
+      buildLanguageInstallArgs(request),
+    );
+  });
+
+  handle('skillink:language-use', async (_event, input: unknown) => {
+    const request = LanguageUseRequestSchema.parse(input);
+    await cli.invoke(buildLanguageUseArgs(request.locale));
+  });
+
+  handle('skillink:language-remove', async (_event, input: unknown) => {
+    const request = LanguageRemoveRequestSchema.parse(input);
+    await cli.invoke(buildLanguageRemoveArgs(request.locale));
+  });
 
   handle('skillink:apply', async (_event, input: unknown) => {
     const request = ApplyRequestSchema.parse(input ?? {});
-    return apply({
-      paths: getSkillinkPaths(),
-      dryRun: request.dryRun,
-      prune: request.prune,
-      targetId: request.targetId,
-    });
+    return cli.invoke<ApplyReport>(buildApplyArgs(request));
+  });
+
+  handle('skillink:scan-skills', async (_event, input: unknown) => {
+    const request = ScanSkillsRequestSchema.parse(input);
+    return cli.invoke<SkillPackageScanReport>(buildScanSkillsArgs(request));
   });
 
   handle('skillink:import-skill', async (_event, input: unknown) => {
     const request = ImportSkillRequestSchema.parse(input);
-    return importSkill({
-      sourceDir: request.sourceDir,
-      name: request.name,
-      version: request.version,
-      home: getSkillinkPaths().home,
-    });
+    return cli.invoke<ImportSkillResult>(buildImportSkillArgs(request));
   });
 
   handle('skillink:create-package', async (_event, input: unknown) => {
     const request = CreatePackageRequestSchema.parse(input);
-    return createPackageVersion({
-      paths: getSkillinkPaths(),
-      name: request.name,
-      version: request.version,
-      description: request.description,
-      skills: request.skills,
-      packages: request.packages,
-    });
-  });
-
-  handle('skillink:copy-package', async (_event, input: unknown) => {
-    const request = CopyPackageRequestSchema.parse(input);
-    return copyPackageVersion({
-      paths: getSkillinkPaths(),
-      sourceName: request.sourceName,
-      sourceVersion: request.sourceVersion,
-      targetName: request.targetName,
-      targetVersion: request.targetVersion,
-      description: request.description,
-      skillOverrides: request.skillOverrides,
-      packageOverrides: request.packageOverrides,
-      dropSkills: request.dropSkills,
-      dropPackages: request.dropPackages,
-    });
+    return cli.invoke<PackageVersion>(buildCreatePackageArgs(request));
   });
 
   handle('skillink:remove-package', async (_event, input: unknown) => {
     const request = PackageRemoveRequestSchema.parse(input);
-    await removePackageVersion(
-      getSkillinkPaths(),
-      request.name,
-      request.version,
-    );
+    await cli.invoke(buildPackageRemoveArgs(request));
   });
 
   handle('skillink:package-tag', async (_event, input: unknown) => {
     const request = PackageTagRequestSchema.parse(input);
-    await setPackageTag(
-      getSkillinkPaths(),
-      request.name,
-      request.version,
-      request.tag,
-    );
+    await cli.invoke(buildPackageTagArgs(request));
   });
 
   handle('skillink:skill-tag', async (_event, input: unknown) => {
     const request = SkillTagRequestSchema.parse(input);
-    await setSkillTag(
-      getSkillinkPaths(),
-      request.name,
-      request.version,
-      request.tag,
-    );
+    await cli.invoke(buildSkillTagArgs(request));
   });
 
   handle('skillink:skill-remove', async (_event, input: unknown) => {
     const request = SkillRemoveRequestSchema.parse(input);
-    await removeSkillVersion(
-      getSkillinkPaths(),
-      request.name,
-      request.version,
-    );
+    await cli.invoke(buildSkillRemoveArgs(request));
   });
 
   handle('skillink:add-target', async (_event, input: unknown) => {
     const request = AddTargetRequestSchema.parse(input);
-    return addTarget({
-      paths: getSkillinkPaths(),
-      path: request.path,
-      id: request.id,
-      label: request.label,
-      mode: request.mode,
-    });
+    return cli.invoke<TargetRoute>(buildAddTargetArgs(request));
   });
 
   handle('skillink:route-add', async (_event, input: unknown) => {
     const request = RouteAddRequestSchema.parse(input);
-    return addRouteEntry({
-      paths: getSkillinkPaths(),
-      targetId: request.targetId,
-      name: request.name,
-      requested: request.requested,
-    });
+    return cli.invoke<PackageLock>(buildRouteAddArgs(request));
   });
 
   handle('skillink:route-remove', async (_event, input: unknown) => {
     const request = RouteRemoveRequestSchema.parse(input);
-    return removeRouteEntry({
-      paths: getSkillinkPaths(),
-      targetId: request.targetId,
-      name: request.name,
-    });
+    return cli.invoke<boolean>(buildRouteRemoveArgs(request));
   });
 
   handle('skillink:route-enable', async (_event, input: unknown) => {
     const request = RouteEnableRequestSchema.parse(input);
-    return setPackageEnabled(
-      getSkillinkPaths(),
-      request.targetId,
-      request.name,
-      request.enabled,
-    );
+    return cli.invoke<PackageLock>(buildRouteEnableArgs(request));
   });
 
   handle('skillink:remove-target', async (_event, input: unknown) => {
     const request = TargetRemoveRequestSchema.parse(input);
-    return removeTarget({
-      paths: getSkillinkPaths(),
-      id: request.id,
-    });
+    return cli.invoke<TargetRoute>(buildRemoveTargetArgs(request));
   });
 
   handle('skillink:target-enable', async (_event, input: unknown) => {
     const request = TargetEnableRequestSchema.parse(input);
-    return setTargetEnabled(
-      getSkillinkPaths(),
-      request.id,
-      request.enabled,
-    );
+    return cli.invoke<TargetRoute>(buildTargetEnableArgs(request));
   });
 
   handle('skillink:gc', async (_event, input: unknown) => {
     const request = GcRequestSchema.parse(input ?? {});
-    return gc(getSkillinkPaths(), request);
-  });
-
-  handle('skillink:history', () => listHistory(getSkillinkPaths()));
-
-  handle('skillink:rollback', async (_event, input: unknown) => {
-    const request = RollbackRequestSchema.parse(input);
-    await restoreHistorySnapshot(getSkillinkPaths(), request.id);
+    return cli.invoke<GcReport>(buildGcArgs(request));
   });
 }

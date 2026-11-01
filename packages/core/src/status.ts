@@ -1,4 +1,4 @@
-import { lstat, readdir, stat } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import {
   SkillinkError,
@@ -6,56 +6,25 @@ import {
   getSkillinkPaths,
   type SkillinkErrorCode,
   type SkillinkPaths,
+  type StatusEntry,
+  type StatusReport,
+  type StatusState,
 } from '@skillink/shared';
-import { inspectPath, isManagedLink } from './links.js';
-import {
-  assertSafeRealTargetPath,
-  isPathInside,
-  isSamePath,
-} from './path-policy.js';
+import { assertSafeRealTargetPath } from './path-policy.js';
+import { compareTargetEntry } from './target-entry.js';
 import { readRouteFile } from './route.js';
 import { readPackageFile } from './package-store.js';
 import { readSkillFile } from './skill-store.js';
 import {
-  computePackageIntegrity,
-  resolvePackageGraph,
-} from './package-graph.js';
-
-export type StatusState =
-  | 'ok'
-  | 'missing'
-  | 'wrong-version'
-  | 'broken-link'
-  | 'conflict'
-  | 'unmanaged'
-  | 'extra'
-  | 'disabled';
-
-export interface StatusEntry {
-  targetId: string;
-  targetPath: string;
-  name: string;
-  version: string;
-  state: StatusState;
-  path: string;
-  sourcePath?: string;
-  packageName?: string;
-  detail?: string;
-}
-
-export interface StatusReport {
-  healthy: boolean;
-  entries: StatusEntry[];
-}
+  checkTargetPackageLocks,
+  resolveTargetGraph,
+} from './target-graph.js';
+import { isNodeError } from './node-error.js';
 
 export interface StatusInput {
   paths?: SkillinkPaths;
   home?: string;
   targetId?: string;
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
 }
 
 function errorCode(error: unknown): SkillinkErrorCode | undefined {
@@ -132,36 +101,24 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
       continue;
     }
 
-    const enabledLocks = Object.entries(target.packages).filter(
-      ([, lock]) => lock.enabled !== false,
-    );
     let targetFailed = false;
 
-    for (const [name, lock] of enabledLocks) {
-      try {
-        const expected = computePackageIntegrity(packageFile, [
-          { name, version: lock.resolved },
-        ]);
-        if (expected !== lock.integrity) {
-          throw new SkillinkError(
-            'PACKAGE_INTEGRITY_MISMATCH',
-            `Route lock for ${name}@${lock.resolved} does not match package.json.`,
-            { name, version: lock.resolved, expected, actual: lock.integrity },
-          );
-        }
-      } catch (error) {
-        entries.push({
-          targetId: target.id,
-          targetPath,
-          name,
-          version: lock.resolved,
-          state: errorState(error),
-          path: path.join(targetPath, name),
-          packageName: name,
-          detail: errorDetail(error),
-        });
-        targetFailed = true;
+    for (const check of checkTargetPackageLocks(packageFile, target)) {
+      const error = check.error;
+      if (!error) {
+        continue;
       }
+      entries.push({
+        targetId: target.id,
+        targetPath,
+        name: check.name,
+        version: check.lock.resolved,
+        state: errorState(error),
+        path: path.join(targetPath, check.name),
+        packageName: check.name,
+        detail: errorDetail(error),
+      });
+      targetFailed = true;
     }
 
     if (targetFailed) {
@@ -170,14 +127,7 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
 
     let resolution;
     try {
-      resolution = resolvePackageGraph(
-        packageFile,
-        skillFile,
-        enabledLocks.map(([name, lock]) => ({
-          name,
-          version: lock.resolved,
-        })),
-      );
+      resolution = resolveTargetGraph(packageFile, skillFile, target);
     } catch (error) {
       entries.push({
         targetId: target.id,
@@ -217,9 +167,14 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
       }
 
       const destination = path.join(targetPath, skill.name);
-      const inspection = await inspectPath(destination);
+      const comparison = await compareTargetEntry({
+        destination,
+        sourcePath,
+        mode: target.mode,
+        expected: skill.entry,
+      });
 
-      if (inspection.kind === 'missing') {
+      if (comparison.kind === 'missing') {
         entries.push({
           targetId: target.id,
           targetPath,
@@ -232,46 +187,43 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
         continue;
       }
 
-      if (inspection.kind === 'link') {
-        if (isSamePath(inspection.target, sourcePath)) {
-          entries.push({
-            targetId: target.id,
-            targetPath,
-            name: skill.name,
-            version: skill.version,
-            state: 'ok',
-            path: destination,
-            sourcePath,
-          });
-          continue;
-        }
-
-        if (
-          isPathInside(inspection.target, paths.libraryDir) ||
-          isSamePath(inspection.target, paths.libraryDir)
-        ) {
-          entries.push({
-            targetId: target.id,
-            targetPath,
-            name: skill.name,
-            version: skill.version,
-            state: 'wrong-version',
-            path: destination,
-            sourcePath,
-            detail: `Link points to ${inspection.target}.`,
-          });
-          continue;
-        }
-
+      if (comparison.kind === 'ok') {
         entries.push({
           targetId: target.id,
           targetPath,
           name: skill.name,
           version: skill.version,
-          state: 'unmanaged',
+          state: 'ok',
           path: destination,
           sourcePath,
-          detail: `Link points outside the library: ${inspection.target}.`,
+        });
+        continue;
+      }
+
+      if (comparison.kind === 'wrong-mode') {
+        entries.push({
+          targetId: target.id,
+          targetPath,
+          name: skill.name,
+          version: skill.version,
+          state: 'wrong-mode',
+          path: destination,
+          sourcePath,
+          detail: `Existing ${comparison.actual.kind} is not a ${target.mode} entry.`,
+        });
+        continue;
+      }
+
+      if (comparison.kind === 'broken-link') {
+        entries.push({
+          targetId: target.id,
+          targetPath,
+          name: skill.name,
+          version: skill.version,
+          state: 'broken-link',
+          path: destination,
+          sourcePath,
+          detail: 'Link target is missing.',
         });
         continue;
       }
@@ -281,45 +233,15 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
         targetPath,
         name: skill.name,
         version: skill.version,
-        state: 'conflict',
+        state:
+          comparison.kind === 'wrong-version' ? 'wrong-version' : 'conflict',
         path: destination,
         sourcePath,
-        detail: `Existing ${inspection.kind} is not a managed link.`,
+        detail:
+          comparison.kind === 'wrong-version'
+            ? `Content does not match ${skill.name}@${skill.version}.`
+            : errorDetail(comparison.error),
       });
-    }
-
-    const desiredNames = new Set(resolution.skills.keys());
-    const children = await readdir(targetPath, { withFileTypes: true }).catch(
-      (error: unknown) => {
-        if (isNodeError(error) && error.code === 'ENOENT') {
-          return [];
-        }
-        throw error;
-      },
-    );
-
-    for (const child of children) {
-      if (desiredNames.has(child.name)) {
-        continue;
-      }
-
-      const childPath = path.join(targetPath, child.name);
-      const info = await lstat(childPath);
-      if (!info.isSymbolicLink()) {
-        continue;
-      }
-
-      if (await isManagedLink(childPath, paths)) {
-        entries.push({
-          targetId: target.id,
-          targetPath,
-          name: child.name,
-          version: '',
-          state: 'extra',
-          path: childPath,
-          detail: 'Managed link is not present in route.json.',
-        });
-      }
     }
   }
 

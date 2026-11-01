@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { TargetModeSchema } from '@skillink/shared';
+import { LOCALE_PATTERN, TargetModeSchema } from '@skillink/shared';
 
 const NonEmptyString = z.string().min(1);
+const LocaleString = z.string().regex(LOCALE_PATTERN, 'Invalid locale tag.');
 const OptionalNonEmptyString = NonEmptyString.optional();
 const DependencyMap = z.record(z.string(), NonEmptyString);
 
@@ -10,6 +11,12 @@ export const ImportSkillRequestSchema = z
     sourceDir: NonEmptyString,
     name: OptionalNonEmptyString,
     version: OptionalNonEmptyString,
+  })
+  .strict();
+
+export const ScanSkillsRequestSchema = z
+  .object({
+    sourceDir: NonEmptyString,
   })
   .strict();
 
@@ -103,20 +110,6 @@ export const CreatePackageRequestSchema = z
     { message: 'Package must contain at least one dependency.' },
   );
 
-export const CopyPackageRequestSchema = z
-  .object({
-    sourceName: NonEmptyString,
-    sourceVersion: NonEmptyString,
-    targetName: NonEmptyString,
-    targetVersion: NonEmptyString,
-    description: OptionalNonEmptyString,
-    skillOverrides: DependencyMap.optional(),
-    packageOverrides: DependencyMap.optional(),
-    dropSkills: z.array(NonEmptyString).optional(),
-    dropPackages: z.array(NonEmptyString).optional(),
-  })
-  .strict();
-
 export const GcRequestSchema = z
   .object({
     dryRun: z.boolean().optional(),
@@ -125,21 +118,35 @@ export const GcRequestSchema = z
   })
   .strict();
 
-export const RollbackRequestSchema = z
-  .object({
-    id: NonEmptyString,
-  })
-  .strict();
-
 export const ApplyRequestSchema = z
   .object({
     dryRun: z.boolean().optional(),
-    prune: z.boolean().optional(),
     targetId: OptionalNonEmptyString,
   })
   .strict();
 
+export const LanguageInstallRequestSchema = z
+  .object({
+    path: NonEmptyString,
+    use: z.boolean().optional(),
+    force: z.boolean().optional(),
+  })
+  .strict();
+
+export const LanguageUseRequestSchema = z
+  .object({
+    locale: LocaleString,
+  })
+  .strict();
+
+export const LanguageRemoveRequestSchema = z
+  .object({
+    locale: LocaleString,
+  })
+  .strict();
+
 export type ImportSkillRequest = z.infer<typeof ImportSkillRequestSchema>;
+export type ScanSkillsRequest = z.infer<typeof ScanSkillsRequestSchema>;
 export type AddTargetRequest = z.infer<typeof AddTargetRequestSchema>;
 export type RouteAddRequest = z.infer<typeof RouteAddRequestSchema>;
 export type RouteRemoveRequest = z.infer<typeof RouteRemoveRequestSchema>;
@@ -151,7 +158,10 @@ export type SkillRemoveRequest = z.infer<typeof SkillRemoveRequestSchema>;
 export type PackageTagRequest = z.infer<typeof PackageTagRequestSchema>;
 export type PackageRemoveRequest = z.infer<typeof PackageRemoveRequestSchema>;
 export type CreatePackageRequest = z.infer<typeof CreatePackageRequestSchema>;
-export type CopyPackageRequest = z.infer<typeof CopyPackageRequestSchema>;
 export type GcRequest = z.infer<typeof GcRequestSchema>;
-export type RollbackRequest = z.infer<typeof RollbackRequestSchema>;
 export type ApplyRequest = z.infer<typeof ApplyRequestSchema>;
+export type LanguageInstallRequest = z.infer<
+  typeof LanguageInstallRequestSchema
+>;
+export type LanguageUseRequest = z.infer<typeof LanguageUseRequestSchema>;
+export type LanguageRemoveRequest = z.infer<typeof LanguageRemoveRequestSchema>;

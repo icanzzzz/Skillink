@@ -4,7 +4,10 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getSkillinkPaths, type SkillinkPaths } from '@skillink/shared';
 
-const state = vi.hoisted(() => ({ failWritePath: '' }));
+const state = vi.hoisted(() => ({
+  failWritePath: '',
+  failRemovePath: '',
+}));
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -17,6 +20,14 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         });
       }
       return actual.rename(from, to);
+    },
+    rm: async (target: string, options?: any) => {
+      if (state.failRemovePath && target === state.failRemovePath) {
+        throw Object.assign(new Error('EBUSY: simulated delete failure'), {
+          code: 'EBUSY',
+        });
+      }
+      return actual.rm(target, options);
     },
   };
 });
@@ -51,13 +62,14 @@ async function setup(): Promise<SkillinkPaths> {
 
 afterEach(async () => {
   state.failWritePath = '';
+  state.failRemovePath = '';
   await Promise.all(
     tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
   );
 });
 
 describe('gc failure handling', () => {
-  it('moves collected skill versions back when skill.json cannot be written', async () => {
+  it('deletes content before writing skill.json', async () => {
     const paths = await setup();
     const contentDir = path.join(paths.libraryDir, 'demo', '1.0.0');
 
@@ -69,8 +81,25 @@ describe('gc failure handling', () => {
 
     await expect(
       readFile(path.join(contentDir, 'file.txt'), 'utf8'),
-    ).resolves.toBe('content');
+    ).rejects.toMatchObject({ code: 'ENOENT' });
     const skillFile = await readSkillFile(paths);
     expect(skillFile.skills.demo?.versions['1.0.0']).toBeDefined();
+  });
+
+  it('keeps the catalog entry when content deletion fails', async () => {
+    const paths = await setup();
+    const contentDir = path.join(paths.libraryDir, 'demo', '1.0.0');
+
+    state.failRemovePath = contentDir;
+    await expect(
+      gc(paths, { dryRun: false, maxAgeDays: 0 }),
+    ).rejects.toMatchObject({ code: 'IO_ERROR' });
+    state.failRemovePath = '';
+
+    const skillFile = await readSkillFile(paths);
+    expect(skillFile.skills.demo?.versions['1.0.0']).toBeDefined();
+    await expect(
+      readFile(path.join(contentDir, 'file.txt'), 'utf8'),
+    ).resolves.toBe('content');
   });
 });

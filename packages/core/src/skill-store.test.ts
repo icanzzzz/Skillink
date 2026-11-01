@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -177,7 +177,7 @@ describe('skill file store', () => {
 });
 
 describe('removeSkillVersion', () => {
-  it('moves unreferenced content to trash and updates skill.json', async () => {
+  it('deletes unreferenced content and updates skill.json', async () => {
     const { paths } = await setup();
     await upsertDemo(paths, '1.0.0');
     await upsertDemo(paths, '1.1.0');
@@ -191,7 +191,6 @@ describe('removeSkillVersion', () => {
     const file = await readSkillFile(paths);
     expect(file.skills.demo?.versions['1.0.0']).toBeUndefined();
     expect(file.skills.demo?.versions['1.1.0']).toBeDefined();
-    expect((await readdir(paths.trashDir)).length).toBeGreaterThan(0);
   });
 
   it('removes the skill entry when the last version is removed', async () => {

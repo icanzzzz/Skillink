@@ -1,17 +1,14 @@
 import semver from 'semver';
 import {
   PackageFileSchema,
-  RouteFileSchema,
   SkillinkError,
-  createEmptyPackageFile,
-  createEmptyRouteFile,
   type PackageEntry,
   type PackageFile,
   type PackageVersion,
   type SkillinkPaths,
 } from '@skillink/shared';
-import { readJsonFile, writeJsonAtomic } from './json-store.js';
-import { withHistory } from './history.js';
+import { writeJsonAtomic } from './json-store.js';
+import { readPackageConfig, readRouteConfig } from './config-store.js';
 import { assertSkillContent, readSkillFile } from './skill-store.js';
 import {
   resolvePackageGraph,
@@ -26,11 +23,7 @@ import {
 export async function readPackageFile(
   paths: SkillinkPaths,
 ): Promise<PackageFile> {
-  return readJsonFile(
-    paths.packageFile,
-    PackageFileSchema,
-    createEmptyPackageFile(),
-  );
+  return readPackageConfig(paths);
 }
 
 export async function writePackageFile(
@@ -186,126 +179,9 @@ export async function createPackageVersion(
     await assertSkillContent(input.paths, skill.name, skill.version);
   }
 
-  await withHistory(input.paths, 'create-package-version', async () => {
-    await writePackageFile(input.paths, candidate);
-  });
+  await writePackageFile(input.paths, candidate);
 
   return nextPackageEntry.versions[version]!;
-}
-
-export interface CopyPackageVersionInput {
-  paths: SkillinkPaths;
-  sourceName: string;
-  sourceVersion: string;
-  targetName: string;
-  targetVersion: string;
-  description?: string;
-  skillOverrides?: Record<string, string>;
-  packageOverrides?: Record<string, string>;
-  dropSkills?: string[];
-  dropPackages?: string[];
-}
-
-export async function copyPackageVersion(
-  input: CopyPackageVersionInput,
-): Promise<PackageVersion> {
-  const targetName = assertSafePackageName(input.targetName);
-  const sourceName = assertSafePackageName(input.sourceName);
-  const targetVersion = assertVersion(input.targetVersion);
-
-  const file = await readPackageFile(input.paths);
-  const skillFile = await readSkillFile(input.paths);
-  assertNoCaseInsensitiveCollision(Object.keys(file.packages), targetName, 'package');
-  const sourcePackage = Object.hasOwn(file.packages, sourceName)
-    ? file.packages[sourceName]
-    : undefined;
-
-  if (!sourcePackage) {
-    throw new SkillinkError(
-      'PACKAGE_NOT_FOUND',
-      `Package "${sourceName}" is not defined in package.json.`,
-      { name: sourceName },
-    );
-  }
-
-  const sourceVersion = Object.hasOwn(
-    sourcePackage.versions,
-    input.sourceVersion,
-  )
-    ? sourcePackage.versions[input.sourceVersion]
-    : undefined;
-  if (!sourceVersion) {
-    throw new SkillinkError(
-      'VERSION_NOT_FOUND',
-      `Version "${input.sourceVersion}" of package "${sourceName}" is not defined in package.json.`,
-      { name: sourceName, version: input.sourceVersion },
-    );
-  }
-
-  const targetPackage = file.packages[targetName];
-  if (targetPackage?.versions[targetVersion]) {
-    throw new SkillinkError(
-      'PACKAGE_EXISTS',
-      `Package ${targetName}@${targetVersion} already exists.`,
-      { name: targetName, version: targetVersion },
-    );
-  }
-
-  const packages = { ...sourceVersion.packages };
-  const skills = { ...sourceVersion.skills };
-
-  for (const [name, version] of Object.entries(input.packageOverrides ?? {})) {
-    packages[name] = assertVersion(version);
-  }
-  for (const [name, version] of Object.entries(input.skillOverrides ?? {})) {
-    skills[name] = assertVersion(version);
-  }
-  for (const name of input.dropPackages ?? []) {
-    delete packages[name];
-  }
-  for (const name of input.dropSkills ?? []) {
-    delete skills[name];
-  }
-
-  assertPackageVersionInput({ packages, skills });
-
-  const nextTargetPackage: PackageEntry = targetPackage ?? { versions: {} };
-  const description =
-    input.description ??
-    (targetName === sourceName
-      ? nextTargetPackage.description
-      : sourcePackage.description);
-
-  const nextPackageEntry: PackageEntry = {
-    ...nextTargetPackage,
-    ...(description !== undefined ? { description } : {}),
-    versions: {
-      ...nextTargetPackage.versions,
-      [targetVersion]: packageVersionEntry({ packages, skills }),
-    },
-  };
-
-  const candidate: PackageFile = {
-    ...file,
-    packages: {
-      ...file.packages,
-      [targetName]: nextPackageEntry,
-    },
-  };
-
-  validateAllPackages(candidate, skillFile);
-  const resolution = resolvePackageGraph(candidate, skillFile, [
-    { name: targetName, version: targetVersion },
-  ]);
-  for (const skill of resolution.skills.values()) {
-    await assertSkillContent(input.paths, skill.name, skill.version);
-  }
-
-  await withHistory(input.paths, 'copy-package-version', async () => {
-    await writePackageFile(input.paths, candidate);
-  });
-
-  return nextPackageEntry.versions[targetVersion]!;
 }
 
 export async function setPackageTag(
@@ -355,9 +231,7 @@ export async function setPackageTag(
     },
   };
 
-  await withHistory(paths, 'set-package-tag', async () => {
-    await writePackageFile(paths, file);
-  });
+  await writePackageFile(paths, file);
 }
 
 export function listPackageReverseReferences(
@@ -414,11 +288,7 @@ export async function removePackageVersion(
     );
   }
 
-  const route = await readJsonFile(
-    paths.routeFile,
-    RouteFileSchema,
-    createEmptyRouteFile(),
-  );
+  const route = await readRouteConfig(paths);
   const routeReference = route.targets.find(
     (target) =>
       Object.hasOwn(target.packages, safeName) &&
@@ -468,7 +338,5 @@ export async function removePackageVersion(
   const candidate: PackageFile = { ...file, packages };
   validateAllPackages(candidate, skillFile);
 
-  await withHistory(paths, 'remove-package-version', async () => {
-    await writePackageFile(paths, candidate);
-  });
+  await writePackageFile(paths, candidate);
 }

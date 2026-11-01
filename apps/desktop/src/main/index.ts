@@ -1,8 +1,40 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Menu } from 'electron';
 import path from 'node:path';
+import { getSkillinkPaths } from '@skillink/shared';
+import {
+  bundledLanguagePackPath,
+  syncBundledLanguagePack,
+} from './bundled-language.js';
+import { createCliAdapter } from './cli-adapter.js';
+import { isDevToolsShortcut } from './devtools.js';
 import { registerIpcHandlers } from './ipc.js';
 
 let mainWindow: BrowserWindow | null = null;
+
+async function refreshBundledLanguagePack(): Promise<void> {
+  const cli = createCliAdapter();
+  const paths = getSkillinkPaths();
+
+  try {
+    await syncBundledLanguagePack({
+      bundledPath: bundledLanguagePackPath({
+        isPackaged: app.isPackaged,
+        appPath: app.getAppPath(),
+        resourcesPath: process.resourcesPath,
+      }),
+      installedPath: path.join(paths.localesDir, 'zh-cn.json'),
+      install: (sourcePath) =>
+        cli.invoke(['locale', 'install', sourcePath, '--force']),
+      log: (message) => console.log(message),
+    });
+  } catch (error) {
+    console.warn(
+      `Unable to refresh bundled language pack: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+}
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -14,7 +46,7 @@ function createWindow(): void {
     ...(app.isPackaged
       ? {}
       : { icon: path.join(app.getAppPath(), 'build', 'icon.png') }),
-    backgroundColor: '#0f1115',
+    backgroundColor: '#f3ede1',
     webPreferences: {
       preload: path.join(app.getAppPath(), 'out', 'preload', 'index.cjs'),
       contextIsolation: true,
@@ -29,6 +61,17 @@ function createWindow(): void {
       mainWindow = null;
     }
   });
+
+  if (!app.isPackaged) {
+    window.webContents.on('before-input-event', (event, input) => {
+      if (!isDevToolsShortcut(input)) {
+        return;
+      }
+
+      event.preventDefault();
+      window.webContents.toggleDevTools();
+    });
+  }
 
   if (process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -52,7 +95,9 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  Menu.setApplicationMenu(null);
+  await refreshBundledLanguagePack();
   registerIpcHandlers(() => mainWindow);
   createWindow();
 

@@ -1,49 +1,28 @@
-import { mkdir, rename, stat } from 'node:fs/promises';
-import path from 'node:path';
+import { rm, stat } from 'node:fs/promises';
 import {
   SkillinkError,
   getSkillDir,
+  type GcCandidate,
+  type GcPlan,
+  type GcReport,
   type SkillinkPaths,
 } from '@skillink/shared';
 import {
-  createTrashDirectory,
   readSkillFile,
   removeEmptySkillParent,
   writeSkillFile,
 } from './skill-store.js';
 import { readPackageFile } from './package-store.js';
 import { readRouteFile } from './route.js';
-import { resolvePackageGraph } from './package-graph.js';
+import { resolveTargetGraph } from './target-graph.js';
 import { isPathInside } from './path-policy.js';
-import { withHistory } from './history.js';
 import { withFsRetry } from './fs-retry.js';
+import { isNodeError } from './node-error.js';
 
 export interface GcOptions {
   dryRun?: boolean;
   maxAgeDays?: number;
   keepTagged?: boolean;
-}
-
-export interface GcCandidate {
-  name: string;
-  version: string;
-  path: string;
-  size: number;
-  modifiedAt: string;
-}
-
-export interface GcPlan {
-  dryRun: boolean;
-  candidates: GcCandidate[];
-  freedBytes: number;
-}
-
-export interface GcReport extends GcPlan {
-  removed: GcCandidate[];
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
 }
 
 async function directoryStat(
@@ -71,16 +50,9 @@ async function collectCandidates(
   const referenced = new Set<string>();
 
   for (const target of route.targets) {
-    const roots = Object.entries(target.packages).map(([name, lock]) => ({
-      name,
-      version: lock.resolved,
-    }));
-
-    if (roots.length === 0) {
-      continue;
-    }
-
-    const resolution = resolvePackageGraph(packageFile, skillFile, roots);
+    const resolution = resolveTargetGraph(packageFile, skillFile, target, {
+      includeDisabledPackages: true,
+    });
     for (const skill of resolution.skills.values()) {
       referenced.add(`${skill.name}@${skill.version}`);
     }
@@ -160,83 +132,91 @@ export async function gc(
     };
   }
 
+  const skillFile = await readSkillFile(paths);
   const removed: GcCandidate[] = [];
+  const failed: Array<{
+    name: string;
+    version: string;
+    path: string;
+    message: string;
+  }> = [];
 
-  await withHistory(paths, 'gc', async () => {
-    const skillFile = await readSkillFile(paths);
-    const trashDirectory = await createTrashDirectory(paths);
-    const moved: Array<{ source: string; destination: string }> = [];
-    const removedSkillNames = new Set<string>();
+  for (const candidate of candidates) {
+    const skillEntry = skillFile.skills[candidate.name];
+    if (!skillEntry?.versions[candidate.version]) {
+      continue;
+    }
+
+    if (!isPathInside(candidate.path, paths.libraryDir)) {
+      throw new SkillinkError(
+        'UNSAFE_PATH',
+        `GC candidate escapes the skill library: ${candidate.path}`,
+        { name: candidate.name, version: candidate.version },
+      );
+    }
 
     try {
-      for (const candidate of candidates) {
-        const skillEntry = skillFile.skills[candidate.name];
-        if (!skillEntry?.versions[candidate.version]) {
-          continue;
-        }
-
-        if (
-          !isPathInside(candidate.path, paths.libraryDir) &&
-          candidate.path !== paths.libraryDir
-        ) {
-          throw new SkillinkError(
-            'UNSAFE_PATH',
-            `GC candidate escapes the skill library: ${candidate.path}`,
-            { name: candidate.name, version: candidate.version },
-          );
-        }
-
-        const destination = path.join(
-          trashDirectory,
-          candidate.name,
-          candidate.version,
-        );
-        await mkdir(path.dirname(destination), { recursive: true });
-        try {
-          await withFsRetry(() => rename(candidate.path, destination));
-          moved.push({ source: candidate.path, destination });
-        } catch (error) {
-          if (!(isNodeError(error) && error.code === 'ENOENT')) {
-            throw error;
-          }
-        }
-
-        const remainingVersions = { ...skillEntry.versions };
-        delete remainingVersions[candidate.version];
-
-        if (Object.keys(remainingVersions).length === 0) {
-          delete skillFile.skills[candidate.name];
-          removedSkillNames.add(candidate.name);
-        } else {
-          const tags = Object.fromEntries(
-            Object.entries(skillEntry.tags ?? {}).filter(
-              ([, taggedVersion]) => taggedVersion !== candidate.version,
-            ),
-          );
-          skillFile.skills[candidate.name] = {
-            ...skillEntry,
-            versions: remainingVersions,
-            ...(Object.keys(tags).length > 0 ? { tags } : { tags: undefined }),
-          };
-        }
-
-        removed.push(candidate);
-      }
-
-      await writeSkillFile(paths, skillFile);
-      for (const name of removedSkillNames) {
-        await removeEmptySkillParent(paths, name);
-      }
+      await withFsRetry(() =>
+        rm(candidate.path, { recursive: true, force: true }),
+      );
+      removed.push(candidate);
     } catch (error) {
-      for (const item of moved.reverse()) {
-        await mkdir(path.dirname(item.source), { recursive: true });
-        await withFsRetry(() =>
-          rename(item.destination, item.source),
-        ).catch(() => undefined);
-      }
-      throw error;
+      failed.push({
+        name: candidate.name,
+        version: candidate.version,
+        path: candidate.path,
+        message: error instanceof Error ? error.message : String(error),
+      });
     }
-  });
+  }
+
+  if (removed.length > 0) {
+    const nextSkills = { ...skillFile.skills };
+    const removedSkillNames = new Set<string>();
+
+    for (const candidate of removed) {
+      const skillEntry = nextSkills[candidate.name];
+      if (!skillEntry?.versions[candidate.version]) {
+        continue;
+      }
+
+      const remainingVersions = { ...skillEntry.versions };
+      delete remainingVersions[candidate.version];
+
+      if (Object.keys(remainingVersions).length === 0) {
+        delete nextSkills[candidate.name];
+        removedSkillNames.add(candidate.name);
+      } else {
+        const tags = Object.fromEntries(
+          Object.entries(skillEntry.tags ?? {}).filter(
+            ([, taggedVersion]) => taggedVersion !== candidate.version,
+          ),
+        );
+        nextSkills[candidate.name] = {
+          ...skillEntry,
+          versions: remainingVersions,
+          ...(Object.keys(tags).length > 0 ? { tags } : { tags: undefined }),
+        };
+      }
+    }
+
+    await writeSkillFile(paths, {
+      ...skillFile,
+      skills: nextSkills,
+    });
+
+    for (const name of removedSkillNames) {
+      await removeEmptySkillParent(paths, name);
+    }
+  }
+
+  if (failed.length > 0) {
+    throw new SkillinkError(
+      'IO_ERROR',
+      `Failed to delete ${failed.length} skill version(s).`,
+      { failed },
+    );
+  }
 
   return {
     dryRun: false,

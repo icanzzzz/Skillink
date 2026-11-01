@@ -1,6 +1,6 @@
-import path from 'node:path';
 import {
   SkillinkError,
+  deriveTargetIdDefault,
   expandPath,
   type SkillinkPaths,
   type TargetMode,
@@ -20,16 +20,7 @@ import {
   validateTargetRoute,
   writeRouteFile,
 } from './route.js';
-import { withHistory } from './history.js';
-
-function slugify(value: string): string {
-  const slug = value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-
-  return slug || 'target';
-}
+import { gcTargetEntries, resolveTargetSkillNames } from './target-gc.js';
 
 export interface AddTargetInput {
   paths: SkillinkPaths;
@@ -46,14 +37,18 @@ export async function addTarget(input: AddTargetInput): Promise<TargetRoute> {
     input.paths,
   );
   const id = assertSafePackageName(
-    input.id?.trim() || slugify(input.label ?? path.basename(targetPath)),
+    deriveTargetIdDefault({
+      id: input.id,
+      label: input.label,
+      path: targetPath,
+    }),
   );
   const mode = input.mode ?? 'link';
 
-  if (mode !== 'link') {
+  if (mode !== 'link' && mode !== 'copy') {
     throw new SkillinkError(
-      'COPY_MODE_UNSUPPORTED',
-      'Copy mode is not implemented yet; use mode "link" instead.',
+      'ROUTE_INVALID',
+      `Unsupported target mode "${String(mode)}".`,
       { mode },
     );
   }
@@ -94,10 +89,8 @@ export async function addTarget(input: AddTargetInput): Promise<TargetRoute> {
     packages: {},
   };
 
-  await withHistory(input.paths, 'add-target', async () => {
-    route.targets.push(target);
-    await writeRouteFile(input.paths, route);
-  });
+  route.targets.push(target);
+  await writeRouteFile(input.paths, route);
 
   return target;
 }
@@ -118,13 +111,20 @@ export async function setTargetEnabled(
     );
   }
 
+  const wasEnabled = target.enabled;
+  const skillNames =
+    !enabled && wasEnabled
+      ? await resolveTargetSkillNames({ paths, target }).catch(() => [])
+      : [];
+
   target.enabled = enabled;
   if (enabled) {
     await validateTargetRoute(paths, target);
   }
-  await withHistory(paths, enabled ? 'enable-target' : 'disable-target', async () => {
-    await writeRouteFile(paths, route);
-  });
+  if (skillNames.length > 0) {
+    await gcTargetEntries({ paths, target, skillNames });
+  }
+  await writeRouteFile(paths, route);
 
   return target;
 }
@@ -146,10 +146,19 @@ export async function removeTarget(input: RemoveTargetInput): Promise<TargetRout
     );
   }
 
-  const [removed] = route.targets.splice(index, 1);
-  await withHistory(input.paths, 'remove-target', async () => {
-    await writeRouteFile(input.paths, route);
+  const removed = route.targets[index]!;
+  const skillNames = await resolveTargetSkillNames({
+    paths: input.paths,
+    target: removed,
   });
 
-  return removed!;
+  route.targets.splice(index, 1);
+  await gcTargetEntries({
+    paths: input.paths,
+    target: removed,
+    skillNames,
+  });
+  await writeRouteFile(input.paths, route);
+
+  return removed;
 }

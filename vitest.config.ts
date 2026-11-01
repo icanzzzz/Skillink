@@ -8,6 +8,8 @@ export default defineConfig({
     alias: {
       '@skillink/shared': `${root}packages/shared/src/index.ts`,
       '@skillink/core': `${root}packages/core/src/index.ts`,
+      '@skillink/cli/run': `${root}apps/cli/src/run.ts`,
+      '@skillink/cli': `${root}apps/cli/src/run.ts`,
     },
   },
   test: {

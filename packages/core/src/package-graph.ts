@@ -173,6 +173,46 @@ export function resolvePackageGraph(
   return { packages: resolvedPackages, skills: resolvedSkills };
 }
 
+export function collectPackageNodes(
+  packages: PackageFile,
+  roots: PackageRef[],
+): Map<string, ResolvedPackageNode> {
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const path: string[] = [];
+  const nodes = new Map<string, ResolvedPackageNode>();
+
+  function visit(ref: PackageRef): void {
+    const id = nodeId(ref);
+
+    if (visiting.has(id)) {
+      throw cycleError(path, id);
+    }
+    if (visited.has(id)) {
+      return;
+    }
+
+    visiting.add(id);
+    path.push(id);
+    const entry = getPackageVersion(packages, ref);
+
+    for (const [packageName, packageVersion] of Object.entries(entry.packages)) {
+      visit({ name: packageName, version: packageVersion });
+    }
+
+    path.pop();
+    visiting.delete(id);
+    visited.add(id);
+    nodes.set(id, { name: ref.name, version: ref.version, entry });
+  }
+
+  for (const root of roots) {
+    visit(root);
+  }
+
+  return nodes;
+}
+
 export function computePackageIntegrity(
   packages: PackageFile,
   roots: PackageRef[],

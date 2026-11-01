@@ -1,8 +1,8 @@
 import { lstat, readlink, symlink, unlink } from 'node:fs/promises';
 import path from 'node:path';
-import { SkillinkError, type SkillinkPaths } from '@skillink/shared';
+import { SkillinkError } from '@skillink/shared';
 import { withFsRetry } from './fs-retry.js';
-import { isPathInside, isSamePath } from './path-policy.js';
+import { isNodeError } from './node-error.js';
 
 export type PathInspection =
   | { kind: 'missing' }
@@ -10,10 +10,6 @@ export type PathInspection =
   | { kind: 'directory' }
   | { kind: 'file' }
   | { kind: 'other' };
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
-}
 
 export async function resolveLinkTarget(linkPath: string): Promise<string> {
   const raw = await readlink(linkPath);
@@ -38,18 +34,6 @@ export async function inspectPath(targetPath: string): Promise<PathInspection> {
       return { kind: 'missing' };
     }
     throw error;
-  }
-}
-
-export async function isManagedLink(
-  linkPath: string,
-  paths: SkillinkPaths,
-): Promise<boolean> {
-  try {
-    const target = await resolveLinkTarget(linkPath);
-    return isSamePath(target, paths.libraryDir) || isPathInside(target, paths.libraryDir);
-  } catch {
-    return false;
   }
 }
 

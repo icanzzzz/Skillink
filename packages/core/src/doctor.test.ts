@@ -14,7 +14,7 @@ import {
   type SkillinkPaths,
 } from '@skillink/shared';
 import { apply } from './apply.js';
-import { doctor } from './doctor.js';
+import { doctor } from './doctor/index.js';
 import { importSkill } from './import-skill.js';
 import { computePackageIntegrity } from './package-graph.js';
 import {
@@ -233,22 +233,19 @@ describe('doctor', () => {
     ).toEqual([]);
   });
 
-  it('reports a copy target that cannot be projected', async () => {
+  it('does not report a copy target as unsupported', async () => {
     const { paths } = await setup();
     const route = await readRouteFile(paths);
     route.targets[0]!.mode = 'copy';
     await writeRouteFile(paths, route);
+    await apply({ paths });
 
     const report = await doctor({ paths });
 
-    expect(report.issues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'UNSUPPORTED_MODE',
-          targetId: 'project-a',
-        }),
-      ]),
-    );
+    expect(
+      report.issues.filter((issue) => issue.code === 'UNSUPPORTED_MODE'),
+    ).toEqual([]);
+    expect(report.ok).toBe(true);
   });
 
   it('reports names that collide case-insensitively', async () => {
@@ -463,6 +460,80 @@ describe('doctor', () => {
           targetId: 'project-a',
         }),
       ]),
+    );
+  });
+
+  it('ignores the skills repository metadata', async () => {
+    const { paths } = await setup();
+    await mkdir(path.join(paths.libraryDir, '.git', 'objects'), {
+      recursive: true,
+    });
+    await writeFile(
+      path.join(paths.libraryDir, '.gitattributes'),
+      '* -text\n',
+      'utf8',
+    );
+
+    const report = await doctor({ paths });
+
+    expect(report.issues.some((issue) => issue.name === '.git')).toBe(false);
+    expect(report.issues.some((issue) => issue.code === 'ORPHAN_CONTENT')).toBe(
+      false,
+    );
+  });
+
+  it('reports every stale route lock', async () => {
+    const { paths } = await setup();
+    await createPackageVersion({
+      paths,
+      name: 'docs',
+      version: '1.0.0',
+      skills: { pdf: '1.0.0' },
+    });
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'docs',
+      requested: '1.0.0',
+    });
+    const route = await readRouteFile(paths);
+    route.targets[0]!.packages.frontend!.integrity = 'sha256-wrong';
+    route.targets[0]!.packages.docs!.integrity = 'sha256-wrong';
+    await writeRouteFile(paths, route);
+
+    const report = await doctor({ paths });
+    const stale = report.issues.filter(
+      (issue) => issue.code === 'PACKAGE_INTEGRITY_MISMATCH',
+    );
+
+    expect(stale.map((issue) => issue.name).sort()).toEqual([
+      'docs',
+      'frontend',
+    ]);
+  });
+
+  it('uses a provided status report instead of rescanning targets', async () => {
+    const { paths } = await setup();
+
+    const report = await doctor({
+      paths,
+      statusReport: {
+        healthy: false,
+        entries: [
+          {
+            targetId: 'project-a',
+            targetPath: paths.home,
+            name: 'fake-skill',
+            version: '1.0.0',
+            state: 'missing',
+            path: paths.home,
+          },
+        ],
+      },
+    });
+
+    expect(report.issues).toContainEqual(
+      expect.objectContaining({ code: 'LINK_ISSUE', name: 'fake-skill' }),
     );
   });
 });

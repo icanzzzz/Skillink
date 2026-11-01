@@ -15,6 +15,8 @@ import {
   expandPath,
   getSkillDir,
   getSkillinkPaths,
+  parseSkillDirectoryName,
+  type ImportSkillResult,
 } from '@skillink/shared';
 import {
   DEFAULT_IMPORT_LIMITS,
@@ -43,16 +45,6 @@ export interface ImportSkillInput {
   version?: string;
   home?: string;
   limits?: ScanFolderOptions;
-}
-
-export interface ImportSkillResult {
-  name: string;
-  version: string;
-  integrity: string;
-  path: string;
-  fileCount: number;
-  size: number;
-  created: boolean;
 }
 
 function sourceError(message: string, sourceDir: string): SkillinkError {
@@ -96,9 +88,15 @@ export async function importSkill(
   };
   const description = frontmatter?.description;
 
-  const name = assertSafePackageName(input.name ?? path.basename(sourceDir));
+  const folderName = path.basename(sourceDir);
+  const folderSpec = parseSkillDirectoryName(folderName);
+  const name = assertSafePackageName(
+    input.name?.trim() || folderSpec?.name || folderName,
+  );
   const version =
-    normalizeVersion(input.version) ?? createAutoVersion(scan.manifestHash);
+    normalizeVersion(input.version) ??
+    folderSpec?.version ??
+    createAutoVersion(scan.manifestHash);
   const skillDir = getSkillDir(paths, name, version);
   const skillFile = await readSkillFile(paths);
   assertNoCaseInsensitiveCollision(Object.keys(skillFile.skills), name, 'skill');

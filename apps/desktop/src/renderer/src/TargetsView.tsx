@@ -1,10 +1,34 @@
 import { useState, type FormEvent } from 'react';
-import type {
-  ApplyReport,
-  StatusEntry,
-  TargetSkillSummary,
-} from '@skillink/core';
-import type { TargetMode, TargetRoute } from '@skillink/shared';
+import {
+  deriveTargetIdDefault,
+  type ApplyReport,
+  type StatusEntry,
+  type TargetMode,
+  type TargetRoute,
+  type TargetSkillSummary,
+  type Translator,
+} from '@skillink/shared';
+import { useConfirm } from './Feedback.js';
+import { useI18n } from './i18n.js';
+import { Modal } from './Modal.js';
+import {
+  EMPTY_ASSIGNMENT_DRAFT,
+  createRouteAddInput,
+  createRouteRemoveInput,
+  setAssignmentName,
+  setAssignmentVersion,
+  toggleAssignmentTarget,
+  type AssignmentDraft,
+  type RouteAddFormInput,
+  type RouteEnableFormInput,
+  type RouteRemoveFormInput,
+} from './targetAssignment.js';
+
+export type {
+  RouteAddFormInput,
+  RouteEnableFormInput,
+  RouteRemoveFormInput,
+} from './targetAssignment.js';
 
 export interface AddTargetFormInput {
   path: string;
@@ -13,11 +37,9 @@ export interface AddTargetFormInput {
   mode?: TargetMode;
 }
 
-export interface RouteAddFormInput {
-  targetId: string;
-  name: string;
-  requested: string;
-}
+export type AddTargetSubmit = (
+  input: AddTargetFormInput,
+) => Promise<boolean> | boolean | void;
 
 export interface TargetRemoveFormInput {
   id: string;
@@ -28,21 +50,6 @@ export interface TargetEnableFormInput {
   enabled: boolean;
 }
 
-export interface RouteRemoveFormInput {
-  targetId: string;
-  name: string;
-}
-
-export interface RouteEnableFormInput {
-  targetId: string;
-  name: string;
-  enabled: boolean;
-}
-
-export interface ApplyOptionsInput {
-  prune?: boolean;
-}
-
 export interface TargetsViewProps {
   targets: TargetRoute[];
   statusEntries?: StatusEntry[];
@@ -50,26 +57,186 @@ export interface TargetsViewProps {
   applyReport?: ApplyReport | null;
   busy?: boolean;
   onBrowse?: () => Promise<string | null> | string | null;
-  onAddTarget?: (input: AddTargetFormInput) => void;
+  onAddTarget?: AddTargetSubmit;
   onRemoveTarget?: (input: TargetRemoveFormInput) => void;
   onTargetEnable?: (input: TargetEnableFormInput) => void;
-  onRouteAdd?: (input: RouteAddFormInput) => void;
+  onRouteAdd?: (
+    input: RouteAddFormInput,
+  ) => Promise<boolean> | boolean | void;
   onRemoveRoute?: (input: RouteRemoveFormInput) => void;
   onRouteEnable?: (input: RouteEnableFormInput) => void;
-  onApply?: (options?: ApplyOptionsInput) => void;
-  onPreview?: (options?: ApplyOptionsInput) => void;
+  onApply?: () => void;
+  onPreview?: () => void;
 }
 
-function packageCountLabel(count: number): string {
-  return `${count} package${count === 1 ? '' : 's'}`;
+function statusLabel(state: string, t: Translator['t']): string {
+  if (state === '—') {
+    return state;
+  }
+  return t(`status.${state.replace(/-/g, '_')}`, {}, state);
 }
 
-function skillCountLabel(count: number): string {
-  return `${count} skill${count === 1 ? '' : 's'}`;
+function operationKindLabel(kind: string, t: Translator['t']): string {
+  return t(`apply.kind.${kind.replace(/-/g, '_')}`, {}, kind);
 }
 
-function confirmRemoval(message: string): boolean {
-  return typeof window === 'undefined' ? true : window.confirm(message);
+export function invokeTargetsAction(action?: () => void): void {
+  action?.();
+}
+
+export interface AddTargetFormProps {
+  busy?: boolean;
+  onBrowse?: () => Promise<string | null> | string | null;
+  onSubmit?: (input: AddTargetFormInput) => void;
+  onCancel?: () => void;
+}
+
+export function AddTargetForm({
+  busy = false,
+  onBrowse,
+  onSubmit,
+  onCancel,
+}: AddTargetFormProps) {
+  const { t } = useI18n();
+  const [targetPath, setTargetPath] = useState('');
+  const [targetId, setTargetId] = useState('');
+  const [targetLabel, setTargetLabel] = useState('');
+  const [mode, setMode] = useState<TargetMode>('link');
+  const hasTargetIdentity =
+    targetPath.trim() !== '' || targetLabel.trim() !== '';
+  const targetIdPlaceholder = hasTargetIdentity
+    ? deriveTargetIdDefault({ path: targetPath, label: targetLabel })
+    : t('common.optional');
+
+  async function browse(): Promise<void> {
+    const selected = await onBrowse?.();
+    if (typeof selected === 'string') {
+      setTargetPath(selected);
+    }
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    if (!onSubmit || targetPath.trim() === '') {
+      return;
+    }
+
+    onSubmit({
+      path: targetPath.trim(),
+      id: targetId.trim() || undefined,
+      label: targetLabel.trim() || undefined,
+      mode,
+    });
+  }
+
+  return (
+    <form className="form-grid" onSubmit={submit}>
+      <label className="field field-wide">
+        <span>{t('targets.form.directoryPath')}</span>
+        <div className="input-row">
+          <input
+            value={targetPath}
+            onChange={(event) => setTargetPath(event.target.value)}
+            placeholder={t('common.required')}
+            required
+          />
+          <button
+            className="secondary"
+            type="button"
+            onClick={() => void browse()}
+            disabled={busy || !onBrowse}
+          >
+            {t('common.browse')}
+          </button>
+        </div>
+      </label>
+      <label className="field">
+        <span>{t('targets.form.targetId')}</span>
+        <input
+          value={targetId}
+          onChange={(event) => setTargetId(event.target.value)}
+          placeholder={targetIdPlaceholder}
+        />
+      </label>
+      <label className="field">
+        <span>{t('targets.form.label')}</span>
+        <input
+          value={targetLabel}
+          onChange={(event) => setTargetLabel(event.target.value)}
+          placeholder={t('common.optional')}
+        />
+      </label>
+      <label className="field">
+        <span>{t('targets.form.mode')}</span>
+        <select
+          value={mode}
+          onChange={(event) => setMode(event.target.value as TargetMode)}
+        >
+          <option value="link">{t('targets.mode.link')}</option>
+          <option value="copy">{t('targets.mode.copy')}</option>
+        </select>
+      </label>
+      <div className="form-actions">
+        <button
+          className="secondary"
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+        >
+          {t('common.cancel')}
+        </button>
+        <button
+          className="primary"
+          type="submit"
+          disabled={busy || !onSubmit}
+        >
+          {t('targets.form.addTarget')}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export interface AddTargetDialogProps {
+  open: boolean;
+  busy?: boolean;
+  onClose: () => void;
+  onBrowse?: () => Promise<string | null> | string | null;
+  onSubmit?: AddTargetSubmit;
+}
+
+export function AddTargetDialog({
+  open,
+  busy = false,
+  onClose,
+  onBrowse,
+  onSubmit,
+}: AddTargetDialogProps) {
+  const { t } = useI18n();
+
+  async function submit(input: AddTargetFormInput): Promise<void> {
+    const result = await onSubmit?.(input);
+    if (result !== false) {
+      onClose();
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      title={t('targets.form.addTarget')}
+      eyebrow={t('targets.form.targetEyebrow')}
+      closeLabel={t('common.close')}
+      onClose={onClose}
+    >
+      <AddTargetForm
+        busy={busy}
+        onBrowse={onBrowse}
+        onCancel={onClose}
+        onSubmit={(input) => void submit(input)}
+      />
+    </Modal>
+  );
 }
 
 export function TargetsView({
@@ -88,57 +255,116 @@ export function TargetsView({
   onApply,
   onPreview,
 }: TargetsViewProps) {
-  const [targetPath, setTargetPath] = useState('');
-  const [targetId, setTargetId] = useState('');
-  const [targetLabel, setTargetLabel] = useState('');
-  const [mode, setMode] = useState<TargetMode>('link');
-  const [routeTarget, setRouteTarget] = useState(targets[0]?.id ?? '');
-  const [routeName, setRouteName] = useState('');
-  const [routeVersion, setRouteVersion] = useState('');
-  const [prune, setPrune] = useState(false);
+  const { t } = useI18n();
+  const confirm = useConfirm();
+  const [addTargetOpen, setAddTargetOpen] = useState(false);
+  const [assignment, setAssignment] =
+    useState<AssignmentDraft>(EMPTY_ASSIGNMENT_DRAFT);
 
-  async function browse(): Promise<void> {
-    const selected = await onBrowse?.();
-    if (typeof selected === 'string') {
-      setTargetPath(selected);
-    }
+  function beginAssignment(targetIdValue: string): void {
+    setAssignment((current) =>
+      toggleAssignmentTarget(current, targetIdValue),
+    );
   }
 
-  function submitTarget(event: FormEvent<HTMLFormElement>): void {
+  async function submitRoute(
+    event: FormEvent<HTMLFormElement>,
+    targetIdValue: string,
+  ): Promise<void> {
     event.preventDefault();
-    if (!onAddTarget || targetPath.trim() === '') {
+    const input = createRouteAddInput(assignment, targetIdValue);
+    if (!onRouteAdd || !input) {
       return;
     }
 
-    onAddTarget({
-      path: targetPath.trim(),
-      id: targetId.trim() || undefined,
-      label: targetLabel.trim() || undefined,
-      mode,
-    });
-    setTargetPath('');
-    setTargetId('');
-    setTargetLabel('');
+    const result = await onRouteAdd(input);
+    if (result !== false) {
+      setAssignment(EMPTY_ASSIGNMENT_DRAFT);
+    }
   }
 
-  function submitRoute(event: FormEvent<HTMLFormElement>): void {
-    event.preventDefault();
-    if (
-      !onRouteAdd ||
-      routeTarget === '' ||
-      routeName.trim() === '' ||
-      routeVersion.trim() === ''
-    ) {
-      return;
+  async function toggleTarget(target: TargetRoute): Promise<void> {
+    if (target.enabled) {
+      const confirmed = await confirm({
+        title: t('targets.actions.disableTarget'),
+        message: t('targets.confirm.disableTarget', {
+          name: target.label ?? target.id,
+        }),
+        confirmLabel: t('targets.actions.disableTarget'),
+        cancelLabel: t('common.cancel'),
+        tone: 'danger',
+      });
+      if (!confirmed) {
+        return;
+      }
     }
 
-    onRouteAdd({
-      targetId: routeTarget,
-      name: routeName.trim(),
-      requested: routeVersion.trim(),
+    onTargetEnable?.({
+      id: target.id,
+      enabled: !target.enabled,
     });
-    setRouteName('');
-    setRouteVersion('');
+  }
+
+  async function removeTarget(target: TargetRoute): Promise<void> {
+    const confirmed = await confirm({
+      title: t('targets.actions.removeTarget'),
+      message: t('targets.confirm.removeTarget', {
+        name: target.label ?? target.id,
+      }),
+      confirmLabel: t('targets.actions.removeTarget'),
+      cancelLabel: t('common.cancel'),
+      tone: 'danger',
+    });
+    if (confirmed) {
+      onRemoveTarget?.({ id: target.id });
+    }
+  }
+
+  async function toggleRoute(
+    target: TargetRoute,
+    name: string,
+    enabled: boolean | undefined,
+  ): Promise<void> {
+    if (enabled !== false) {
+      const confirmed = await confirm({
+        title: t('targets.actions.disableRoute'),
+        message: t('targets.confirm.disableRoute', {
+          name,
+          target: target.label ?? target.id,
+        }),
+        confirmLabel: t('targets.actions.disableRoute'),
+        cancelLabel: t('common.cancel'),
+        tone: 'danger',
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    onRouteEnable?.({
+      targetId: target.id,
+      name,
+      enabled: enabled === false,
+    });
+  }
+
+  async function removeRoute(
+    target: TargetRoute,
+    name: string,
+  ): Promise<void> {
+    const confirmed = await confirm({
+      title: t('targets.actions.removeRoute'),
+      message: t('targets.confirm.removeRoute', {
+        name,
+        target: target.label ?? target.id,
+      }),
+      confirmLabel: t('targets.actions.removeRoute'),
+      cancelLabel: t('common.cancel'),
+      tone: 'danger',
+    });
+    if (confirmed) {
+      onRemoveRoute?.(createRouteRemoveInput(target.id, name));
+    }
   }
 
   const statusByTarget = new Map<string, StatusEntry[]>();
@@ -150,13 +376,6 @@ export function TargetsView({
 
   const skillsByTarget = new Map(
     targetSkills.map((summary) => [summary.targetId, summary]),
-  );
-  const assignments = targets.flatMap((target) =>
-    Object.entries(target.packages).map(([name, lock]) => ({
-      target,
-      name,
-      lock,
-    })),
   );
 
   function targetStatus(targetIdValue: string): string {
@@ -175,172 +394,218 @@ export function TargetsView({
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">ROUTES</p>
-            <h2>Target directories</h2>
+            <p className="eyebrow">{t('targets.routes.eyebrow')}</p>
+            <h2>{t('targets.routes.title')}</h2>
           </div>
-          <div className="row-actions">
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={prune}
-                onChange={(event) => setPrune(event.target.checked)}
-                disabled={busy}
-              />
-              Prune
-            </label>
+          <div className="panel-heading-tools">
+            <span className="count">{targets.length}</span>
             <button
               className="secondary"
               type="button"
-              onClick={() => onPreview?.({ prune })}
+              onClick={() => setAddTargetOpen(true)}
+              disabled={busy || !onAddTarget}
+            >
+              {t('targets.form.addTarget')}
+            </button>
+            <button
+              className="secondary"
+              type="button"
+              onClick={() => invokeTargetsAction(onPreview)}
               disabled={busy || !onPreview}
             >
-              Preview apply
+              {t('targets.previewApply')}
             </button>
             <button
               className="primary"
               type="button"
-              onClick={() => onApply?.({ prune })}
+              onClick={() => invokeTargetsAction(onApply)}
               disabled={busy || !onApply}
             >
-              Apply routes
+              {t('app.actions.applyRoutes')}
             </button>
           </div>
         </div>
 
         {targets.length === 0 ? (
-          <p className="empty">
-            No targets yet. Choose a directory that should directly contain skill
-            folders.
-          </p>
+          <p className="empty">{t('targets.routes.empty')}</p>
         ) : (
-          <div className="table targets-table">
-            <div className="table-row table-head">
-              <span>Target</span>
-              <span>Path</span>
-              <span>Mode</span>
-              <span>Packages</span>
-              <span>Status</span>
-              <span>Actions</span>
-            </div>
+          <div className="target-grid">
             {targets.map((target) => {
-              const count = Object.keys(target.packages).length;
+              const packageEntries = Object.entries(target.packages);
+              const count = packageEntries.length;
               const resolved = skillsByTarget.get(target.id);
+              const assigning = assignment.targetId === target.id;
+              const state = targetStatus(target.id);
               return (
-                <div className="table-row" key={target.id}>
-                  <span>
-                    <strong>{target.label ?? target.id}</strong>
-                    <small>{target.id}</small>
-                  </span>
-                  <span className="path-value">{target.path}</span>
-                  <span>{target.mode}</span>
-                  <span>
-                    {packageCountLabel(count)}
-                    {resolved && !resolved.error
-                      ? ` · ${skillCountLabel(resolved.skills.length)}`
-                      : ''}
-                    {resolved?.error ? ' · unresolved' : ''}
-                  </span>
-                  <span>{targetStatus(target.id)}</span>
-                  <span className="row-actions">
+                <article
+                  className="target-card"
+                  data-target-id={target.id}
+                  key={target.id}
+                >
+                  <div className="target-card-heading">
+                    <div className="target-card-title">
+                      <strong>{target.label ?? target.id}</strong>
+                      <small>{target.id}</small>
+                    </div>
+                    <span className="target-card-status" data-state={state}>
+                      {statusLabel(state, t)}
+                    </span>
+                  </div>
+
+                  <p className="path-value target-card-path">
+                    {target.path}
+                  </p>
+
+                  <div className="target-card-meta">
+                    <span className="target-chip">
+                      {t(`targets.mode.${target.mode}`, {}, target.mode)}
+                    </span>
+                    <span className="target-chip">
+                      {t('targets.counts.packages', { count })}
+                    </span>
+                    {resolved && !resolved.error ? (
+                      <span className="target-chip">
+                        {t('targets.counts.skills', {
+                          count: resolved.skills.length,
+                        })}
+                      </span>
+                    ) : null}
+                    {resolved?.error ? (
+                      <span className="target-chip target-chip-warn">
+                        {t('status.unresolved')}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="target-packages">
+                    {packageEntries.length === 0 ? (
+                      <p className="target-package-empty">
+                        {t('targets.packages.empty')}
+                      </p>
+                    ) : (
+                      packageEntries.map(([name, lock]) => (
+                        <div className="target-package-row" key={name}>
+                          <span className="target-package-name">
+                            <code>{name}</code>
+                            <small>@{lock.resolved}</small>
+                          </span>
+                          <span className="target-package-state">
+                            {lock.enabled === false
+                              ? t('status.disabled')
+                              : t('status.enabled')}
+                          </span>
+                          <span className="target-package-actions row-actions">
+                            <button
+                              className="secondary"
+                              type="button"
+                              disabled={busy || !onRouteEnable}
+                              onClick={() =>
+                                void toggleRoute(target, name, lock.enabled)
+                              }
+                            >
+                              {lock.enabled === false
+                                ? t('targets.actions.enableRoute')
+                                : t('targets.actions.disableRoute')}
+                            </button>
+                            <button
+                              className="danger"
+                              type="button"
+                              disabled={busy || !onRemoveRoute}
+                              onClick={() => void removeRoute(target, name)}
+                            >
+                              {t('targets.actions.removeRoute')}
+                            </button>
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {assigning ? (
+                    <form
+                      className="target-package-form form-grid"
+                      onSubmit={(event) => void submitRoute(event, target.id)}
+                    >
+                      <label className="field">
+                        <span>{t('targets.form.package')}</span>
+                        <input
+                          value={assignment.name}
+                          onChange={(event) =>
+                            setAssignment((current) =>
+                              setAssignmentName(current, event.target.value),
+                            )
+                          }
+                          placeholder={t('common.required')}
+                          required
+                          autoFocus
+                        />
+                      </label>
+                      <label className="field">
+                        <span>{t('targets.form.versionOrTag')}</span>
+                        <input
+                          value={assignment.version}
+                          onChange={(event) =>
+                            setAssignment((current) =>
+                              setAssignmentVersion(
+                                current,
+                                event.target.value,
+                              ),
+                            )
+                          }
+                          placeholder={t('common.required')}
+                          required
+                        />
+                      </label>
+                      <div className="form-actions">
+                        <button
+                          className="primary"
+                          type="submit"
+                          disabled={busy || !onRouteAdd}
+                        >
+                          {t('targets.form.assign')}
+                        </button>
+                        <button
+                          className="secondary"
+                          type="button"
+                          onClick={() => setAssignment(EMPTY_ASSIGNMENT_DRAFT)}
+                        >
+                          {t('common.cancel')}
+                        </button>
+                      </div>
+                    </form>
+                  ) : null}
+
+                  <div className="target-card-actions row-actions">
+                    <button
+                      className="secondary"
+                      type="button"
+                      disabled={busy || !onRouteAdd}
+                      onClick={() => beginAssignment(target.id)}
+                    >
+                      {t('targets.form.assignPackage')}
+                    </button>
                     <button
                       className="secondary"
                       type="button"
                       disabled={busy || !onTargetEnable}
-                      onClick={() =>
-                        onTargetEnable?.({
-                          id: target.id,
-                          enabled: !target.enabled,
-                        })
-                      }
+                      onClick={() => void toggleTarget(target)}
                     >
-                      {target.enabled ? 'Disable target' : 'Enable target'}
+                      {target.enabled
+                        ? t('targets.actions.disableTarget')
+                        : t('targets.actions.enableTarget')}
                     </button>
                     <button
                       className="danger"
                       type="button"
                       disabled={busy || !onRemoveTarget}
-                      onClick={() => {
-                        if (
-                          confirmRemoval(
-                            `Remove target "${target.label ?? target.id}" from route.json?`,
-                          )
-                        ) {
-                          onRemoveTarget?.({ id: target.id });
-                        }
-                      }}
+                      onClick={() => void removeTarget(target)}
                     >
-                      Remove target
+                      {t('targets.actions.removeTarget')}
                     </button>
-                  </span>
-                </div>
+                  </div>
+                </article>
               );
             })}
-          </div>
-        )}
-      </section>
-
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">PACKAGES</p>
-            <h2>Package assignments</h2>
-          </div>
-          <span className="count">{assignments.length}</span>
-        </div>
-
-        {assignments.length === 0 ? (
-          <p className="empty">No package assignments.</p>
-        ) : (
-          <div className="table">
-            <div className="table-row table-head">
-              <span>Target</span>
-              <span>Package</span>
-              <span>Version</span>
-              <span>Status</span>
-              <span>Actions</span>
-            </div>
-            {assignments.map(({ target, name, lock }) => (
-              <div className="table-row" key={`${target.id}/${name}`}>
-                <span>{target.label ?? target.id}</span>
-                <span>
-                  <code>{name}</code>
-                </span>
-                <span>{lock.resolved}</span>
-                <span>{lock.enabled === false ? 'disabled' : 'enabled'}</span>
-                <span className="row-actions">
-                  <button
-                    className="secondary"
-                    type="button"
-                    disabled={busy || !onRouteEnable}
-                    onClick={() =>
-                      onRouteEnable?.({
-                        targetId: target.id,
-                        name,
-                        enabled: lock.enabled === false,
-                      })
-                    }
-                  >
-                    {lock.enabled === false ? 'Enable route' : 'Disable route'}
-                  </button>
-                  <button
-                    className="danger"
-                    type="button"
-                    disabled={busy || !onRemoveRoute}
-                    onClick={() => {
-                      if (
-                        confirmRemoval(
-                          `Remove package "${name}" from target "${target.label ?? target.id}"?`,
-                        )
-                      ) {
-                        onRemoveRoute?.({ targetId: target.id, name });
-                      }
-                    }}
-                  >
-                    Remove route
-                  </button>
-                </span>
-              </div>
-            ))}
           </div>
         )}
       </section>
@@ -349,164 +614,47 @@ export function TargetsView({
         <section className="panel">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">APPLY</p>
-              <h2>{applyReport.dryRun ? 'Apply preview' : 'Apply result'}</h2>
+              <p className="eyebrow">{t('targets.apply.eyebrow')}</p>
+              <h2>
+                {applyReport.dryRun
+                  ? t('targets.apply.preview')
+                  : t('targets.apply.result')}
+              </h2>
             </div>
             <span className="count">
-              {applyReport.operations.length} operations ·{' '}
-              {applyReport.conflicts.length} conflicts
+              {t('targets.apply.operations', {
+                count: applyReport.operations.length,
+              })}
             </span>
           </div>
           <p className="empty">
-            {applyReport.dryRun ? 'dry-run' : 'applied'}
-            {applyReport.ok ? ' · ok' : ' · needs attention'}
+            {applyReport.dryRun
+              ? t('targets.apply.dryRun')
+              : t('targets.apply.applied')}
+            {applyReport.ok
+              ? ` · ${t('targets.apply.ok')}`
+              : ` · ${t('targets.apply.needsAttention')}`}
           </p>
           {applyReport.operations.map((operation, index) => (
             <div
               className="issue-row"
               key={`${operation.kind}-${operation.name ?? operation.targetId}-${index}`}
             >
-              <code>{operation.kind}</code>
+              <code>{operationKindLabel(operation.kind, t)}</code>
               <span>{operation.name ?? operation.targetId}</span>
               <span className="path-value">{operation.path}</span>
-            </div>
-          ))}
-          {applyReport.conflicts.map((conflict, index) => (
-            <div className="issue-row" key={`conflict-${index}`}>
-              <code>conflict</code>
-              <span>{conflict.name}</span>
-              <span>{conflict.reason}</span>
             </div>
           ))}
         </section>
       ) : null}
 
-      <div className="split">
-        <section className="panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">TARGET</p>
-              <h2>Add target</h2>
-            </div>
-          </div>
-
-          <form className="form-grid" onSubmit={submitTarget}>
-            <label className="field field-wide">
-              <span>Directory path</span>
-              <div className="input-row">
-                <input
-                  value={targetPath}
-                  onChange={(event) => setTargetPath(event.target.value)}
-                  placeholder="C:/Projects/ProjectA/skills"
-                  required
-                />
-                <button
-                  className="secondary"
-                  type="button"
-                  onClick={() => void browse()}
-                  disabled={busy || !onBrowse}
-                >
-                  Browse
-                </button>
-              </div>
-            </label>
-            <label className="field">
-              <span>Target id</span>
-              <input
-                value={targetId}
-                onChange={(event) => setTargetId(event.target.value)}
-                placeholder="project-a"
-              />
-            </label>
-            <label className="field">
-              <span>Label</span>
-              <input
-                value={targetLabel}
-                onChange={(event) => setTargetLabel(event.target.value)}
-                placeholder="Project A"
-              />
-            </label>
-            <label className="field">
-              <span>Mode</span>
-              <select
-                value={mode}
-                onChange={(event) =>
-                  setMode(event.target.value as TargetMode)
-                }
-              >
-                <option value="link">link</option>
-                <option value="copy" disabled>
-                  copy (coming later)
-                </option>
-              </select>
-            </label>
-            <div className="form-actions">
-              <button
-                className="primary"
-                type="submit"
-                disabled={busy || !onAddTarget}
-              >
-                Add target
-              </button>
-            </div>
-          </form>
-        </section>
-
-        <section className="panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">ROUTE</p>
-              <h2>Assign package</h2>
-            </div>
-          </div>
-
-          <form className="form-grid" onSubmit={submitRoute}>
-            <label className="field">
-              <span>Target</span>
-              <select
-                value={routeTarget}
-                onChange={(event) => setRouteTarget(event.target.value)}
-              >
-                {targets.length === 0 ? (
-                  <option value="">No targets</option>
-                ) : null}
-                {targets.map((target) => (
-                  <option value={target.id} key={target.id}>
-                    {target.label ?? target.id}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>Package</span>
-              <input
-                value={routeName}
-                onChange={(event) => setRouteName(event.target.value)}
-                placeholder="frontend"
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Version or tag</span>
-              <input
-                value={routeVersion}
-                onChange={(event) => setRouteVersion(event.target.value)}
-                placeholder="1.0.0"
-                required
-              />
-            </label>
-            <div className="form-actions">
-              <button
-                className="primary"
-                type="submit"
-                disabled={busy || !onRouteAdd}
-              >
-                Assign
-              </button>
-            </div>
-          </form>
-        </section>
-      </div>
+      <AddTargetDialog
+        open={addTargetOpen}
+        busy={busy}
+        onClose={() => setAddTargetOpen(false)}
+        onBrowse={onBrowse}
+        onSubmit={onAddTarget}
+      />
     </main>
   );
 }

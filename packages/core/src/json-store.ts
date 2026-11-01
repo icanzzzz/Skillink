@@ -3,13 +3,10 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { SkillinkError } from '@skillink/shared';
 import { withFsRetry } from './fs-retry.js';
+import { isNodeError } from './node-error.js';
 
 export interface JsonSchema<T> {
   parse(value: unknown): T;
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
 }
 
 function sortKeys(value: unknown): unknown {
