@@ -98,7 +98,7 @@ describe('SkillsView', () => {
     expect(
       html.match(/class="version-tab(?: is-active)?"/g),
     ).toHaveLength(2);
-    expect(html.match(/placeholder="tag"/g)).toHaveLength(1);
+    expect(html.match(/placeholder="Required"/g)).toHaveLength(1);
     expect(html).toContain('aria-pressed="true"');
   });
 
@@ -197,6 +197,7 @@ describe('SkillsView', () => {
           name: '',
           autoName: 'linked',
           version: '',
+          defaultVersion: '1.0.0',
           directoryLinks: [],
           status: 'pending',
         }}
@@ -212,6 +213,26 @@ describe('SkillsView', () => {
     expect(html).not.toContain('1.0.0+');
     expect(html).toContain('<strong>linked</strong>');
     expect(html).not.toContain('disabled');
+  });
+
+  it('shows required placeholders when scanning finds no defaults', () => {
+    const html = renderWithMessages(
+      <SkillBatchCard
+        item={{
+          sourceDir: 'C:/Skills/untitled',
+          name: '',
+          autoName: '',
+          version: '',
+          directoryLinks: [],
+          status: 'pending',
+        }}
+        onConfirm={() => undefined}
+      />,
+      {},
+    );
+
+    expect(html.match(/placeholder="Required"/g)).toHaveLength(1);
+    expect(html).toContain('placeholder="1.0.0"');
   });
 
   it('falls back to the scanned name when the name field is empty', () => {

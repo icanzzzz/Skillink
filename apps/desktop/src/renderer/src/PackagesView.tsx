@@ -149,7 +149,7 @@ export function CreatePackageDialog({
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder={t('packages.form.namePlaceholder')}
+            placeholder={t('common.required')}
             required
             data-autofocus
           />
@@ -159,7 +159,7 @@ export function CreatePackageDialog({
           <input
             value={version}
             onChange={(event) => setVersion(event.target.value)}
-            placeholder={t('packages.form.versionPlaceholder')}
+            placeholder={t('common.required')}
             required
           />
         </label>
@@ -168,7 +168,7 @@ export function CreatePackageDialog({
           <input
             value={description}
             onChange={(event) => setDescription(event.target.value)}
-            placeholder={t('packages.form.descriptionPlaceholder')}
+            placeholder={t('common.optional')}
           />
         </label>
         <label className="field field-wide">
@@ -176,7 +176,7 @@ export function CreatePackageDialog({
           <textarea
             value={skillsText}
             onChange={(event) => setSkillsText(event.target.value)}
-            placeholder={t('packages.form.skillsPlaceholder')}
+            placeholder={t('common.optional')}
             rows={3}
           />
         </label>
@@ -185,7 +185,7 @@ export function CreatePackageDialog({
           <textarea
             value={packagesText}
             onChange={(event) => setPackagesText(event.target.value)}
-            placeholder={t('packages.form.packagesPlaceholder')}
+            placeholder={t('common.optional')}
             rows={3}
           />
         </label>
@@ -333,7 +333,7 @@ export function PackagesView({
                                   [key]: event.target.value,
                                 }))
                               }
-                              placeholder={t('packages.tagPlaceholder')}
+                              placeholder={t('common.required')}
                             />
                             <button
                               className="secondary"

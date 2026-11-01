@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from 'react';
-import type {
-  ApplyReport,
-  StatusEntry,
-  TargetMode,
-  TargetRoute,
-  TargetSkillSummary,
-  Translator,
+import {
+  deriveTargetIdDefault,
+  type ApplyReport,
+  type StatusEntry,
+  type TargetMode,
+  type TargetRoute,
+  type TargetSkillSummary,
+  type Translator,
 } from '@skillink/shared';
 import { useConfirm } from './Feedback.js';
 import { useI18n } from './i18n.js';
@@ -101,6 +102,11 @@ export function AddTargetForm({
   const [targetId, setTargetId] = useState('');
   const [targetLabel, setTargetLabel] = useState('');
   const [mode, setMode] = useState<TargetMode>('link');
+  const hasTargetIdentity =
+    targetPath.trim() !== '' || targetLabel.trim() !== '';
+  const targetIdPlaceholder = hasTargetIdentity
+    ? deriveTargetIdDefault({ path: targetPath, label: targetLabel })
+    : t('common.optional');
 
   async function browse(): Promise<void> {
     const selected = await onBrowse?.();
@@ -131,7 +137,7 @@ export function AddTargetForm({
           <input
             value={targetPath}
             onChange={(event) => setTargetPath(event.target.value)}
-            placeholder={t('targets.form.pathPlaceholder')}
+            placeholder={t('common.required')}
             required
           />
           <button
@@ -149,7 +155,7 @@ export function AddTargetForm({
         <input
           value={targetId}
           onChange={(event) => setTargetId(event.target.value)}
-          placeholder={t('targets.form.targetIdPlaceholder')}
+          placeholder={targetIdPlaceholder}
         />
       </label>
       <label className="field">
@@ -157,7 +163,7 @@ export function AddTargetForm({
         <input
           value={targetLabel}
           onChange={(event) => setTargetLabel(event.target.value)}
-          placeholder={t('targets.form.labelPlaceholder')}
+          placeholder={t('common.optional')}
         />
       </label>
       <label className="field">
@@ -529,7 +535,7 @@ export function TargetsView({
                               setAssignmentName(current, event.target.value),
                             )
                           }
-                          placeholder={t('targets.form.packagePlaceholder')}
+                          placeholder={t('common.required')}
                           required
                           autoFocus
                         />
@@ -546,7 +552,7 @@ export function TargetsView({
                               ),
                             )
                           }
-                          placeholder={t('targets.form.versionPlaceholder')}
+                          placeholder={t('common.required')}
                           required
                         />
                       </label>

@@ -61,6 +61,15 @@ describe('TargetsView', () => {
     expect(dialog).toContain('Directory path');
   });
 
+  it('uses required and optional placeholders in the add-target form', () => {
+    const dialog = renderToStaticMarkup(
+      <AddTargetDialog open onClose={() => undefined} />,
+    );
+
+    expect(dialog.match(/placeholder="Required"/g)).toHaveLength(1);
+    expect(dialog.match(/placeholder="Optional"/g)).toHaveLength(2);
+  });
+
   it('renders package and resolved skill counts', () => {
     const html = renderToStaticMarkup(
       <TargetsView

@@ -1,6 +1,6 @@
-import path from 'node:path';
 import {
   SkillinkError,
+  deriveTargetIdDefault,
   expandPath,
   type SkillinkPaths,
   type TargetMode,
@@ -22,15 +22,6 @@ import {
 } from './route.js';
 import { gcTargetEntries, resolveTargetSkillNames } from './target-gc.js';
 
-function slugify(value: string): string {
-  const slug = value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-
-  return slug || 'target';
-}
-
 export interface AddTargetInput {
   paths: SkillinkPaths;
   id?: string;
@@ -46,7 +37,11 @@ export async function addTarget(input: AddTargetInput): Promise<TargetRoute> {
     input.paths,
   );
   const id = assertSafePackageName(
-    input.id?.trim() || slugify(input.label ?? path.basename(targetPath)),
+    deriveTargetIdDefault({
+      id: input.id,
+      label: input.label,
+      path: targetPath,
+    }),
   );
   const mode = input.mode ?? 'link';
 

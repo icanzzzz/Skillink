@@ -55,6 +55,8 @@ export interface SkillBatchItem {
   /** Name detected during scanning, shown as the name placeholder. */
   autoName?: string;
   version: string;
+  /** Version used when the field is empty, shown without build metadata. */
+  defaultVersion?: string;
   description?: string;
   directoryLinks: string[];
   status: SkillBatchStatus;
@@ -79,12 +81,18 @@ function folderName(sourceDir: string): string {
   return sourceDir.split(/[\\/]+/u).filter(Boolean).at(-1) ?? sourceDir;
 }
 
+function versionMain(version: string | undefined): string {
+  const trimmed = version?.trim() ?? '';
+  return trimmed.split('+')[0] ?? trimmed;
+}
+
 function toBatchItem(candidate: SkillPackageCandidate): SkillBatchItem {
   return {
     sourceDir: candidate.sourceDir,
     name: '',
     autoName: candidate.name ?? '',
     version: candidate.version ?? '',
+    defaultVersion: versionMain(candidate.version),
     ...(candidate.description
       ? { description: candidate.description }
       : {}),
@@ -135,9 +143,7 @@ export function SkillBatchCard({
             value={item.name}
             readOnly={!onChange}
             onChange={(event) => onChange?.({ name: event.target.value })}
-            placeholder={
-              item.autoName?.trim() || t('skills.form.namePlaceholder')
-            }
+            placeholder={item.autoName?.trim() || t('common.required')}
             required={!item.autoName?.trim()}
           />
         </label>
@@ -147,7 +153,9 @@ export function SkillBatchCard({
             value={item.version}
             readOnly={!onChange}
             onChange={(event) => onChange?.({ version: event.target.value })}
-            placeholder={t('skills.form.versionPlaceholder')}
+            placeholder={
+              item.defaultVersion?.trim() || t('skills.form.versionPlaceholder')
+            }
           />
         </label>
       </div>
@@ -307,7 +315,7 @@ export function InstalledSkillCard({
             })}
             value={tagDraft}
             onChange={(event) => changeTag(event.target.value)}
-            placeholder={t('skills.tagPlaceholder')}
+            placeholder={t('common.required')}
           />
           <button
             className="secondary"
@@ -507,7 +515,7 @@ export function SkillImportDialog({
             <input
               value={sourceDir}
               onChange={(event) => changeSource(event.target.value)}
-              placeholder={t('skills.form.sourcePlaceholder')}
+              placeholder={t('common.required')}
               required
             />
             <button
