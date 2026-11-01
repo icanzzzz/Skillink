@@ -1,7 +1,6 @@
 import type { Command } from 'commander';
 import {
   checkPackageSkillReferences,
-  copyPackageVersion,
   createPackageVersion,
   readPackageFile,
   removePackageVersion,
@@ -9,7 +8,7 @@ import {
 } from '@skillink/core';
 import { addCommonOptions, printJson } from '../cli-context.js';
 import type { CommandRuntime } from '../command-runtime.js';
-import { asArray, collectSpecs, parseSpec } from '../specs.js';
+import { collectSpecs, parseSpec } from '../specs.js';
 
 export function registerPackageCommands(
   program: Command,
@@ -111,62 +110,6 @@ export function registerPackageCommands(
           return;
         }
         context.stdout(`Created ${parsed.name}@${parsed.version}`);
-      },
-    );
-
-  packageCommand
-    .command('copy')
-    .description('Copy a package version, optionally overriding dependencies')
-    .argument('<source@version>', 'Source package and version')
-    .argument('<target@version>', 'Target package and version')
-    .option('--skill <spec...>', 'Override or add a skill dependency')
-    .option('--package <spec...>', 'Override or add a package dependency')
-    .option('--drop-skill <name...>', 'Drop a direct skill dependency')
-    .option('--drop-package <name...>', 'Drop a direct package dependency')
-    .option('--description <text>', 'Display description')
-    .option('--json', 'Print machine-readable JSON')
-    .action(
-      async (
-        sourceSpec: string,
-        targetSpec: string,
-        options: {
-          skill?: string[] | string;
-          package?: string[] | string;
-          dropSkill?: string[] | string;
-          dropPackage?: string[] | string;
-          description?: string;
-          json?: boolean;
-        },
-      ) => {
-        const paths = runtime.paths();
-        const source = parseSpec(sourceSpec);
-        const target = parseSpec(targetSpec);
-        const created = await runtime.mutate(
-          paths,
-          'package copy',
-          'copy',
-          `${sourceSpec} -> ${targetSpec}`,
-          async () => {
-            await runtime.ensureHome();
-            return copyPackageVersion({
-              paths,
-              sourceName: source.name,
-              sourceVersion: source.version,
-              targetName: target.name,
-              targetVersion: target.version,
-              description: options.description,
-              skillOverrides: collectSpecs(options.skill),
-              packageOverrides: collectSpecs(options.package),
-              dropSkills: asArray(options.dropSkill),
-              dropPackages: asArray(options.dropPackage),
-            });
-          },
-        );
-        if (options.json) {
-          printJson(context, created);
-          return;
-        }
-        context.stdout(`Copied ${sourceSpec} -> ${targetSpec}`);
       },
     );
 

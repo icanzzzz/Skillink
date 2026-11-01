@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   AddTargetRequestSchema,
   ApplyRequestSchema,
-  CopyPackageRequestSchema,
   CreatePackageRequestSchema,
   GcRequestSchema,
   ImportSkillRequestSchema,
@@ -73,7 +72,7 @@ describe('IPC request schemas', () => {
     });
   });
 
-  it('validates package creation and copy requests', () => {
+  it('validates package creation requests', () => {
     expect(
       CreatePackageRequestSchema.parse({
         name: 'frontend',
@@ -97,29 +96,6 @@ describe('IPC request schemas', () => {
         name: 'frontend',
         version: '1.0.0',
         skills: { pdf: '' },
-      }).success,
-    ).toBe(false);
-
-    expect(
-      CopyPackageRequestSchema.parse({
-        sourceName: 'frontend',
-        sourceVersion: '1.0.0',
-        targetName: 'frontend',
-        targetVersion: '1.1.0',
-        skillOverrides: { pdf: '1.1.0' },
-        dropSkills: ['review'],
-      }),
-    ).toMatchObject({
-      sourceName: 'frontend',
-      targetName: 'frontend',
-      skillOverrides: { pdf: '1.1.0' },
-      dropSkills: ['review'],
-    });
-    expect(
-      CopyPackageRequestSchema.safeParse({
-        sourceVersion: '1.0.0',
-        targetName: 'frontend',
-        targetVersion: '1.1.0',
       }).success,
     ).toBe(false);
   });

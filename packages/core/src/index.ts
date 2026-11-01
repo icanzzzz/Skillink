@@ -41,7 +41,6 @@ export {
 export { migrateV1ToV2 } from './migrate.js';
 export { checkPackageSkillReferences } from './package-check.js';
 export {
-  copyPackageVersion,
   createPackageVersion,
   readPackageFile,
   removePackageVersion,

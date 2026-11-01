@@ -387,8 +387,14 @@ describe.skipIf(!(await isGitAvailable()))('CLI git integration', () => {
         subject: 'skillink(route): enable project-a/bundle',
       },
       {
-        args: ['package', 'copy', 'bundle@1.0.0', 'bundle@1.1.0'],
-        subject: 'skillink(package): copy bundle@1.0.0 -> bundle@1.1.0',
+        args: [
+          'package',
+          'create',
+          'bundle@1.1.0',
+          '--skill',
+          'demo@1.0.0',
+        ],
+        subject: 'skillink(package): create bundle@1.1.0',
       },
       {
         args: ['package', 'tag', 'bundle@1.1.0', 'stable'],

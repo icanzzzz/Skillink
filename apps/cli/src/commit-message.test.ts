@@ -4,7 +4,7 @@ import { buildCliCommitMessage, inferScope } from './commit-message.js';
 describe('commit messages', () => {
   it('prefers the command path for the scope', () => {
     expect(inferScope('skill add', ['route.json'])).toBe('skill');
-    expect(inferScope('package copy', ['skill.json'])).toBe('package');
+    expect(inferScope('package create', ['skill.json'])).toBe('package');
     expect(inferScope('target remove', ['route.json'])).toBe('target');
     expect(inferScope('route add', ['route.json'])).toBe('route');
     expect(inferScope('gc', ['skill.json', 'skills/pdf/1.0.0/SKILL.md'])).toBe(
@@ -69,9 +69,9 @@ describe('commit messages', () => {
   it('truncates long subjects and long file lists', () => {
     const message = buildCliCommitMessage({
       repo: 'control',
-      commandPath: 'package copy',
-      argv: ['package', 'copy', 'a@1.0.0', 'b@1.0.0'],
-      action: 'copy',
+      commandPath: 'package create',
+      argv: ['package', 'create', 'b@1.0.0', '--skill', 'a@1.0.0'],
+      action: 'create',
       summary: 'x'.repeat(200),
       changedFiles: Array.from({ length: 25 }, (_, index) => `file-${index}.json`),
     });

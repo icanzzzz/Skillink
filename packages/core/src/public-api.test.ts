@@ -6,6 +6,7 @@ describe('public API', () => {
     const surface = core as unknown as Record<string, unknown>;
 
     expect(surface.apply).toBeTypeOf('function');
+    expect(surface.copyPackageVersion).toBeUndefined();
     expect(surface.resolveTarget).toBeUndefined();
     expect(surface.removeObsoleteTargetSkills).toBeUndefined();
     expect(surface.findTarget).toBeUndefined();

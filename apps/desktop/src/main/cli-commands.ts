@@ -1,7 +1,6 @@
 import type {
   AddTargetRequest,
   ApplyRequest,
-  CopyPackageRequest,
   CreatePackageRequest,
   GcRequest,
   ImportSkillRequest,
@@ -27,10 +26,6 @@ function dependencyArgs(flag: string, values: Record<string, string>): string[] 
     spec(name, version),
   );
   return specs.length > 0 ? [flag, ...specs] : [];
-}
-
-function variadicArgs(flag: string, values: string[]): string[] {
-  return values.length > 0 ? [flag, ...values] : [];
 }
 
 export function buildApplyArgs(request: ApplyRequest): string[] {
@@ -66,21 +61,6 @@ export function buildCreatePackageArgs(
     spec(request.name, request.version),
     ...dependencyArgs('--skill', request.skills ?? {}),
     ...dependencyArgs('--package', request.packages ?? {}),
-    ...(request.description ? ['--description', request.description] : []),
-    '--json',
-  ];
-}
-
-export function buildCopyPackageArgs(request: CopyPackageRequest): string[] {
-  return [
-    'package',
-    'copy',
-    spec(request.sourceName, request.sourceVersion),
-    spec(request.targetName, request.targetVersion),
-    ...dependencyArgs('--skill', request.skillOverrides ?? {}),
-    ...dependencyArgs('--package', request.packageOverrides ?? {}),
-    ...variadicArgs('--drop-skill', request.dropSkills ?? []),
-    ...variadicArgs('--drop-package', request.dropPackages ?? []),
     ...(request.description ? ['--description', request.description] : []),
     '--json',
   ];

@@ -110,20 +110,6 @@ export const CreatePackageRequestSchema = z
     { message: 'Package must contain at least one dependency.' },
   );
 
-export const CopyPackageRequestSchema = z
-  .object({
-    sourceName: NonEmptyString,
-    sourceVersion: NonEmptyString,
-    targetName: NonEmptyString,
-    targetVersion: NonEmptyString,
-    description: OptionalNonEmptyString,
-    skillOverrides: DependencyMap.optional(),
-    packageOverrides: DependencyMap.optional(),
-    dropSkills: z.array(NonEmptyString).optional(),
-    dropPackages: z.array(NonEmptyString).optional(),
-  })
-  .strict();
-
 export const GcRequestSchema = z
   .object({
     dryRun: z.boolean().optional(),
@@ -172,7 +158,6 @@ export type SkillRemoveRequest = z.infer<typeof SkillRemoveRequestSchema>;
 export type PackageTagRequest = z.infer<typeof PackageTagRequestSchema>;
 export type PackageRemoveRequest = z.infer<typeof PackageRemoveRequestSchema>;
 export type CreatePackageRequest = z.infer<typeof CreatePackageRequestSchema>;
-export type CopyPackageRequest = z.infer<typeof CopyPackageRequestSchema>;
 export type GcRequest = z.infer<typeof GcRequestSchema>;
 export type ApplyRequest = z.infer<typeof ApplyRequestSchema>;
 export type LanguageInstallRequest = z.infer<

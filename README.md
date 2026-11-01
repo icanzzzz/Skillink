@@ -23,7 +23,7 @@ target -> package -> skill -> 实体内容
 - `apply` / `doctor` 会重新校验 skill 内容完整性；
 - `package.json` 管理 package 组合，支持 package 嵌套 package；
 - DFS 环检测、skill 同版本去重、不同版本冲突报错；
-- `package copy` 支持复制 package 并覆盖/删除依赖，用于解决 skill 版本冲突；
+- GUI 复制 package 版本时，用源版本数据预填创建包表单；实际写入仍走 `package create`；
 - `route.json` 只写 package lock；
 - Windows junction / POSIX symlink 投影；
 - `apply` / `status` / `doctor` / `gc`；
@@ -131,7 +131,7 @@ pnpm dev:cli -- locale install ./locales/zh-CN.json --use
 
   ```text
   skillink(skill): add pdf@1.0.0
-  skillink(package): copy frontend@1.0.0 -> frontend@1.1.0
+  skillink(package): create frontend@1.1.0
   skillink(route): add project-a frontend@1.1.0
   skillink(target): remove project-a
   skillink(gc): remove 3 unreferenced skill versions
@@ -154,19 +154,26 @@ docs@1.0.0     -> pdf@1.3.0
 => SKILL_VERSION_CONFLICT
 ```
 
-用 `package copy` 复制其中一个 package，覆盖依赖后把 route 指向新版本：
+在 GUI 中点击冲突 package 版本的“复制”，创建包表单会直接填入该版本的名称、版本、描述和依赖；把版本改成新的 `1.1.0`，调整依赖后提交即可。实际写入仍走 `package create`。
+
+CLI 中等价于重新声明一个组合版本：
 
 ```bash
-pnpm dev:cli -- package copy frontend@1.0.0 frontend@1.1.0 --skill pdf@1.3.0
+pnpm dev:cli -- package create frontend@1.1.0 \
+  --skill pdf@1.3.0 --skill review@1.0.0 \
+  --package base@1.0.0
 pnpm dev:cli -- route add project-a frontend@1.1.0
 pnpm dev:cli -- apply
 ```
 
-嵌套冲突时先复制嵌套 package，再复制父 package：
+嵌套冲突时先创建嵌套 package 的新版本，再创建父 package：
 
 ```bash
-pnpm dev:cli -- package copy base@2.0.0 base@2.1.0 --skill pdf@1.3.0
-pnpm dev:cli -- package copy frontend@1.0.0 frontend@1.1.0 --package base@2.1.0
+pnpm dev:cli -- package create base@2.1.0 \
+  --skill pdf@1.3.0 --skill docs@1.0.0
+pnpm dev:cli -- package create frontend@1.1.0 \
+  --skill pdf@1.3.0 --skill review@1.0.0 \
+  --package base@2.1.0
 ```
 
 ## CLI 命令参考
@@ -246,10 +253,8 @@ skillink skill remove <skill@version> [--json]
 # --skill / --package 都可以重复传入多个 name@version。
 skillink package create <name@version> [--skill <skill@version>...] [--package <package@version>...] [--description <text>] [--json]
 
-# 复制一个 package 版本，并在副本上覆盖/新增/删除直接依赖。
-# --skill / --package 用于覆盖或新增依赖；--drop-skill / --drop-package 只写依赖名。
-# 用于解决同一个 target 中同一 skill 的版本冲突；嵌套冲突时先复制嵌套 package。
-skillink package copy <source@version> <target@version> [--skill <skill@version>...] [--package <package@version>...] [--drop-skill <name>...] [--drop-package <name>...] [--description <text>] [--json]
+# GUI 的复制按钮会把源版本数据预填到创建表单；CLI 直接重新声明新版本即可。
+# 用于解决同一个 target 中同一 skill 的版本冲突；嵌套冲突时先创建嵌套 package 的新版本。
 
 # 列出 package 组合、标签和每个版本包含的 skill/package 依赖；ls 是别名。
 skillink package list [--json]
@@ -373,7 +378,7 @@ GUI 页面：
 - **Overview**：skills、packages、targets、links、doctor 概览；
 - **Targets**：添加/删除 target、分配/删除 package、target/package enable/disable、显示 package 数与解析后的 skill 数、删除或禁用 target/package 时清理 route 解析出的 skill 目录/链接、apply 预览（dry-run）、apply 结果；
 - **Skills**：选择一个目录批量扫描 `SKILL.md`，逐个确认安装；确认时检测目录链接，命中则提示链接路径并跳过该包；标签、删除、GC；
-- **Packages**：创建/复制 package、查看组合、标签、删除；
+- **Packages**：创建 package、查看组合、标签、删除；复制某个版本时用该版本数据预填创建表单；
 - **Doctor**：健康问题与重新 apply；
 - **Language**：安装、切换、删除语言包，显示当前语言和翻译覆盖率。
 

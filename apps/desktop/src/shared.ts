@@ -13,7 +13,6 @@ import type {
 import type {
   AddTargetRequest,
   ApplyRequest,
-  CopyPackageRequest,
   CreatePackageRequest,
   GcRequest,
   ImportSkillRequest,
@@ -43,7 +42,6 @@ export interface DesktopApi {
   scanSkills(input: ScanSkillsRequest): Promise<SkillPackageScanReport>;
   importSkill(input: ImportSkillRequest): Promise<ImportSkillResult>;
   createPackage(input: CreatePackageRequest): Promise<PackageVersion>;
-  copyPackage(input: CopyPackageRequest): Promise<PackageVersion>;
   removePackage(input: PackageRemoveRequest): Promise<void>;
   packageTag(input: PackageTagRequest): Promise<void>;
   skillTag(input: SkillTagRequest): Promise<void>;

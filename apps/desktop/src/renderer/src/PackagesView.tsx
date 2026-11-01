@@ -17,18 +17,6 @@ export interface CreatePackageFormInput {
   packages: Record<string, string>;
 }
 
-export interface CopyPackageFormInput {
-  sourceName: string;
-  sourceVersion: string;
-  targetName: string;
-  targetVersion: string;
-  description?: string;
-  skillOverrides?: Record<string, string>;
-  packageOverrides?: Record<string, string>;
-  dropSkills?: string[];
-  dropPackages?: string[];
-}
-
 export interface PackageTagFormInput {
   name: string;
   version: string;
@@ -46,9 +34,6 @@ export interface PackagesViewProps {
   busy?: boolean;
   onCreatePackage?: (
     input: CreatePackageFormInput,
-  ) => Promise<boolean> | boolean | void;
-  onCopyPackage?: (
-    input: CopyPackageFormInput,
   ) => Promise<boolean> | boolean | void;
   onTag?: (input: PackageTagFormInput) => void;
   onRemove?: (input: PackageVersionInput) => void;
@@ -72,17 +57,17 @@ function parseDependencies(value: string): Record<string, string> {
   return result;
 }
 
-function parseNames(value: string): string[] {
-  return value
-    .split(/[\s,]+/)
-    .map((name) => name.trim())
-    .filter(Boolean);
+function formatDependencies(dependencies: Record<string, string>): string {
+  return Object.entries(dependencies)
+    .map(([name, version]) => `${name}@${version}`)
+    .join('\n');
 }
 
 export interface CreatePackageDialogProps {
   open: boolean;
   busy?: boolean;
   skills: SkillFile;
+  preset?: CreatePackageFormInput;
   onClose: () => void;
   onCreatePackage?: (
     input: CreatePackageFormInput,
@@ -93,15 +78,20 @@ export function CreatePackageDialog({
   open,
   busy = false,
   skills,
+  preset,
   onClose,
   onCreatePackage,
 }: CreatePackageDialogProps) {
   const { t } = useI18n();
-  const [name, setName] = useState('');
-  const [version, setVersion] = useState('');
-  const [description, setDescription] = useState('');
-  const [skillsText, setSkillsText] = useState('');
-  const [packagesText, setPackagesText] = useState('');
+  const [name, setName] = useState(preset?.name ?? '');
+  const [version, setVersion] = useState(preset?.version ?? '');
+  const [description, setDescription] = useState(preset?.description ?? '');
+  const [skillsText, setSkillsText] = useState(() =>
+    formatDependencies(preset?.skills ?? {}),
+  );
+  const [packagesText, setPackagesText] = useState(() =>
+    formatDependencies(preset?.packages ?? {}),
+  );
   const skillVersions = Object.entries(skills.skills).flatMap(
     ([skillName, entry]) =>
       Object.keys(entry.versions).map(
@@ -145,7 +135,14 @@ export function CreatePackageDialog({
       closeLabel={t('common.close')}
       onClose={onClose}
     >
-      <p className="hint">{t('packages.hint')}</p>
+      <p className="hint">
+        {preset
+          ? t('packages.copyHint', {
+              name: preset.name,
+              version: preset.version,
+            })
+          : t('packages.hint')}
+      </p>
       <form className="form-grid" onSubmit={submit}>
         <label className="field">
           <span>{t('packages.form.name')}</span>
@@ -220,214 +217,28 @@ export function CreatePackageDialog({
   );
 }
 
-export interface CopyPackageDialogProps {
-  open: boolean;
-  busy?: boolean;
-  preset?: {
-    sourceName: string;
-    sourceVersion: string;
-  };
-  onClose: () => void;
-  onCopyPackage?: (
-    input: CopyPackageFormInput,
-  ) => Promise<boolean> | boolean | void;
-}
-
-export function CopyPackageDialog({
-  open,
-  busy = false,
-  preset,
-  onClose,
-  onCopyPackage,
-}: CopyPackageDialogProps) {
-  const { t } = useI18n();
-  const [copySource, setCopySource] = useState({
-    name: preset?.sourceName ?? '',
-    version: preset?.sourceVersion ?? '',
-  });
-  const [copyTargetName, setCopyTargetName] = useState(
-    preset?.sourceName ?? '',
-  );
-  const [copyTargetVersion, setCopyTargetVersion] = useState('');
-  const [copyDescription, setCopyDescription] = useState('');
-  const [copySkillsText, setCopySkillsText] = useState('');
-  const [copyPackagesText, setCopyPackagesText] = useState('');
-  const [dropSkills, setDropSkills] = useState('');
-  const [dropPackages, setDropPackages] = useState('');
-
-  const canCopy =
-    copySource.name.trim() !== '' &&
-    copySource.version.trim() !== '' &&
-    copyTargetName.trim() !== '' &&
-    copyTargetVersion.trim() !== '';
-
-  function submit(event: FormEvent<HTMLFormElement>): void {
-    event.preventDefault();
-    if (!onCopyPackage || !canCopy) {
-      return;
-    }
-
-    const input: CopyPackageFormInput = {
-      sourceName: copySource.name.trim(),
-      sourceVersion: copySource.version.trim(),
-      targetName: copyTargetName.trim(),
-      targetVersion: copyTargetVersion.trim(),
-      description: copyDescription.trim() || undefined,
-      skillOverrides: parseDependencies(copySkillsText),
-      packageOverrides: parseDependencies(copyPackagesText),
-      dropSkills: parseNames(dropSkills),
-      dropPackages: parseNames(dropPackages),
-    };
-    void (async () => {
-      const result = await onCopyPackage(input);
-      if (result !== false) {
-        onClose();
-      }
-    })();
-  }
-
-  return (
-    <Modal
-      open={open}
-      title={t('packages.copy')}
-      eyebrow={t('packages.copy.eyebrow')}
-      closeLabel={t('common.close')}
-      onClose={onClose}
-    >
-      <p className="hint">{t('packages.copyHint')}</p>
-      <form className="form-grid" onSubmit={submit}>
-        <label className="field">
-          <span>{t('packages.copy.sourceName')}</span>
-          <input
-            value={copySource.name}
-            onChange={(event) =>
-              setCopySource((current) => ({
-                ...current,
-                name: event.target.value,
-              }))
-            }
-            placeholder={t('packages.form.namePlaceholder')}
-            required
-            data-autofocus
-          />
-        </label>
-        <label className="field">
-          <span>{t('packages.copy.sourceVersion')}</span>
-          <input
-            value={copySource.version}
-            onChange={(event) =>
-              setCopySource((current) => ({
-                ...current,
-                version: event.target.value,
-              }))
-            }
-            placeholder={t('packages.form.versionPlaceholder')}
-            required
-          />
-        </label>
-        <label className="field">
-          <span>{t('packages.copy.targetName')}</span>
-          <input
-            value={copyTargetName}
-            onChange={(event) => setCopyTargetName(event.target.value)}
-            placeholder={t('packages.form.namePlaceholder')}
-            required
-          />
-        </label>
-        <label className="field">
-          <span>{t('packages.copy.targetVersion')}</span>
-          <input
-            value={copyTargetVersion}
-            onChange={(event) => setCopyTargetVersion(event.target.value)}
-            placeholder={t('packages.copy.targetVersionPlaceholder')}
-            required
-          />
-        </label>
-        <label className="field field-wide">
-          <span>{t('packages.copy.skillOverrides')}</span>
-          <textarea
-            value={copySkillsText}
-            onChange={(event) => setCopySkillsText(event.target.value)}
-            placeholder={t('packages.copy.skillOverridesPlaceholder')}
-            rows={2}
-          />
-        </label>
-        <label className="field field-wide">
-          <span>{t('packages.copy.packageOverrides')}</span>
-          <textarea
-            value={copyPackagesText}
-            onChange={(event) => setCopyPackagesText(event.target.value)}
-            placeholder={t('packages.copy.packageOverridesPlaceholder')}
-            rows={2}
-          />
-        </label>
-        <label className="field">
-          <span>{t('packages.copy.dropSkills')}</span>
-          <input
-            value={dropSkills}
-            onChange={(event) => setDropSkills(event.target.value)}
-            placeholder={t('packages.copy.dropSkillsPlaceholder')}
-          />
-        </label>
-        <label className="field">
-          <span>{t('packages.copy.dropPackages')}</span>
-          <input
-            value={dropPackages}
-            onChange={(event) => setDropPackages(event.target.value)}
-            placeholder={t('packages.copy.dropPackagesPlaceholder')}
-          />
-        </label>
-        <label className="field field-wide">
-          <span>{t('packages.form.description')}</span>
-          <input
-            value={copyDescription}
-            onChange={(event) => setCopyDescription(event.target.value)}
-            placeholder={t('packages.copy.descriptionPlaceholder')}
-          />
-        </label>
-        <div className="form-actions field-wide">
-          <button
-            className="secondary"
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            className="primary"
-            type="submit"
-            disabled={busy || !onCopyPackage || !canCopy}
-          >
-            {t('packages.copy')}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
 export function PackagesView({
   packages,
   skills,
   busy = false,
   onCreatePackage,
-  onCopyPackage,
   onTag,
   onRemove,
 }: PackagesViewProps) {
   const { t } = useI18n();
   const confirm = useConfirm();
   const [createOpen, setCreateOpen] = useState(false);
-  const [copyPreset, setCopyPreset] = useState<{
-    sourceName: string;
-    sourceVersion: string;
-  } | null>(null);
+  const [createPreset, setCreatePreset] = useState<CreatePackageFormInput>();
   const [tagDrafts, setTagDrafts] = useState<Record<string, string>>({});
   const entries = Object.entries(packages.packages);
 
   function tagKey(packageName: string, packageVersion: string): string {
     return `${packageName}@${packageVersion}`;
+  }
+
+  function openCreate(preset?: CreatePackageFormInput): void {
+    setCreatePreset(preset);
+    setCreateOpen(true);
   }
 
   async function removePackage(
@@ -460,17 +271,9 @@ export function PackagesView({
           <div className="panel-heading-tools">
             <span className="count">{entries.length}</span>
             <button
-              className="secondary"
-              type="button"
-              onClick={() => setCopyPreset({ sourceName: '', sourceVersion: '' })}
-              disabled={busy || !onCopyPackage}
-            >
-              {t('packages.copy')}
-            </button>
-            <button
               className="primary"
               type="button"
-              onClick={() => setCreateOpen(true)}
+              onClick={() => openCreate()}
               disabled={busy || !onCreatePackage}
             >
               {t('packages.create')}
@@ -557,11 +360,14 @@ export function PackagesView({
                             <button
                               className="secondary"
                               type="button"
-                              disabled={busy || !onCopyPackage}
+                              disabled={busy || !onCreatePackage}
                               onClick={() =>
-                                setCopyPreset({
-                                  sourceName: packageName,
-                                  sourceVersion: packageVersion,
+                                openCreate({
+                                  name: packageName,
+                                  version: packageVersion,
+                                  description: entry.description,
+                                  skills: value.skills,
+                                  packages: value.packages,
                                 })
                               }
                             >
@@ -594,21 +400,17 @@ export function PackagesView({
 
       {createOpen ? (
         <CreatePackageDialog
+          key={
+            createPreset
+              ? `${createPreset.name}@${createPreset.version}`
+              : 'new'
+          }
           open
           busy={busy}
           skills={skills}
+          preset={createPreset}
           onClose={() => setCreateOpen(false)}
           onCreatePackage={onCreatePackage}
-        />
-      ) : null}
-
-      {copyPreset ? (
-        <CopyPackageDialog
-          open
-          busy={busy}
-          preset={copyPreset}
-          onClose={() => setCopyPreset(null)}
-          onCopyPackage={onCopyPackage}
         />
       ) : null}
     </main>

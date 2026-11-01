@@ -302,45 +302,6 @@ describe.skipIf(!gitReady)('CLI', () => {
     expect(ctx.out.join('\n')).toContain('Removed target project-a');
   });
 
-  it('copies a package with a skill override', async () => {
-    const home = await tempDir('skillink-cli-');
-    const source = await makeSkillSource();
-    const ctx = context(home);
-
-    await runCli(['init'], ctx);
-    await runCli(
-      ['skill', 'add', source, '--name', 'pdf', '--version', '1.0.0'],
-      ctx,
-    );
-    await runCli(
-      ['skill', 'add', source, '--name', 'pdf', '--version', '1.1.0'],
-      ctx,
-    );
-    await runCli(
-      ['package', 'create', 'demo@1.0.0', '--skill', 'pdf@1.0.0'],
-      ctx,
-    );
-
-    expect(
-      await runCli(
-        [
-          'package',
-          'copy',
-          'demo@1.0.0',
-          'demo@1.1.0',
-          '--skill',
-          'pdf@1.1.0',
-        ],
-        ctx,
-      ),
-    ).toBe(0);
-
-    const packageFile = await readJson(path.join(home, 'package.json'));
-    expect(
-      packageFile.packages.demo.versions['1.1.0'].skills.pdf,
-    ).toBe('1.1.0');
-  });
-
   it('checks package skill references and cleans affected target projections', async () => {
     const root = await tempDir('skillink-cli-check-');
     const home = path.join(root, 'home');
@@ -384,7 +345,7 @@ describe.skipIf(!gitReady)('CLI', () => {
     expect(await pathExists(path.join(targetPath, 'pdf'))).toBe(false);
   });
 
-  it('parses repeated skill/package options and drop options', async () => {
+  it('parses repeated skill/package options', async () => {
     const home = await tempDir('skillink-cli-');
     const source = await makeSkillSource();
     const ctx = context(home);
@@ -422,28 +383,6 @@ describe.skipIf(!gitReady)('CLI', () => {
     expect(packageFile.packages.frontend.versions['1.0.0']).toEqual({
       packages: { base: '1.0.0' },
       skills: { pdf: '1.0.0', review: '1.0.0' },
-    });
-
-    expect(
-      await runCli(
-        [
-          'package',
-          'copy',
-          'frontend@1.0.0',
-          'frontend@1.1.0',
-          '--drop-skill',
-          'review',
-          '--drop-package',
-          'base',
-        ],
-        ctx,
-      ),
-    ).toBe(0);
-
-    const copied = await readJson(path.join(home, 'package.json'));
-    expect(copied.packages.frontend.versions['1.1.0']).toEqual({
-      packages: {},
-      skills: { pdf: '1.0.0' },
     });
   });
 

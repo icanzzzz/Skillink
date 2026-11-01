@@ -15,7 +15,6 @@ import type {
 import {
   AddTargetRequestSchema,
   ApplyRequestSchema,
-  CopyPackageRequestSchema,
   CreatePackageRequestSchema,
   GcRequestSchema,
   ImportSkillRequestSchema,
@@ -38,7 +37,6 @@ import { localizeError } from './error-localization.js';
 import {
   buildAddTargetArgs,
   buildApplyArgs,
-  buildCopyPackageArgs,
   buildCreatePackageArgs,
   buildGcArgs,
   buildImportSkillArgs,
@@ -174,11 +172,6 @@ export function registerIpcHandlers(
   handle('skillink:create-package', async (_event, input: unknown) => {
     const request = CreatePackageRequestSchema.parse(input);
     return cli.invoke<PackageVersion>(buildCreatePackageArgs(request));
-  });
-
-  handle('skillink:copy-package', async (_event, input: unknown) => {
-    const request = CopyPackageRequestSchema.parse(input);
-    return cli.invoke<PackageVersion>(buildCopyPackageArgs(request));
   });
 
   handle('skillink:remove-package', async (_event, input: unknown) => {

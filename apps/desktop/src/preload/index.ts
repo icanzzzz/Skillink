@@ -8,7 +8,6 @@ const api: DesktopApi = {
   scanSkills: (input) => ipcRenderer.invoke('skillink:scan-skills', input),
   importSkill: (input) => ipcRenderer.invoke('skillink:import-skill', input),
   createPackage: (input) => ipcRenderer.invoke('skillink:create-package', input),
-  copyPackage: (input) => ipcRenderer.invoke('skillink:copy-package', input),
   removePackage: (input) => ipcRenderer.invoke('skillink:remove-package', input),
   packageTag: (input) => ipcRenderer.invoke('skillink:package-tag', input),
   skillTag: (input) => ipcRenderer.invoke('skillink:skill-tag', input),

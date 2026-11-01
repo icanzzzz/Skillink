@@ -304,7 +304,7 @@ CLI ------------------------> @skillink/core -> @skillink/shared
 - package 条目至少一个版本；
 - 每个 package 版本至少一个依赖，`packages` + `skills` 不能同时为空；
 - package/skill 依赖必须是精确版本，不能是 range；
-- package 版本一旦创建，工具不再修改；修改组合用 `package copy`；
+- package 版本一旦创建，工具不再修改；修改组合需要创建新的版本；
 - 一个 package 版本可以引用同名 package 的其他版本；
 - 包名和 skill 名各自独立命名空间，允许同名；
 - 每个写操作都做图校验，失败不写文件。
@@ -440,7 +440,6 @@ resolve(node):
 | 操作 | 校验 |
 |---|---|
 | `package create` | 新版本传递闭包：缺失引用、环、skill 冲突 |
-| `package copy` | 复制 + override/drop 后的传递闭包 |
 | `package tag` | 目标版本传递闭包 |
 | `package remove` | 不能被 route/其他 package 引用；剩余图仍可解析 |
 | `package check` | 所有 package 版本 skill 引用存在；仅对受影响 target 清理投影，不改配置 |
@@ -461,22 +460,13 @@ resolve(node):
 
 任何嵌套 package 被手工修改都会让 route lock 失效，apply/doctor 报 `PACKAGE_INTEGRITY_MISMATCH`。
 
-### 5.5 Package 复制
+### 5.5 Package 版本复制（GUI）
 
-```bash
-skillink package copy <source>@<version> <target>@<version> \
-  [--skill <skill>@<version>]... \
-  [--package <package>@<version>]... \
-  [--drop-skill <name>]... \
-  [--drop-package <name>]... \
-  [--description <text>]
-```
+CLI 不提供 `package copy` 子命令。GUI 的复制操作只做表单预填：点击某个 package 版本的“复制”后，打开创建包表单，直接填入源版本的 name、version、description、skills 和 packages 依赖；用户修改版本或依赖后提交，实际仍调用 `package create`。
 
-- 复制源版本直接 `packages` / `skills` 组合；
-- 不深拷贝嵌套 package 定义；
-- override/drop 后重新做 DFS 校验；
-- 目标版本已存在 -> `PACKAGE_EXISTS`；
 - 不复制 tag；
+- 不深拷贝嵌套 package 定义；
+- 图校验、`SKILL.md` 检查和不可变语义与 `package create` 完全一致；
 - 用途：解决同一 target 中同一 skill 不同版本的冲突。
 
 ---
@@ -693,7 +683,7 @@ ok | missing | wrong-mode | wrong-version | broken-link | conflict | disabled
 | `init` / `migrate` | 是 | 是（如有内容变化） |
 | `skill add` / `skill remove` | 是 | 是 |
 | `skill tag` | 是 | 否 |
-| `package create/copy/tag/remove` | 是 | 否 |
+| `package create/tag/remove` | 是 | 否 |
 | `target add/remove/enable/disable` | 是 | 否 |
 | `route add/remove/enable/disable` | 是 | 否 |
 | `gc --apply` | 是 | 是 |
@@ -750,7 +740,7 @@ scope 优先取命令路径（`skill`、`package`、`target`、`route`、`gc`、
 skillink init
 skillink migrate
 skillink skill add|scan|list|tag|remove
-skillink package create|copy|list|tag|remove|check
+skillink package create|list|tag|remove|check
 skillink target add|list|remove|enable|disable
 skillink route add|remove|list|enable|disable
 skillink snapshot
@@ -773,7 +763,7 @@ skillink locale list|install|use|remove
 init
 migrate
 skill list|add|scan|tag|remove
-package list|create|copy|tag|remove|check
+package list|create|tag|remove|check
 target list|add|remove|enable|disable
 route list|add|remove|enable|disable
 snapshot
@@ -800,7 +790,7 @@ env
 init / migrate
   -> skill list --json / package list --json
   -> skill add
-  -> package create / package copy
+  -> package create
   -> target list --json（需要时 target add）
   -> route add
   -> apply --dry-run --json
@@ -811,7 +801,7 @@ init / migrate
 失败分支：
 
 ```text
-SKILL_VERSION_CONFLICT -> package copy -> route add -> apply
+SKILL_VERSION_CONFLICT -> package create <新组合版本> -> route add -> apply
 drift / missing       -> apply
 清理                   -> package remove / skill remove / gc --json -> gc --apply
 ```
@@ -829,7 +819,7 @@ drift / missing       -> apply
 - **Overview**：skills、packages、targets、links、doctor；
 - **Targets**：target 列表、package 数、解析后的 skill 数、分配 package、target/package enable/disable（禁用时清理不再需要的投影）、删除 target/route（按 route 清理目标目录条目）、apply 预览（dry-run）、apply 结果；
 - **Skills**：选择目录批量扫描 `SKILL.md`，逐个确认安装；扫描名称只作为名称输入框 placeholder，留空确认时作为默认名称；版本输入框显示自动生成版本的 semver 主体 `1.0.0`，不显示 `+<hash8>` 构建元数据；确认时检测包内目录链接，命中则提示绝对路径并取消该包安装；已安装技能按技能名聚合为一张卡片，通过版本切换标签选择版本，再对当前版本执行标记/移除，标签可直接切换到对应版本；GC；
-- **Packages**：创建/复制 package、组合列表、标签、删除；
+- **Packages**：创建 package、组合列表、标签、删除；复制某个版本时用该版本数据预填创建表单，提交仍走 `package create`；
 - **Doctor**：健康检查；
 - **Language**：安装/切换/删除语言包，显示 nativeName、版本和翻译覆盖率；切换后立即刷新界面，删除当前语言回到英文。
 
@@ -983,7 +973,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 
 ## 10. 测试策略
 
-当前验证（2026-11-01）：69 个测试文件、550 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
+当前验证（2026-11-01）：69 个测试文件、563 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
 
 | 层级 | 内容 |
 |---|---|
@@ -1003,7 +993,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 3. 自环、两节点环、三节点环、同名跨版本环被捕获；
 4. 同一 skill 同版本去重；
 5. 同一 skill 不同版本在 route add 和 apply 都失败；
-6. package copy 通过 override 解决冲突，且引入环/冲突时 `package.json` 不变；
+6. package create 引入环/冲突时 `package.json` 不变；GUI 复制预填不写入配置，提交仍走 package create；
 7. target 只出现 skill 目录；
 8. 删除未托管内容被拒绝；
 9. 三文件历史回滚；
@@ -1047,7 +1037,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 1. `skillink init` 创建 `route.json`、`package.json`、`skill.json`；
 2. `skillink skill add` 拒绝没有 `SKILL.md` 的文件夹；
 3. `package create` 支持 `--skill` 和 `--package`，空依赖失败；
-4. `package copy` 支持依赖 override/drop；
+4. GUI 的复制按钮用源版本数据预填创建包表单，提交仍走 `package create`；
 5. `route add` 只写 package lock，并拒绝环/skill 冲突；
 6. `apply` 只投影 skill，不投影 package；
 7. `status` 能报告链接状态和 package 解析错误；
@@ -1058,8 +1048,8 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 12. 配置中的不安全 name/version 被拒绝，apply/GC 不越出库或 target；
 13. doctor 能报告不安全/重复/嵌套 target，嵌套 package 不被误报 unused；
 14. 删除最后一个 skill 版本和 GC 后不留下空 orphan 目录；
-15. package create/copy、apply、import 复用都要求 `SKILL.md`；
-16. CLI 能完成 init -> skill add -> package create -> target add -> route add -> apply -> status/doctor -> package copy/gc 的调用闭环；
+15. package create、apply、import 复用都要求 `SKILL.md`；
+16. CLI 能完成 init -> skill add -> package create -> target add -> route add -> apply -> status/doctor -> gc 的调用闭环；
 17. 篡改 `skills/<name>/<version>/` 内容后，`apply` 拒绝、`doctor` 报 `SKILL_INTEGRITY_MISMATCH`；
 18. target/import 路径支持 `~`、`%USERPROFILE%`、`$HOME`；导入拒绝系统目录和超限目录；
 19. `target add --mode copy` 成功；`apply` 在 copy target 生成真实目录，修改后 `status` 报 `wrong-version` 并可被再次 apply 恢复；
@@ -1083,10 +1073,10 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 
 ### 11.1 当前实现验证
 
-- `pnpm test`：56 个测试文件、507 个测试通过（2026-11-01）；
+- `pnpm test`：69 个测试文件、563 个测试通过（2026-11-01）；
 - `pnpm typecheck`：通过；
 - `pnpm build`：CLI 与 Electron 桌面端构建成功；
-- 真实 CLI E2E：skill 安装、package 创建/复制、target/route、apply、status/doctor、冲突修复、gc dry-run 均跑通；
+- 真实 CLI E2E：skill 安装、package 创建、target/route、apply、status/doctor、冲突修复、gc dry-run 均跑通；
 - 桌面冒烟：旧版 `zh-CN` 语言包在启动后自动刷新到内置版本，版本输入框显示 `1.0.0`，不显示 hash；
 - hardening 验证：内容完整性篡改、apply 预检/回滚、导入限制、路径展开、文件锁重试、IPC sender、大小写冲突、frontmatter、GUI 生命周期均有测试覆盖。
 
@@ -1102,7 +1092,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 | package 没有嵌套 | package 可以嵌套 package |
 | 无环检测 | 每个 package 生命周期和 apply/route 都做 DFS 环检测 |
 | 无传递闭包哈希 | route lock 使用 package 传递闭包哈希 |
-| 无 package copy | `package copy` 解决 skill 版本冲突 |
+| 无 package 版本复制表单 | GUI 复制版本时预填创建包表单，解决 skill 版本冲突 |
 | 旧 `skills.json` | `skillink migrate` 全有或全无迁移 |
 | 配置 name/version 未做路径校验 | `SafeNameSchema`/`SafeVersionSchema` + apply/GC 包含检查 |
 | package/skill 内容存在性校验较弱 | `assertSkillContent` 强制目录 + `SKILL.md` |

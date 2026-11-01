@@ -8,7 +8,6 @@ import type {
 } from '@skillink/shared';
 import type {
   AddTargetRequest,
-  CopyPackageRequest,
   CreatePackageRequest,
   ImportSkillRequest,
   PackageRemoveRequest,
@@ -269,12 +268,6 @@ export function App({ api }: AppProps) {
     }, t('toast.package.created'));
   }
 
-  function copyPackage(input: CopyPackageRequest): Promise<boolean> {
-    return runAction(async () => {
-      await client!.copyPackage(input);
-    }, t('toast.package.copied'));
-  }
-
   function packageTag(input: PackageTagRequest): void {
     void runAction(async () => {
       await client!.packageTag(input);
@@ -438,7 +431,6 @@ export function App({ api }: AppProps) {
               skills={snapshot.skills}
               busy={busy}
               onCreatePackage={createPackage}
-              onCopyPackage={copyPackage}
               onTag={packageTag}
               onRemove={packageRemove}
             />

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   buildAddTargetArgs,
   buildApplyArgs,
-  buildCopyPackageArgs,
   buildCreatePackageArgs,
   buildGcArgs,
   buildImportSkillArgs,
@@ -66,27 +65,6 @@ describe('CLI argv builders', () => {
       'review@2.0.0',
       '--package',
       'base@2.0.0',
-      '--json',
-    ]);
-
-    expect(
-      buildCopyPackageArgs({
-        sourceName: 'frontend',
-        sourceVersion: '1.0.0',
-        targetName: 'frontend',
-        targetVersion: '1.1.0',
-        skillOverrides: { pdf: '1.1.0' },
-        dropSkills: ['review'],
-      }),
-    ).toEqual([
-      'package',
-      'copy',
-      'frontend@1.0.0',
-      'frontend@1.1.0',
-      '--skill',
-      'pdf@1.1.0',
-      '--drop-skill',
-      'review',
       '--json',
     ]);
   });
