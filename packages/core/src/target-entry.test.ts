@@ -189,4 +189,81 @@ describe('compareTargetEntry', () => {
       actual: { kind: 'link' },
     });
   });
+
+  it('accepts a real directory with matching content in copy mode', async () => {
+    const root = await tempDir('skillink-target-entry-copy-ok-');
+    const { sourcePath, expected } = await sourceSkill();
+    const destination = path.join(root, 'demo');
+    await cp(sourcePath, destination, { recursive: true });
+
+    const comparison = await compareTargetEntry({
+      destination,
+      sourcePath,
+      mode: 'copy',
+      expected,
+    });
+
+    expect(comparison).toMatchObject({
+      kind: 'ok',
+      actual: { kind: 'directory' },
+    });
+  });
+
+  it('reports wrong-version for a modified copy directory', async () => {
+    const root = await tempDir('skillink-target-entry-copy-different-');
+    const { sourcePath, expected } = await sourceSkill();
+    const destination = path.join(root, 'demo');
+    await cp(sourcePath, destination, { recursive: true });
+    await writeFile(path.join(destination, 'content.txt'), 'changed', 'utf8');
+
+    const comparison = await compareTargetEntry({
+      destination,
+      sourcePath,
+      mode: 'copy',
+      expected,
+    });
+
+    expect(comparison).toMatchObject({
+      kind: 'wrong-version',
+      actual: { kind: 'directory' },
+    });
+  });
+
+  it('reports wrong-mode for a link in copy mode', async () => {
+    const root = await tempDir('skillink-target-entry-copy-link-');
+    const { sourcePath, expected } = await sourceSkill();
+    const destination = path.join(root, 'demo');
+    await createDirectoryLink(sourcePath, destination);
+
+    const comparison = await compareTargetEntry({
+      destination,
+      sourcePath,
+      mode: 'copy',
+      expected,
+    });
+
+    expect(comparison).toMatchObject({
+      kind: 'wrong-mode',
+      actual: { kind: 'link' },
+    });
+  });
+
+  it('reports wrong-mode for a regular file in copy mode', async () => {
+    const root = await tempDir('skillink-target-entry-copy-file-');
+    const { sourcePath, expected } = await sourceSkill();
+    const destination = path.join(root, 'demo');
+    await writeFile(destination, 'not a skill', 'utf8');
+
+    const comparison = await compareTargetEntry({
+      destination,
+      sourcePath,
+      mode: 'copy',
+      expected,
+    });
+
+    expect(comparison).toMatchObject({
+      kind: 'wrong-mode',
+      actual: { kind: 'file' },
+    });
+  });
 });

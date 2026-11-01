@@ -50,10 +50,10 @@ export async function addTarget(input: AddTargetInput): Promise<TargetRoute> {
   );
   const mode = input.mode ?? 'link';
 
-  if (mode !== 'link') {
+  if (mode !== 'link' && mode !== 'copy') {
     throw new SkillinkError(
-      'COPY_MODE_UNSUPPORTED',
-      'Copy mode is not implemented yet; use mode "link" instead.',
+      'ROUTE_INVALID',
+      `Unsupported target mode "${String(mode)}".`,
       { mode },
     );
   }

@@ -56,7 +56,8 @@ describe('TargetsView', () => {
     );
 
     expect(page).not.toContain('<select');
-    expect(dialog).toMatch(/<option value="copy"[^>]*disabled/);
+    expect(dialog).toContain('<option value="copy">copy</option>');
+    expect(dialog).not.toMatch(/<option value="copy"[^>]*disabled/);
     expect(dialog).toContain('Directory path');
   });
 
@@ -208,5 +209,38 @@ describe('TargetsView', () => {
 
     expect(html).toContain('1 package');
     expect(html).toContain('3 skills');
+  });
+
+  it('renders copy apply operation labels', () => {
+    const html = renderToStaticMarkup(
+      <TargetsView
+        targets={[target]}
+        applyReport={{
+          dryRun: false,
+          ok: true,
+          operations: [
+            {
+              kind: 'create-copy',
+              targetId: 'project-a',
+              targetPath: 'C:/Projects/ProjectA/skills',
+              name: 'pdf',
+              version: '1.0.0',
+              path: 'C:/Projects/ProjectA/skills/pdf',
+            },
+            {
+              kind: 'replace-copy',
+              targetId: 'project-a',
+              targetPath: 'C:/Projects/ProjectA/skills',
+              name: 'review',
+              version: '1.0.0',
+              path: 'C:/Projects/ProjectA/skills/review',
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(html).toContain('create-copy');
+    expect(html).toContain('replace-copy');
   });
 });

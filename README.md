@@ -9,7 +9,7 @@ target -> package -> skill -> 实体内容
 - **Skill 是唯一安装单位，也是唯一实体**：内容存放在 `%USERPROFILE%\.agents\skillink\skills\<skill>\<version>\`，根目录必须有 `SKILL.md`。
 - **Package 只是配置文件**：`package.json` 描述 package 版本如何组合 skill 和其他 package；它没有内容目录，也不会投影到 target。
 - **Route 只依赖 package**：`route.json` 的 target 声明 package 版本，不直接声明 skill。
-- **Target 最终只包含 skill**：apply 会把 package 图展开为 skill 集合，再链接 skill 文件夹（v2.0 只实现 link；copy target 在创建时直接拒绝）。
+- **Target 最终只包含 skill**：apply 会把 package 图展开为 skill 集合，再链接或复制 skill 文件夹（`link` / `copy` 两种投影模式）。
 - **三个数据配置 + 用户偏好**：`route.json`、`package.json`、`skill.json` 同级，均位于控制面并由 git 跟踪；`settings.json` 只保存 UI 语言等用户偏好，不进入 git 版本控制。
 - **可复现**：route 锁定 package 版本；package 版本锁定精确 skill/package 版本；package 使用传递闭包哈希校验。
 - **不在项目中生成配置**：target 是普通目录，只放投影结果。
@@ -27,7 +27,7 @@ target -> package -> skill -> 实体内容
 - `route.json` 只写 package lock；
 - Windows junction / POSIX symlink 投影；
 - `apply` / `status` / `doctor` / `gc`；
-- apply 先完成全量预检再写文件系统；执行失败会回滚本次创建的链接，但被替换的真实目录/文件不会恢复；
+- apply 先完成全量预检再写文件系统；执行失败会回滚本次创建的链接/副本，但被替换的真实目录/文件不会恢复；
 - apply 只处理 route 期望集合中的同名条目；集合外条目不动，不再提供 `--prune`；route 版本覆盖或删除时由 target GC 清理不再需要的投影；
 - v1 `skills.json` -> v2 全有或全无迁移；
 - target/import 路径支持 `~`、`%USERPROFILE%`、`$HOME`；
@@ -41,7 +41,7 @@ target -> package -> skill -> 实体内容
 - 写命令通过 `<home>/.skillink.lock` 串行化；
 - Electron 打包（NSIS + portable）。
 
-> v2.0 仅支持 `mode: link`。copy target 会被拒绝，迁移遗留的 copy target 由 `doctor` 报 `UNSUPPORTED_MODE`。
+> target 支持 `mode: link` 和 `mode: copy`。copy target 会在目标目录中生成完整的真实目录副本；副本内容与 skill 库不一致时，`status` 报 `wrong-version`，`apply` 会整目录替换。
 
 ## 快速开始
 
@@ -66,6 +66,10 @@ pnpm dev:cli -- package create frontend@1.0.0 \
 # 添加 target，并把 package 分配给 target
 pnpm dev:cli -- target add <empty-target-dir> --id project-a
 pnpm dev:cli -- route add project-a frontend@1.0.0
+
+# 需要真实目录副本而不是链接时使用 copy 模式
+pnpm dev:cli -- target add <empty-target-dir> --id project-copy --mode copy
+pnpm dev:cli -- route add project-copy frontend@1.0.0
 
 # 投影 skill 到 target
 pnpm dev:cli -- apply
@@ -266,9 +270,9 @@ skillink package check [--json]
 
 ```bash
 # 添加一个 target 目录，最终只会在其中生成 skill 文件夹/链接。
-# id 省略时由 --label 或目录名生成；--mode 默认 link，v2.0 只支持 link，
-# 传 copy 会报 COPY_MODE_UNSUPPORTED。
-skillink target add <path> [--id <id>] [--label <label>] [--mode <mode>] [--json]
+# id 省略时由 --label 或目录名生成；--mode 默认 link，可选 link 或 copy。
+# copy 会生成真实目录副本，link 会生成目录链接。
+skillink target add <path> [--id <id>] [--label <label>] [--mode <link|copy>] [--json]
 
 # 列出所有 target 的 id、路径、投影模式和启用状态。
 skillink target list [--json]

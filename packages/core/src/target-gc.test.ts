@@ -1,4 +1,5 @@
 import {
+  cp,
   mkdir,
   mkdtemp,
   readFile,
@@ -199,6 +200,26 @@ describe('target GC', () => {
       }),
     ).resolves.toEqual(['review']);
     expect(await pathExists(path.join(librarySkill, 'SKILL.md'))).toBe(true);
+  });
+
+  it('deletes copied directories from a copy target', async () => {
+    const { paths, target, targetPath } = await setup();
+    const copied = path.join(targetPath, 'pdf');
+    await cp(path.join(paths.libraryDir, 'pdf', '1.0.0'), copied, {
+      recursive: true,
+    });
+
+    const removed = await gcTargetEntries({
+      paths,
+      target: { ...target, mode: 'copy' },
+      skillNames: ['pdf'],
+    });
+
+    expect(removed).toEqual(['pdf']);
+    expect(await pathExists(copied)).toBe(false);
+    expect(
+      await pathExists(path.join(paths.libraryDir, 'pdf', '1.0.0', 'SKILL.md')),
+    ).toBe(true);
   });
 
   it('returns an empty list when the target directory is missing', async () => {

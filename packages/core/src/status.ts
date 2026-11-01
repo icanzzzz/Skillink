@@ -101,19 +101,6 @@ export async function status(input: StatusInput = {}): Promise<StatusReport> {
       continue;
     }
 
-    if (target.mode !== 'link') {
-      entries.push({
-        targetId: target.id,
-        targetPath,
-        name: '<target>',
-        version: '',
-        state: 'conflict',
-        path: targetPath,
-        detail: `Unsupported target mode "${target.mode}".`,
-      });
-      continue;
-    }
-
     let targetFailed = false;
 
     for (const check of checkTargetPackageLocks(packageFile, target)) {

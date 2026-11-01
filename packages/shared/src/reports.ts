@@ -4,6 +4,8 @@ export type ApplyOperationKind =
   | 'create-target'
   | 'create-link'
   | 'replace-link'
+  | 'create-copy'
+  | 'replace-copy'
   | 'skip';
 
 export interface ApplyOperation {

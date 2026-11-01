@@ -897,7 +897,38 @@ describe.skipIf(!gitReady)('CLI', () => {
     expect(error.error.message).toContain('SKILL.md');
   });
 
-  it('rejects copy mode with a structured JSON error', async () => {
+  it('adds a copy target and lists its mode', async () => {
+    const root = await tempDir('skillink-cli-');
+    const home = path.join(root, 'home');
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    ctx.out.length = 0;
+    expect(
+      await runCli(
+        ['target', 'add', targetPath, '--mode', 'copy', '--json'],
+        ctx,
+      ),
+    ).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({
+      id: 'target',
+      mode: 'copy',
+    });
+
+    ctx.out.length = 0;
+    expect(await runCli(['target', 'list', '--json'], ctx)).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toEqual([
+      expect.objectContaining({ mode: 'copy' }),
+    ]);
+
+    ctx.out.length = 0;
+    expect(await runCli(['target', 'list'], ctx)).toBe(0);
+    expect(ctx.out.join('\n')).toContain('copy');
+  });
+
+  it('rejects an unknown target mode', async () => {
     const root = await tempDir('skillink-cli-');
     const home = path.join(root, 'home');
     const targetPath = path.join(root, 'target');
@@ -908,13 +939,13 @@ describe.skipIf(!gitReady)('CLI', () => {
     ctx.err.length = 0;
     expect(
       await runCli(
-        ['target', 'add', targetPath, '--mode', 'copy', '--json'],
+        ['target', 'add', targetPath, '--mode', 'zip', '--json'],
         ctx,
       ),
     ).toBe(1);
     expect(JSON.parse(ctx.err.join('\n'))).toMatchObject({
       ok: false,
-      error: { code: 'COPY_MODE_UNSUPPORTED' },
+      error: { code: 'ROUTE_INVALID' },
     });
   });
 

@@ -227,7 +227,7 @@ CLI ------------------------> @skillink/core -> @skillink/shared
 | `targets[].id` | 是 | 稳定唯一 ID |
 | `targets[].label` | 否 | GUI 显示名 |
 | `targets[].path` | 是 | 用户填写的 target 目录 |
-| `targets[].mode` | 是 | `link` 或 `copy`；v2.0 仅接受 `link`，copy 字段保留给 v2.1 |
+| `targets[].mode` | 是 | `link` 或 `copy`；`link` 创建目录链接，`copy` 创建真实目录副本 |
 | `targets[].enabled` | 否 | 默认 true；false 时 apply 跳过 |
 | `targets[].packages` | 是 | package 名称 -> package lock |
 | `packages[].requested` | 否 | package 版本范围、精确版本或 tag |
@@ -581,12 +581,12 @@ skillink route add <target-id> <package@range-or-tag>
 - 每个 skill 内容的 `integrity/fileCount/size` 必须与 `skill.json` 一致；
 - skill 名/版本必须是安全路径段，源/目标路径必须保持在库和 target 内；
 - route 是受管的唯一准则：期望集合中的同名条目无论由谁创建，都按 Skillink 的投影处理；
-- 同名条目形态与 `target.mode` 不同时直接删除，按 route 记录的模式重建；形态相同（链接）时再与 skill 库比对 `integrity/fileCount/size`，不同则删除重建；
+- 同名条目形态与 `target.mode` 不同时直接删除，按 route 记录的模式重建；形态相同（链接或真实目录）时再与 skill 库比对 `integrity/fileCount/size`，不同则删除重建；
+- `copy` 模式先在 target 内部的 `.skillink-tmp-<uuid>` 目录完成复制和校验，再替换目标条目；临时目录不参与 route 所有权判断，崩溃遗留的临时目录需要手工清理；
 - 只处理同名且在期望集合中的条目；集合外条目不动；
 - 替换真实目录或文件使用 `rm -rf` 直接删除，失败时不恢复被替换内容；
-- 所有 target 先完成配置、package 图、skill 内容、路径和条目预检，再创建目录/链接；
-- 执行期间创建/替换的链接有进程内回滚；被删除的真实目录/文件不在回滚范围内；进程崩溃仍可能留下半完成状态；
-- v2.0 仅支持 `mode: link`；`target add --mode copy` 直接返回 `COPY_MODE_UNSUPPORTED`，迁移遗留 copy target 由 doctor 报 `UNSUPPORTED_MODE`；
+- 所有 target 先完成配置、package 图、skill 内容、路径和条目预检，再创建目录/链接/副本；
+- 执行期间创建/替换的链接和副本有进程内回滚；被删除的真实目录/文件不在回滚范围内；进程崩溃仍可能留下半完成状态；
 - 失败时三个配置文件保持不变。
 
 ### 6.5 Status
@@ -623,8 +623,9 @@ ok | missing | wrong-mode | wrong-version | broken-link | conflict | disabled
 - 同一 target 内 skill 版本冲突；
 - 链接健康状态；
 - 未被 route 引用的 package 版本（`UNUSED_PACKAGE_VERSION`）；嵌套 package 通过传递闭包算作已引用；
-- 不支持的 target mode（`UNSUPPORTED_MODE`）；
 - package/skill/target 名称大小写冲突（`INVALID_CONFIG`）。
+
+`UNSUPPORTED_MODE` 错误码暂时保留以兼容外部类型消费，但当前 schema 不会再产生该问题。
 
 `doctor` 不自动删除任何内容。
 
@@ -1018,7 +1019,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 
 ### 10.1 已知限制
 
-- `mode: copy` 投影尚未实现；v2.0 在 `target add` 时返回 `COPY_MODE_UNSUPPORTED`，迁移遗留 copy target 由 doctor 报 `UNSUPPORTED_MODE`，计划 v2.1 实现；
+- `mode: copy` 不做增量同步，每次替换都会重新复制并哈希；副本中的额外文件会在 apply 时被删除；FAT/exFAT 等无法保留权限位的文件系统可能导致副本持续 `wrong-version`；
 - apply 的预检和回滚覆盖普通失败与进程内异常，但不能防止进程崩溃/断电留下半完成 target；
 - Windows 长路径、OneDrive 同步冲突尚未做专项自动化验证；
 - Linux/macOS 已加入 CI 矩阵，但尚未在真实设备上手工验证；
@@ -1061,7 +1062,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 16. CLI 能完成 init -> skill add -> package create -> target add -> route add -> apply -> status/doctor -> package copy/gc 的调用闭环；
 17. 篡改 `skills/<name>/<version>/` 内容后，`apply` 拒绝、`doctor` 报 `SKILL_INTEGRITY_MISMATCH`；
 18. target/import 路径支持 `~`、`%USERPROFILE%`、`$HOME`；导入拒绝系统目录和超限目录；
-19. `target add --mode copy` 返回 `COPY_MODE_UNSUPPORTED`，doctor 能诊断遗留 copy target；
+19. `target add --mode copy` 成功；`apply` 在 copy target 生成真实目录，修改后 `status` 报 `wrong-version` 并可被再次 apply 恢复；
 20. `route remove` 默认校验剩余图，`--force` 可修复；target/package enable/disable 可用；
 21. GUI 能删除 target/route、切换 enable（禁用时清理投影）、预览/执行 apply，并显示解析后的 skill 数；
 22. `locale` 命令能安装、切换、列出、删除语言包；缺失/损坏语言包回退英文；`zh-CN` 覆盖全部英文 key；

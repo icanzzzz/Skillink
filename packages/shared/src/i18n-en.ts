@@ -115,6 +115,8 @@ export const EN_MESSAGES = {
   'apply.kind.create_target': 'create-target',
   'apply.kind.create_link': 'create-link',
   'apply.kind.replace_link': 'replace-link',
+  'apply.kind.create_copy': 'create-copy',
+  'apply.kind.replace_copy': 'replace-copy',
   'apply.kind.skip': 'skip',
 
   'common.browse': 'Browse',
@@ -184,7 +186,7 @@ export const EN_MESSAGES = {
   'targets.form.versionPlaceholder': '1.0.0',
   'targets.form.assign': 'Assign',
   'targets.mode.link': 'link',
-  'targets.mode.copy': 'copy (coming later)',
+  'targets.mode.copy': 'copy',
 
   'common.remove': 'Remove',
 

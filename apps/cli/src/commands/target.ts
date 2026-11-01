@@ -24,7 +24,7 @@ export function registerTargetCommands(
     .argument('<path>', 'Target directory')
     .option('--id <id>', 'Stable target id')
     .option('--label <label>', 'Display label')
-    .option('--mode <mode>', 'Projection mode (v2.0 supports link only)')
+    .option('--mode <mode>', 'Projection mode (link or copy)')
     .option('--json', 'Print machine-readable JSON')
     .action(
       async (

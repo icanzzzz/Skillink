@@ -233,22 +233,19 @@ describe('doctor', () => {
     ).toEqual([]);
   });
 
-  it('reports a copy target that cannot be projected', async () => {
+  it('does not report a copy target as unsupported', async () => {
     const { paths } = await setup();
     const route = await readRouteFile(paths);
     route.targets[0]!.mode = 'copy';
     await writeRouteFile(paths, route);
+    await apply({ paths });
 
     const report = await doctor({ paths });
 
-    expect(report.issues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'UNSUPPORTED_MODE',
-          targetId: 'project-a',
-        }),
-      ]),
-    );
+    expect(
+      report.issues.filter((issue) => issue.code === 'UNSUPPORTED_MODE'),
+    ).toEqual([]);
+    expect(report.ok).toBe(true);
   });
 
   it('reports names that collide case-insensitively', async () => {

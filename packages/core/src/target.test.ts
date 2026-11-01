@@ -9,7 +9,11 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { getSkillDir, getSkillinkPaths } from '@skillink/shared';
+import {
+  getSkillDir,
+  getSkillinkPaths,
+  type TargetMode,
+} from '@skillink/shared';
 import { createDirectoryLink } from './links.js';
 import { addTarget, removeTarget, setTargetEnabled } from './target.js';
 import {
@@ -97,17 +101,37 @@ describe('targets', () => {
     expect(route.targets).toHaveLength(1);
   });
 
-  it('rejects copy mode until it is implemented', async () => {
+  it('adds a copy target', async () => {
+    const { paths, targetPath } = await setup();
+
+    const target = await addTarget({
+      paths,
+      id: 'copy-target',
+      path: targetPath,
+      mode: 'copy',
+    });
+
+    expect(target).toMatchObject({
+      id: 'copy-target',
+      path: targetPath,
+      mode: 'copy',
+    });
+    expect((await readRouteFile(paths)).targets).toEqual([
+      expect.objectContaining({ id: 'copy-target', mode: 'copy' }),
+    ]);
+  });
+
+  it('rejects an unknown target mode', async () => {
     const { paths, targetPath } = await setup();
 
     await expect(
       addTarget({
         paths,
-        id: 'copy-target',
+        id: 'bad-target',
         path: targetPath,
-        mode: 'copy',
+        mode: 'zip' as TargetMode,
       }),
-    ).rejects.toMatchObject({ code: 'COPY_MODE_UNSUPPORTED' });
+    ).rejects.toMatchObject({ code: 'ROUTE_INVALID' });
 
     expect((await readRouteFile(paths)).targets).toEqual([]);
   });

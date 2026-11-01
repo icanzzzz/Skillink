@@ -167,9 +167,7 @@ export function AddTargetForm({
           onChange={(event) => setMode(event.target.value as TargetMode)}
         >
           <option value="link">{t('targets.mode.link')}</option>
-          <option value="copy" disabled>
-            {t('targets.mode.copy')}
-          </option>
+          <option value="copy">{t('targets.mode.copy')}</option>
         </select>
       </label>
       <div className="form-actions">

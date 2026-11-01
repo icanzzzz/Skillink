@@ -214,6 +214,19 @@ describe('language packs', () => {
     expect(pack.messages['skills.form.versionPlaceholder']).toBe('1.0.0');
   });
 
+  it('ships copy projection labels in English and Simplified Chinese', () => {
+    const pack = LanguagePackSchema.parse(zhCN);
+
+    for (const key of [
+      'apply.kind.create_copy',
+      'apply.kind.replace_copy',
+      'targets.mode.copy',
+    ]) {
+      expect(EN_MESSAGES[key as keyof typeof EN_MESSAGES]).toBeTruthy();
+      expect(pack.messages[key]).toBeTruthy();
+    }
+  });
+
   it('summarizes a language pack against the English catalog', () => {
     const summary = summarizeLanguagePack({
       schemaVersion: 1,

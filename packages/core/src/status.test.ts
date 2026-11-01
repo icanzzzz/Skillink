@@ -1,4 +1,5 @@
 import {
+  cp,
   mkdir,
   mkdtemp,
   rm,
@@ -86,6 +87,12 @@ async function setup(): Promise<{
   });
 
   return { paths, targetPath };
+}
+
+async function useCopyTarget(paths: SkillinkPaths): Promise<void> {
+  const route = await readRouteFile(paths);
+  route.targets[0]!.mode = 'copy';
+  await writeRouteFile(paths, route);
 }
 
 afterEach(async () => {
@@ -366,5 +373,119 @@ describe('status', () => {
     );
 
     expect(stale.map((entry) => entry.name)).toEqual(['combo', 'docs-pack']);
+  });
+
+  it('reports ok for correctly copied skills', async () => {
+    const { paths } = await setup();
+    await useCopyTarget(paths);
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'combo',
+      requested: '1.0.0',
+    });
+    await apply({ paths });
+
+    const report = await status({ paths });
+
+    expect(report.healthy).toBe(true);
+    expect(report.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'pdf', state: 'ok', version: '1.0.0' }),
+        expect.objectContaining({
+          name: 'review',
+          state: 'ok',
+          version: '1.0.0',
+        }),
+      ]),
+    );
+  });
+
+  it('reports missing when a copy entry is absent', async () => {
+    const { paths, targetPath } = await setup();
+    await useCopyTarget(paths);
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'combo',
+      requested: '1.0.0',
+    });
+    await apply({ paths });
+    await rm(path.join(targetPath, 'pdf'), { recursive: true, force: true });
+
+    const report = await status({ paths });
+
+    expect(report.healthy).toBe(false);
+    expect(report.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'pdf', state: 'missing' }),
+      ]),
+    );
+  });
+
+  it('reports wrong-version for a modified copy directory', async () => {
+    const { paths, targetPath } = await setup();
+    await useCopyTarget(paths);
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'combo',
+      requested: '1.0.0',
+    });
+    await apply({ paths });
+    await writeFile(path.join(targetPath, 'pdf', 'content.txt'), 'changed', 'utf8');
+
+    const report = await status({ paths });
+
+    expect(report.healthy).toBe(false);
+    expect(report.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'pdf', state: 'wrong-version' }),
+      ]),
+    );
+  });
+
+  it('reports wrong-mode for a link in a copy target', async () => {
+    const { paths, targetPath } = await setup();
+    await useCopyTarget(paths);
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'pdf-pack',
+      requested: '1.0.0',
+    });
+    await createDirectoryLink(
+      getSkillDir(paths, 'pdf', '1.0.0'),
+      path.join(targetPath, 'pdf'),
+    );
+
+    const report = await status({ paths });
+
+    expect(report.healthy).toBe(false);
+    expect(report.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'pdf', state: 'wrong-mode' }),
+      ]),
+    );
+  });
+
+  it('ignores copy entries outside the route', async () => {
+    const { paths, targetPath } = await setup();
+    await useCopyTarget(paths);
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'pdf-pack',
+      requested: '1.0.0',
+    });
+    await apply({ paths });
+    await cp(getSkillDir(paths, 'review', '1.0.0'), path.join(targetPath, 'review'), {
+      recursive: true,
+    });
+
+    const report = await status({ paths });
+
+    expect(report.healthy).toBe(true);
+    expect(report.entries.some((entry) => entry.name === 'review')).toBe(false);
   });
 });

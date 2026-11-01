@@ -245,7 +245,7 @@ describe('apply', () => {
     });
   });
 
-  it('rejects a migrated copy target before writing links', async () => {
+  it('projects a copy target as real directories', async () => {
     const { paths, targetPath } = await setup();
     await addRouteEntry({
       paths,
@@ -257,8 +257,168 @@ describe('apply', () => {
     route.targets[0]!.mode = 'copy';
     await writeRouteFile(paths, route);
 
+    const report = await apply({ paths });
+
+    expect(report.ok).toBe(true);
+    expect(report.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'create-copy', name: 'pdf' }),
+        expect.objectContaining({ kind: 'create-copy', name: 'review' }),
+      ]),
+    );
+    expect((await lstat(path.join(targetPath, 'pdf'))).isDirectory()).toBe(true);
+    expect((await lstat(path.join(targetPath, 'pdf'))).isSymbolicLink()).toBe(
+      false,
+    );
+    await expect(
+      readFile(path.join(targetPath, 'pdf', 'content.txt'), 'utf8'),
+    ).resolves.toBe('pdf@1.0.0');
+  });
+
+  it('skips copy entries that already match the skill', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'combo',
+      requested: '1.0.0',
+    });
+    const route = await readRouteFile(paths);
+    route.targets[0]!.mode = 'copy';
+    await writeRouteFile(paths, route);
+    await apply({ paths });
+
+    const report = await apply({ paths });
+
+    expect(report.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'skip', name: 'pdf' }),
+        expect.objectContaining({ kind: 'skip', name: 'review' }),
+      ]),
+    );
+  });
+
+  it('replaces a modified copy and removes extra files', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'pdf-pack',
+      requested: '1.0.0',
+    });
+    const route = await readRouteFile(paths);
+    route.targets[0]!.mode = 'copy';
+    await writeRouteFile(paths, route);
+    await apply({ paths });
+    const destination = path.join(targetPath, 'pdf');
+    await writeFile(path.join(destination, 'content.txt'), 'changed', 'utf8');
+    await writeFile(path.join(destination, 'extra.txt'), 'extra', 'utf8');
+
+    const report = await apply({ paths });
+
+    expect(report.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'replace-copy', name: 'pdf' }),
+      ]),
+    );
+    await expect(
+      readFile(path.join(destination, 'content.txt'), 'utf8'),
+    ).resolves.toBe('pdf@1.0.0');
+    await expect(
+      lstat(path.join(destination, 'extra.txt')),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('replaces a link in a copy target with a real directory', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'pdf-pack',
+      requested: '1.0.0',
+    });
+    const destination = path.join(targetPath, 'pdf');
+    await createDirectoryLink(getSkillDir(paths, 'pdf', '1.0.0'), destination);
+    const route = await readRouteFile(paths);
+    route.targets[0]!.mode = 'copy';
+    await writeRouteFile(paths, route);
+
+    const report = await apply({ paths });
+
+    expect(report.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'replace-copy', name: 'pdf' }),
+      ]),
+    );
+    expect((await lstat(destination)).isDirectory()).toBe(true);
+    expect((await lstat(destination)).isSymbolicLink()).toBe(false);
+  });
+
+  it('does not create copies on dry-run', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'combo',
+      requested: '1.0.0',
+    });
+    const route = await readRouteFile(paths);
+    route.targets[0]!.mode = 'copy';
+    await writeRouteFile(paths, route);
+
+    const report = await apply({ paths, dryRun: true });
+
+    expect(report.dryRun).toBe(true);
+    expect(report.operations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'create-copy', name: 'pdf' }),
+      ]),
+    );
+    await expect(lstat(path.join(targetPath, 'pdf'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
+  it('does not write copies when the source skill is invalid', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'pdf-pack',
+      requested: '1.0.0',
+    });
+    const route = await readRouteFile(paths);
+    route.targets[0]!.mode = 'copy';
+    await writeRouteFile(paths, route);
+    await rm(path.join(getSkillDir(paths, 'pdf', '1.0.0'), 'SKILL.md'));
+
     await expect(apply({ paths })).rejects.toMatchObject({
-      code: 'COPY_MODE_UNSUPPORTED',
+      code: 'SKILL_MD_MISSING',
+    });
+    await expect(lstat(path.join(targetPath, 'pdf'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
+  it('does not write copies when the source integrity is invalid', async () => {
+    const { paths, targetPath } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'pdf-pack',
+      requested: '1.0.0',
+    });
+    const route = await readRouteFile(paths);
+    route.targets[0]!.mode = 'copy';
+    await writeRouteFile(paths, route);
+    await writeFile(
+      path.join(getSkillDir(paths, 'pdf', '1.0.0'), 'content.txt'),
+      'tampered',
+      'utf8',
+    );
+
+    await expect(apply({ paths })).rejects.toMatchObject({
+      code: 'SKILL_INTEGRITY_MISMATCH',
     });
     await expect(lstat(path.join(targetPath, 'pdf'))).rejects.toMatchObject({
       code: 'ENOENT',

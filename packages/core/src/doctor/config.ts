@@ -45,15 +45,6 @@ export async function checkTargetConfiguration(
   const targetIds = new Set<string>();
   const resolvedTargetPaths: string[] = [];
   for (const target of ctx.route.targets) {
-    if (target.mode !== 'link') {
-      issues.push({
-        code: 'UNSUPPORTED_MODE',
-        message: `Target "${target.id}" uses unsupported mode "${target.mode}"; v2.0 only supports link mode.`,
-        targetId: target.id,
-        path: target.path,
-      });
-    }
-
     if (targetIds.has(target.id)) {
       issues.push({
         code: 'INVALID_CONFIG',
