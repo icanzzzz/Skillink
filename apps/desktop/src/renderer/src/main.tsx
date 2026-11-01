@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
+import { UiProvider } from './Feedback.js';
 import { I18nProvider } from './i18n.js';
 import './styles.css';
 
@@ -13,7 +14,9 @@ if (!container) {
 createRoot(container).render(
   <React.StrictMode>
     <I18nProvider api={window.skillink}>
-      <App />
+      <UiProvider>
+        <App />
+      </UiProvider>
     </I18nProvider>
   </React.StrictMode>,
 );

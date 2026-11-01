@@ -23,6 +23,7 @@ import type {
 } from '../../ipc-schemas.js';
 import type { DesktopApi, DesktopSnapshot } from '../../shared.js';
 import { DoctorView } from './DoctorView.js';
+import { useToast } from './Feedback.js';
 import { useI18n } from './i18n.js';
 import { LanguageDialog, LanguageTrigger } from './LanguageDialog.js';
 import { GitUnavailableNotice } from './GitUnavailableNotice.js';
@@ -119,6 +120,7 @@ export function App({ api }: AppProps) {
   const client =
     api ?? (typeof window !== 'undefined' ? window.skillink : undefined);
   const { t } = useI18n();
+  const { pushToast } = useToast();
   const [view, setView] = useState<ViewId>('overview');
   const [snapshot, setSnapshot] = useState<DesktopSnapshot | null>(null);
   const [gcReport, setGcReport] = useState<GcReport | null>(null);
@@ -156,9 +158,12 @@ export function App({ api }: AppProps) {
       .catch(() => setGitAvailable(null));
   }, []);
 
-  async function runAction(action: () => Promise<void>): Promise<void> {
+  async function runAction(
+    action: () => Promise<void>,
+    successMessage?: string,
+  ): Promise<boolean> {
     if (!client) {
-      return;
+      return false;
     }
 
     setBusy(true);
@@ -166,47 +171,61 @@ export function App({ api }: AppProps) {
     try {
       await action();
       await refresh();
+      if (successMessage) {
+        pushToast({ tone: 'success', message: successMessage });
+      }
+      return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      pushToast({
+        tone: 'error',
+        message: cause instanceof Error ? cause.message : String(cause),
+      });
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
-  function addTarget(input: AddTargetRequest): void {
-    void runAction(async () => {
+  function addTarget(input: AddTargetRequest): Promise<boolean> {
+    return runAction(async () => {
       await client!.addTarget(input);
-    });
+    }, t('toast.target.added'));
   }
 
   function removeTarget(input: TargetRemoveRequest): void {
     void runAction(async () => {
       await client!.removeTarget(input);
-    });
+    }, t('toast.target.removed'));
   }
 
   function targetEnable(input: TargetEnableRequest): void {
-    void runAction(async () => {
-      await client!.targetEnable(input);
-    });
+    void runAction(
+      async () => {
+        await client!.targetEnable(input);
+      },
+      input.enabled ? t('toast.target.enabled') : t('toast.target.disabled'),
+    );
   }
 
-  function routeAdd(input: RouteAddRequest): void {
-    void runAction(async () => {
+  function routeAdd(input: RouteAddRequest): Promise<boolean> {
+    return runAction(async () => {
       await client!.routeAdd(input);
-    });
+    }, t('toast.route.added'));
   }
 
   function removeRoute(input: RouteRemoveRequest): void {
     void runAction(async () => {
       await client!.routeRemove(input);
-    });
+    }, t('toast.route.removed'));
   }
 
   function routeEnable(input: RouteEnableRequest): void {
-    void runAction(async () => {
-      await client!.routeEnable(input);
-    });
+    void runAction(
+      async () => {
+        await client!.routeEnable(input);
+      },
+      input.enabled ? t('toast.route.enabled') : t('toast.route.disabled'),
+    );
   }
 
   async function scanSkills(
@@ -244,54 +263,60 @@ export function App({ api }: AppProps) {
     }
   }
 
-  function createPackage(input: CreatePackageRequest): void {
-    void runAction(async () => {
+  function createPackage(input: CreatePackageRequest): Promise<boolean> {
+    return runAction(async () => {
       await client!.createPackage(input);
-    });
+    }, t('toast.package.created'));
   }
 
-  function copyPackage(input: CopyPackageRequest): void {
-    void runAction(async () => {
+  function copyPackage(input: CopyPackageRequest): Promise<boolean> {
+    return runAction(async () => {
       await client!.copyPackage(input);
-    });
+    }, t('toast.package.copied'));
   }
 
   function packageTag(input: PackageTagRequest): void {
     void runAction(async () => {
       await client!.packageTag(input);
-    });
+    }, t('toast.package.tagged'));
   }
 
   function packageRemove(input: PackageRemoveRequest): void {
     void runAction(async () => {
       await client!.removePackage(input);
-    });
+    }, t('toast.package.removed'));
   }
 
   function skillTag(input: SkillTagRequest): void {
     void runAction(async () => {
       await client!.skillTag(input);
-    });
+    }, t('toast.skill.tagged'));
   }
 
   function skillRemove(input: SkillRemoveRequest): void {
     void runAction(async () => {
       await client!.skillRemove(input);
-    });
+    }, t('toast.skill.removed'));
   }
 
   function runGc(input: { dryRun: boolean }): void {
-    void runAction(async () => {
-      const report = await client!.gc(input);
-      setGcReport(report);
-    });
+    void runAction(
+      async () => {
+        const report = await client!.gc(input);
+        setGcReport(report);
+      },
+      input.dryRun ? undefined : t('toast.gc.completed'),
+    );
   }
 
   function applyRoutes(): void {
-    void runAction(async () => {
-      const report = await client!.apply({});
-      setApplyReport(report);
-    });
+    void runAction(
+      async () => {
+        const report = await client!.apply({});
+        setApplyReport(report);
+      },
+      t('toast.apply.completed'),
+    );
   }
 
   function previewRoutes(): void {
@@ -347,11 +372,25 @@ export function App({ api }: AppProps) {
           <div className="topbar-actions">
             {busy ? <span className="busy">{t('app.status.working')}</span> : null}
             <button
-              className="primary"
-              onClick={() => applyRoutes()}
+              className="icon-button"
+              type="button"
+              onClick={() => void refresh()}
               disabled={busy}
+              title={t('app.actions.refresh')}
+              aria-label={t('app.actions.refresh')}
             >
-              {t('app.actions.applyRoutes')}
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M20 12a8 8 0 1 1-2.3-5.6" />
+                <path d="M20 4v4.5h-4.5" />
+              </svg>
             </button>
           </div>
         </header>
@@ -359,7 +398,11 @@ export function App({ api }: AppProps) {
         {error ? <div className="error-banner">{error}</div> : null}
         {snapshot ? (
           view === 'overview' ? (
-            <SnapshotView snapshot={snapshot} />
+            <SnapshotView
+              snapshot={snapshot}
+              onApply={applyRoutes}
+              onNavigate={(destination) => setView(destination)}
+            />
           ) : view === 'targets' ? (
             <TargetsView
               targets={snapshot.route.targets}

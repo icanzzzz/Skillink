@@ -7,8 +7,10 @@ import type {
   SkillPackageCandidate,
   SkillPackageScanReport,
 } from '@skillink/shared';
+import { useConfirm } from './Feedback.js';
 import { useI18n } from './i18n.js';
 import { errorMessage, formatBytes } from './format.js';
+import { Modal } from './Modal.js';
 
 export interface ImportSkillFormInput {
   sourceDir: string;
@@ -329,17 +331,23 @@ export function InstalledSkillCard({
   );
 }
 
-export function SkillsView({
-  skills,
-  gcReport = null,
+export interface SkillImportDialogProps {
+  open: boolean;
+  busy?: boolean;
+  onClose: () => void;
+  onBrowse?: () => Promise<string | null> | string | null;
+  onScanSkills?: (sourceDir: string) => Promise<SkillPackageScanReport>;
+  onImportSkill?: (input: ImportSkillFormInput) => Promise<ImportSkillResult>;
+}
+
+export function SkillImportDialog({
+  open,
   busy = false,
+  onClose,
   onBrowse,
   onScanSkills,
   onImportSkill,
-  onTag,
-  onRemove,
-  onGc,
-}: SkillsViewProps) {
+}: SkillImportDialogProps) {
   const { t } = useI18n();
   const [sourceDir, setSourceDir] = useState('');
   const [batch, setBatch] = useState<SkillBatchItem[]>([]);
@@ -347,7 +355,6 @@ export function SkillsView({
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanned, setScanned] = useState(false);
   const scanRequest = useRef(0);
-  const entries = Object.entries(skills.skills);
 
   async function scan(directory: string): Promise<void> {
     const trimmed = directory.trim();
@@ -405,6 +412,16 @@ export function SkillsView({
   function submitScan(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
     void scan(sourceDir);
+  }
+
+  function closeDialog(): void {
+    scanRequest.current += 1;
+    setScanning(false);
+    setSourceDir('');
+    setBatch([]);
+    setScanned(false);
+    setScanError(null);
+    onClose();
   }
 
   function updateItem(
@@ -468,92 +485,156 @@ export function SkillsView({
   }
 
   return (
-    <main className="view">
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">{t('skills.import.eyebrow')}</p>
-            <h2>{t('skills.import.heading')}</h2>
-          </div>
-          {batch.length > 0 ? (
-            <span className="count">{batch.length}</span>
-          ) : null}
-        </div>
+    <Modal
+      open={open}
+      title={t('skills.import.heading')}
+      eyebrow={t('skills.import.eyebrow')}
+      size="lg"
+      closeLabel={t('common.close')}
+      onClose={closeDialog}
+      footer={
+        <button className="secondary" type="button" onClick={closeDialog}>
+          {t('common.done')}
+        </button>
+      }
+    >
+      <p className="hint">{t('skills.batch.hint')}</p>
 
-        <p className="hint">{t('skills.batch.hint')}</p>
-
-        <form className="form-grid scan-form" onSubmit={submitScan}>
-          <label className="field">
-            <span>{t('skills.form.sourceFolder')}</span>
-            <div className="input-row">
-              <input
-                value={sourceDir}
-                onChange={(event) => changeSource(event.target.value)}
-                placeholder={t('skills.form.sourcePlaceholder')}
-                required
-              />
-              <button
-                className="secondary"
-                type="button"
-                onClick={() => void browse()}
-                disabled={busy || scanning || !onBrowse}
-              >
-                {t('common.browse')}
-              </button>
-            </div>
-          </label>
-          <div className="form-actions">
+      <form className="form-grid scan-form" onSubmit={submitScan}>
+        <label className="field">
+          <span>{t('skills.form.sourceFolder')}</span>
+          <div className="input-row">
+            <input
+              value={sourceDir}
+              onChange={(event) => changeSource(event.target.value)}
+              placeholder={t('skills.form.sourcePlaceholder')}
+              required
+            />
             <button
-              className="primary"
-              type="submit"
-              disabled={busy || scanning || !onScanSkills}
+              className="secondary"
+              type="button"
+              onClick={() => void browse()}
+              disabled={busy || scanning || !onBrowse}
             >
-              {t('skills.form.scan')}
+              {t('common.browse')}
             </button>
           </div>
-        </form>
+        </label>
+        <div className="form-actions">
+          <button
+            className="primary"
+            type="submit"
+            disabled={busy || scanning || !onScanSkills}
+          >
+            {t('skills.form.scan')}
+          </button>
+        </div>
+      </form>
 
-        {scanError ? (
-          <div className="error-banner" role="alert">
-            {scanError}
+      {scanError ? (
+        <div className="error-banner" role="alert">
+          {scanError}
+        </div>
+      ) : null}
+
+      {scanning ? (
+        <p className="empty">{t('skills.batch.scanning')}</p>
+      ) : null}
+
+      {!scanning && scanned && batch.length === 0 ? (
+        <p className="empty">{t('skills.batch.empty')}</p>
+      ) : null}
+
+      {batch.length > 0 ? (
+        <>
+          <p className="hint">{t('skills.batch.found', { count: batch.length })}</p>
+          <div className="install-list">
+            {batch.map((item) => (
+              <SkillBatchCard
+                key={item.sourceDir}
+                item={item}
+                busy={busy || scanning}
+                onChange={(changes) =>
+                  updateItem(item.sourceDir, changes)
+                }
+                onConfirm={() => void confirmItem(item.sourceDir)}
+              />
+            ))}
           </div>
-        ) : null}
+        </>
+      ) : null}
+    </Modal>
+  );
+}
 
-        {scanning ? (
-          <p className="empty">{t('skills.batch.scanning')}</p>
-        ) : null}
+export function SkillsView({
+  skills,
+  gcReport = null,
+  busy = false,
+  onBrowse,
+  onScanSkills,
+  onImportSkill,
+  onTag,
+  onRemove,
+  onGc,
+}: SkillsViewProps) {
+  const { t } = useI18n();
+  const confirm = useConfirm();
+  const [importOpen, setImportOpen] = useState(false);
+  const entries = Object.entries(skills.skills);
 
-        {!scanning && scanned && batch.length === 0 ? (
-          <p className="empty">{t('skills.batch.empty')}</p>
-        ) : null}
+  async function removeSkill(input: SkillVersionInput): Promise<void> {
+    const confirmed = await confirm({
+      title: t('skills.confirm.removeTitle'),
+      message: t('skills.confirm.remove', {
+        name: input.name,
+        version: input.version,
+      }),
+      confirmLabel: t('common.remove'),
+      cancelLabel: t('common.cancel'),
+      tone: 'danger',
+    });
+    if (confirmed) {
+      onRemove?.(input);
+    }
+  }
 
-        {batch.length > 0 ? (
-          <>
-            <p className="hint">{t('skills.batch.found', { count: batch.length })}</p>
-            <div className="install-list">
-              {batch.map((item) => (
-                <SkillBatchCard
-                  key={item.sourceDir}
-                  item={item}
-                  busy={busy || scanning}
-                  onChange={(changes) =>
-                    updateItem(item.sourceDir, changes)
-                  }
-                  onConfirm={() => void confirmItem(item.sourceDir)}
-                />
-              ))}
-            </div>
-          </>
-        ) : null}
-      </section>
+  async function runGc(dryRun: boolean): Promise<void> {
+    if (!dryRun) {
+      const confirmed = await confirm({
+        title: t('skills.confirm.gcTitle'),
+        message: t('skills.confirm.gc'),
+        confirmLabel: t('skills.storage.apply'),
+        cancelLabel: t('common.cancel'),
+        tone: 'danger',
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
 
+    onGc?.({ dryRun });
+  }
+
+  return (
+    <main className="view">
       <section className="panel">
         <div className="panel-heading">
           <div>
             <p className="eyebrow">{t('skills.eyebrow')}</p>
             <h2>{t('skills.heading')}</h2>
           </div>
-          <span className="count">{entries.length}</span>
+          <div className="panel-heading-tools">
+            <span className="count">{entries.length}</span>
+            <button
+              className="primary"
+              type="button"
+              onClick={() => setImportOpen(true)}
+              disabled={busy || !onScanSkills}
+            >
+              {t('skills.actions.import')}
+            </button>
+          </div>
         </div>
 
         {entries.length === 0 ? (
@@ -567,7 +648,11 @@ export function SkillsView({
                 entry={entry}
                 busy={busy}
                 onTag={onTag}
-                onRemove={onRemove}
+                onRemove={
+                  onRemove
+                    ? (input) => void removeSkill(input)
+                    : undefined
+                }
               />
             ))}
           </div>
@@ -584,7 +669,7 @@ export function SkillsView({
             <button
               className="secondary"
               type="button"
-              onClick={() => onGc?.({ dryRun: true })}
+              onClick={() => void runGc(true)}
               disabled={busy || !onGc}
             >
               {t('skills.storage.dryRun')}
@@ -592,7 +677,7 @@ export function SkillsView({
             <button
               className="danger"
               type="button"
-              onClick={() => onGc?.({ dryRun: false })}
+              onClick={() => void runGc(false)}
               disabled={busy || !onGc}
             >
               {t('skills.storage.apply')}
@@ -628,6 +713,15 @@ export function SkillsView({
           </div>
         ) : null}
       </section>
+
+      <SkillImportDialog
+        open={importOpen}
+        busy={busy}
+        onClose={() => setImportOpen(false)}
+        onBrowse={onBrowse}
+        onScanSkills={onScanSkills}
+        onImportSkill={onImportSkill}
+      />
     </main>
   );
 }

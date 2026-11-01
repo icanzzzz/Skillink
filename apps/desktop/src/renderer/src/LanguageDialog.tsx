@@ -1,5 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { installPickedLanguage, useI18n } from './i18n.js';
+import { useConfirm, useToast } from './Feedback.js';
+import { Modal } from './Modal.js';
 
 export interface LanguageDialogProps {
   open: boolean;
@@ -18,33 +20,22 @@ export function LanguageDialog({
     useLanguage,
     removeLanguage,
   } = useI18n();
+  const confirm = useConfirm();
+  const { pushToast } = useToast();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    }
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
-
-  if (!open) {
-    return null;
-  }
-
-  async function run(action: () => Promise<void>): Promise<void> {
+  async function run(
+    action: () => Promise<void>,
+    successMessage?: string,
+  ): Promise<void> {
     setBusy(true);
     setError(null);
     try {
       await action();
+      if (successMessage) {
+        pushToast({ tone: 'success', message: successMessage });
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -54,107 +45,52 @@ export function LanguageDialog({
 
   function install(): void {
     void run(async () => {
-      await installPickedLanguage({ chooseLanguagePack, installLanguagePack });
+      const report = await installPickedLanguage({
+        chooseLanguagePack,
+        installLanguagePack,
+      });
+      if (report) {
+        pushToast({
+          tone: 'success',
+          message: t('toast.language.installed'),
+        });
+      }
     });
   }
 
+  async function removePack(locale: string, name: string): Promise<void> {
+    const confirmed = await confirm({
+      title: t('language.confirm.removeTitle'),
+      message: t('language.confirm.remove', { name }),
+      confirmLabel: t('language.remove'),
+      cancelLabel: t('common.cancel'),
+      tone: 'danger',
+    });
+    if (confirmed) {
+      await run(
+        () => removeLanguage(locale),
+        t('toast.language.removed'),
+      );
+    }
+  }
+
   return (
-    <div
-      className="language-backdrop"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          onClose();
-        }
-      }}
-    >
-      <div
-        className="language-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="language-title"
-      >
-        <header className="language-header">
-          <div>
-            <p className="eyebrow">{t('language.eyebrow')}</p>
-            <h2 id="language-title">{t('language.title')}</h2>
-          </div>
-          <button className="secondary" type="button" onClick={onClose}>
+    <Modal
+      open={open}
+      title={t('language.title')}
+      eyebrow={t('language.eyebrow')}
+      closeLabel={t('common.close')}
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            className="secondary"
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+          >
             {t('language.close')}
           </button>
-        </header>
-
-        <p className="hint">{t('language.installHint')}</p>
-
-        <div className="language-list">
-          {state.packs.length === 0 ? (
-            <p className="empty">{t('language.empty')}</p>
-          ) : (
-            state.packs.map((pack) => {
-              const active =
-                pack.locale.toLowerCase() === state.current.toLowerCase();
-              return (
-                <div
-                  className={active ? 'language-row active' : 'language-row'}
-                  key={pack.locale}
-                >
-                  <div className="language-info">
-                    <strong>{pack.nativeName}</strong>
-                    <span>
-                      {pack.name} · <code>{pack.locale}</code> · {pack.version}
-                    </span>
-                    <span>
-                      {t('language.coverage', {
-                        percent: Math.round(pack.coverage * 100),
-                      })}
-                    </span>
-                  </div>
-                  <div className="language-badges">
-                    {pack.builtIn ? (
-                      <span className="language-badge">
-                        {t('language.builtIn')}
-                      </span>
-                    ) : null}
-                    {active ? (
-                      <span className="language-badge current">
-                        {t('language.current')}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="row-actions">
-                    <button
-                      className="secondary"
-                      type="button"
-                      disabled={busy || active}
-                      onClick={() => void run(() => useLanguage(pack.locale))}
-                    >
-                      {t('language.use')}
-                    </button>
-                    <button
-                      className="danger"
-                      type="button"
-                      disabled={busy || pack.builtIn}
-                      onClick={() =>
-                        void run(() => removeLanguage(pack.locale))
-                      }
-                    >
-                      {t('language.remove')}
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        <p className="hint">{t('language.removeActiveHint')}</p>
-
-        {error ? (
-          <p className="language-error" role="alert">
-            {error}
-          </p>
-        ) : null}
-
-        <footer className="language-footer">
           <button
             className="primary"
             type="button"
@@ -163,9 +99,85 @@ export function LanguageDialog({
           >
             {t('language.install')}
           </button>
-        </footer>
+        </>
+      }
+    >
+      <p className="hint">{t('language.installHint')}</p>
+
+      <div className="language-list">
+        {state.packs.length === 0 ? (
+          <p className="empty">{t('language.empty')}</p>
+        ) : (
+          state.packs.map((pack) => {
+            const active =
+              pack.locale.toLowerCase() === state.current.toLowerCase();
+            return (
+              <div
+                className={active ? 'language-row active' : 'language-row'}
+                key={pack.locale}
+              >
+                <div className="language-info">
+                  <strong>{pack.nativeName}</strong>
+                  <span>
+                    {pack.name} · <code>{pack.locale}</code> · {pack.version}
+                  </span>
+                  <span>
+                    {t('language.coverage', {
+                      percent: Math.round(pack.coverage * 100),
+                    })}
+                  </span>
+                </div>
+                <div className="language-badges">
+                  {pack.builtIn ? (
+                    <span className="language-badge">
+                      {t('language.builtIn')}
+                    </span>
+                  ) : null}
+                  {active ? (
+                    <span className="language-badge current">
+                      {t('language.current')}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="row-actions">
+                  <button
+                    className="secondary"
+                    type="button"
+                    disabled={busy || active}
+                    onClick={() =>
+                      void run(
+                        () => useLanguage(pack.locale),
+                        t('toast.language.changed'),
+                      )
+                    }
+                  >
+                    {t('language.use')}
+                  </button>
+                  <button
+                    className="danger"
+                    type="button"
+                    disabled={busy || pack.builtIn}
+                    onClick={() =>
+                      void removePack(pack.locale, pack.nativeName)
+                    }
+                  >
+                    {t('language.remove')}
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
-    </div>
+
+      <p className="hint">{t('language.removeActiveHint')}</p>
+
+      {error ? (
+        <p className="language-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </Modal>
   );
 }
 

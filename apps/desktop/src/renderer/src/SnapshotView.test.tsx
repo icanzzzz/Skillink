@@ -115,9 +115,9 @@ describe('SnapshotView', () => {
     expect(html).toContain('Project A');
     expect(html).toContain('demo-pack');
     expect(html).toContain('demo');
-    expect(html).toContain('2.0 KB');
-    expect(html).toContain('<span>Skills</span>');
-    expect(html).toContain('<span>1</span>');
+    expect(html).toContain('Apply routes');
+    expect(html).toContain('View all');
+    expect(html).toContain('Skills');
   });
 
   it('renders translated overview text and issue counts', () => {

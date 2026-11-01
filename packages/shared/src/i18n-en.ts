@@ -25,6 +25,9 @@ export const EN_MESSAGES = {
   'app.titles.doctor': 'Doctor',
   'app.eyebrow': 'WORKSPACE',
   'app.actions.applyRoutes': 'Apply routes',
+  'app.actions.refresh': 'Refresh',
+  'app.actions.viewAll': 'View all',
+  'app.actions.manageTargets': 'Manage targets',
   'app.status.working': 'Working…',
   'app.loading': 'Loading Skillink…',
   'app.errors.bridgeUnavailable': 'Skillink IPC bridge is unavailable.',
@@ -87,6 +90,16 @@ export const EN_MESSAGES = {
   'overview.composition.packages': 'packages',
   'overview.issues.eyebrow': 'DOCTOR',
   'overview.issues.title': 'Needs attention',
+  'overview.library.eyebrow': 'LIBRARY',
+  'overview.library.title': 'Workspace library',
+  'overview.library.skills': 'Skills',
+  'overview.library.packages': 'Packages',
+  'overview.library.versions': {
+    one: '{count} version',
+    other: '{count} versions',
+  },
+  'overview.library.openSkills': 'Open skills',
+  'overview.library.openPackages': 'Open packages',
 
   'status.healthy': 'healthy',
   'status.unresolved': 'unresolved',
@@ -106,6 +119,9 @@ export const EN_MESSAGES = {
 
   'common.browse': 'Browse',
   'common.cancel': 'Cancel',
+  'common.close': 'Close',
+  'common.confirm': 'Confirm',
+  'common.done': 'Done',
 
   'targets.routes.eyebrow': 'ROUTES',
   'targets.routes.title': 'Target directories',
@@ -175,6 +191,13 @@ export const EN_MESSAGES = {
   'skills.eyebrow': 'SKILLS',
   'skills.heading': 'Installed skills',
   'skills.empty': 'No skills yet. Import a folder that contains SKILL.md.',
+  'skills.actions.import': 'Import skills',
+  'skills.confirm.removeTitle': 'Remove skill version',
+  'skills.confirm.remove':
+    'Remove {name}@{version}? The version cannot be removed while a route or tag still references it.',
+  'skills.confirm.gcTitle': 'Apply garbage collection',
+  'skills.confirm.gc':
+    'Delete all unreferenced skill versions? This cannot be undone.',
   'skills.import.eyebrow': 'IMPORT',
   'skills.import.heading': 'Install skill packages',
   'skills.batch.hint':
@@ -263,6 +286,9 @@ export const EN_MESSAGES = {
   'packages.copy.descriptionPlaceholder': 'Optional',
   'packages.empty': 'No packages yet. Create a package from installed skills.',
   'packages.badge': 'package',
+  'packages.confirm.removeTitle': 'Remove package version',
+  'packages.confirm.remove':
+    'Remove {name}@{version}? It cannot be removed while a route or another package references it.',
   'packages.tagAriaLabel': 'Tag {name}@{version}',
   'packages.tagPlaceholder': 'tag',
   'packages.tag': 'Tag',
@@ -285,6 +311,8 @@ export const EN_MESSAGES = {
   'language.unavailable': 'Language packs are unavailable.',
   'language.removeActiveHint':
     'Removing the current language switches back to English.',
+  'language.confirm.removeTitle': 'Remove language pack',
+  'language.confirm.remove': 'Remove the {name} language pack?',
 
   'doctor.eyebrow': 'DIAGNOSTICS',
   'doctor.heading': 'Doctor',
@@ -295,6 +323,27 @@ export const EN_MESSAGES = {
   'doctor.refresh': 'Refresh',
   'doctor.empty':
     'No issues found. route.json, package.json, skill.json, the skill library, and links are consistent.',
+
+  'toast.dismiss': 'Dismiss',
+  'toast.target.added': 'Target added.',
+  'toast.target.removed': 'Target removed.',
+  'toast.target.enabled': 'Target enabled.',
+  'toast.target.disabled': 'Target disabled.',
+  'toast.route.added': 'Package assigned.',
+  'toast.route.removed': 'Package removed from target.',
+  'toast.route.enabled': 'Route enabled.',
+  'toast.route.disabled': 'Route disabled.',
+  'toast.package.created': 'Package created.',
+  'toast.package.copied': 'Package copied.',
+  'toast.package.tagged': 'Package tagged.',
+  'toast.package.removed': 'Package removed.',
+  'toast.skill.tagged': 'Skill tagged.',
+  'toast.skill.removed': 'Skill version removed.',
+  'toast.gc.completed': 'Garbage collection completed.',
+  'toast.apply.completed': 'Routes applied.',
+  'toast.language.installed': 'Language pack installed.',
+  'toast.language.changed': 'Language changed.',
+  'toast.language.removed': 'Language pack removed.',
 
   'errors.INVALID_NAME': 'The name is invalid.',
   'errors.INVALID_VERSION': 'The version is invalid.',

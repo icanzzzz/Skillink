@@ -832,6 +832,14 @@ drift / missing       -> apply
 - **Doctor**：健康检查；
 - **Language**：安装/切换/删除语言包，显示 nativeName、版本和翻译覆盖率；切换后立即刷新界面，删除当前语言回到英文。
 
+GUI 交互约定：
+
+- 创建目标、导入技能、创建/复制包等表单在统一模态框中完成，避免长期占用页面首屏；
+- 删除目标/包/技能、禁用目标/路由、应用 GC 等危险操作统一使用界面内确认框，并说明会被清理的内容；
+- 写操作成功后用 toast 反馈，操作失败使用同一条反馈通道，页面顶部只保留加载错误；
+- 概览页只展示摘要、健康状态和跳转入口，不重复列出技能和包的完整卡片；
+- 顶栏只保留全局刷新，应用路由等页面级主操作放在对应页面内。
+
 GUI 的刷新通过一次只读 `skillink snapshot --json` 获取 skills、packages、route、status、doctor 和 target 解析结果。Renderer 只调用 preload API；Electron 主进程负责 IPC 校验、argv 映射和串行队列，不直接调用 Core。语言包操作同样走 `locale ... --json` 命令层。
 
 本阶段 GUI 不提供 History 页面；`history` / `rollback` 只在 CLI 提供，GUI 后续可按需接入 `history --json`。
@@ -974,7 +982,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 
 ## 10. 测试策略
 
-当前验证（2026-11-01）：56 个测试文件、507 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
+当前验证（2026-11-01）：69 个测试文件、550 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
 
 | 层级 | 内容 |
 |---|---|

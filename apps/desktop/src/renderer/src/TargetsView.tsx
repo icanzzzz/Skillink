@@ -7,11 +7,12 @@ import type {
   TargetSkillSummary,
   Translator,
 } from '@skillink/shared';
+import { useConfirm } from './Feedback.js';
 import { useI18n } from './i18n.js';
+import { Modal } from './Modal.js';
 import {
   EMPTY_ASSIGNMENT_DRAFT,
   createRouteAddInput,
-  createRouteEnableInput,
   createRouteRemoveInput,
   setAssignmentName,
   setAssignmentVersion,
@@ -35,6 +36,10 @@ export interface AddTargetFormInput {
   mode?: TargetMode;
 }
 
+export type AddTargetSubmit = (
+  input: AddTargetFormInput,
+) => Promise<boolean> | boolean | void;
+
 export interface TargetRemoveFormInput {
   id: string;
 }
@@ -51,10 +56,12 @@ export interface TargetsViewProps {
   applyReport?: ApplyReport | null;
   busy?: boolean;
   onBrowse?: () => Promise<string | null> | string | null;
-  onAddTarget?: (input: AddTargetFormInput) => void;
+  onAddTarget?: AddTargetSubmit;
   onRemoveTarget?: (input: TargetRemoveFormInput) => void;
   onTargetEnable?: (input: TargetEnableFormInput) => void;
-  onRouteAdd?: (input: RouteAddFormInput) => void;
+  onRouteAdd?: (
+    input: RouteAddFormInput,
+  ) => Promise<boolean> | boolean | void;
   onRemoveRoute?: (input: RouteRemoveFormInput) => void;
   onRouteEnable?: (input: RouteEnableFormInput) => void;
   onApply?: () => void;
@@ -76,8 +83,156 @@ export function invokeTargetsAction(action?: () => void): void {
   action?.();
 }
 
-function confirmRemoval(message: string): boolean {
-  return typeof window === 'undefined' ? true : window.confirm(message);
+export interface AddTargetFormProps {
+  busy?: boolean;
+  onBrowse?: () => Promise<string | null> | string | null;
+  onSubmit?: (input: AddTargetFormInput) => void;
+  onCancel?: () => void;
+}
+
+export function AddTargetForm({
+  busy = false,
+  onBrowse,
+  onSubmit,
+  onCancel,
+}: AddTargetFormProps) {
+  const { t } = useI18n();
+  const [targetPath, setTargetPath] = useState('');
+  const [targetId, setTargetId] = useState('');
+  const [targetLabel, setTargetLabel] = useState('');
+  const [mode, setMode] = useState<TargetMode>('link');
+
+  async function browse(): Promise<void> {
+    const selected = await onBrowse?.();
+    if (typeof selected === 'string') {
+      setTargetPath(selected);
+    }
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    if (!onSubmit || targetPath.trim() === '') {
+      return;
+    }
+
+    onSubmit({
+      path: targetPath.trim(),
+      id: targetId.trim() || undefined,
+      label: targetLabel.trim() || undefined,
+      mode,
+    });
+  }
+
+  return (
+    <form className="form-grid" onSubmit={submit}>
+      <label className="field field-wide">
+        <span>{t('targets.form.directoryPath')}</span>
+        <div className="input-row">
+          <input
+            value={targetPath}
+            onChange={(event) => setTargetPath(event.target.value)}
+            placeholder={t('targets.form.pathPlaceholder')}
+            required
+          />
+          <button
+            className="secondary"
+            type="button"
+            onClick={() => void browse()}
+            disabled={busy || !onBrowse}
+          >
+            {t('common.browse')}
+          </button>
+        </div>
+      </label>
+      <label className="field">
+        <span>{t('targets.form.targetId')}</span>
+        <input
+          value={targetId}
+          onChange={(event) => setTargetId(event.target.value)}
+          placeholder={t('targets.form.targetIdPlaceholder')}
+        />
+      </label>
+      <label className="field">
+        <span>{t('targets.form.label')}</span>
+        <input
+          value={targetLabel}
+          onChange={(event) => setTargetLabel(event.target.value)}
+          placeholder={t('targets.form.labelPlaceholder')}
+        />
+      </label>
+      <label className="field">
+        <span>{t('targets.form.mode')}</span>
+        <select
+          value={mode}
+          onChange={(event) => setMode(event.target.value as TargetMode)}
+        >
+          <option value="link">{t('targets.mode.link')}</option>
+          <option value="copy" disabled>
+            {t('targets.mode.copy')}
+          </option>
+        </select>
+      </label>
+      <div className="form-actions">
+        <button
+          className="secondary"
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+        >
+          {t('common.cancel')}
+        </button>
+        <button
+          className="primary"
+          type="submit"
+          disabled={busy || !onSubmit}
+        >
+          {t('targets.form.addTarget')}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export interface AddTargetDialogProps {
+  open: boolean;
+  busy?: boolean;
+  onClose: () => void;
+  onBrowse?: () => Promise<string | null> | string | null;
+  onSubmit?: AddTargetSubmit;
+}
+
+export function AddTargetDialog({
+  open,
+  busy = false,
+  onClose,
+  onBrowse,
+  onSubmit,
+}: AddTargetDialogProps) {
+  const { t } = useI18n();
+
+  async function submit(input: AddTargetFormInput): Promise<void> {
+    const result = await onSubmit?.(input);
+    if (result !== false) {
+      onClose();
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      title={t('targets.form.addTarget')}
+      eyebrow={t('targets.form.targetEyebrow')}
+      closeLabel={t('common.close')}
+      onClose={onClose}
+    >
+      <AddTargetForm
+        busy={busy}
+        onBrowse={onBrowse}
+        onCancel={onClose}
+        onSubmit={(input) => void submit(input)}
+      />
+    </Modal>
+  );
 }
 
 export function TargetsView({
@@ -97,36 +252,10 @@ export function TargetsView({
   onPreview,
 }: TargetsViewProps) {
   const { t } = useI18n();
-  const [targetPath, setTargetPath] = useState('');
-  const [targetId, setTargetId] = useState('');
-  const [targetLabel, setTargetLabel] = useState('');
-  const [mode, setMode] = useState<TargetMode>('link');
+  const confirm = useConfirm();
+  const [addTargetOpen, setAddTargetOpen] = useState(false);
   const [assignment, setAssignment] =
     useState<AssignmentDraft>(EMPTY_ASSIGNMENT_DRAFT);
-
-  async function browse(): Promise<void> {
-    const selected = await onBrowse?.();
-    if (typeof selected === 'string') {
-      setTargetPath(selected);
-    }
-  }
-
-  function submitTarget(event: FormEvent<HTMLFormElement>): void {
-    event.preventDefault();
-    if (!onAddTarget || targetPath.trim() === '') {
-      return;
-    }
-
-    onAddTarget({
-      path: targetPath.trim(),
-      id: targetId.trim() || undefined,
-      label: targetLabel.trim() || undefined,
-      mode,
-    });
-    setTargetPath('');
-    setTargetId('');
-    setTargetLabel('');
-  }
 
   function beginAssignment(targetIdValue: string): void {
     setAssignment((current) =>
@@ -134,18 +263,104 @@ export function TargetsView({
     );
   }
 
-  function submitRoute(
+  async function submitRoute(
     event: FormEvent<HTMLFormElement>,
     targetIdValue: string,
-  ): void {
+  ): Promise<void> {
     event.preventDefault();
     const input = createRouteAddInput(assignment, targetIdValue);
     if (!onRouteAdd || !input) {
       return;
     }
 
-    onRouteAdd(input);
-    setAssignment(EMPTY_ASSIGNMENT_DRAFT);
+    const result = await onRouteAdd(input);
+    if (result !== false) {
+      setAssignment(EMPTY_ASSIGNMENT_DRAFT);
+    }
+  }
+
+  async function toggleTarget(target: TargetRoute): Promise<void> {
+    if (target.enabled) {
+      const confirmed = await confirm({
+        title: t('targets.actions.disableTarget'),
+        message: t('targets.confirm.disableTarget', {
+          name: target.label ?? target.id,
+        }),
+        confirmLabel: t('targets.actions.disableTarget'),
+        cancelLabel: t('common.cancel'),
+        tone: 'danger',
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    onTargetEnable?.({
+      id: target.id,
+      enabled: !target.enabled,
+    });
+  }
+
+  async function removeTarget(target: TargetRoute): Promise<void> {
+    const confirmed = await confirm({
+      title: t('targets.actions.removeTarget'),
+      message: t('targets.confirm.removeTarget', {
+        name: target.label ?? target.id,
+      }),
+      confirmLabel: t('targets.actions.removeTarget'),
+      cancelLabel: t('common.cancel'),
+      tone: 'danger',
+    });
+    if (confirmed) {
+      onRemoveTarget?.({ id: target.id });
+    }
+  }
+
+  async function toggleRoute(
+    target: TargetRoute,
+    name: string,
+    enabled: boolean | undefined,
+  ): Promise<void> {
+    if (enabled !== false) {
+      const confirmed = await confirm({
+        title: t('targets.actions.disableRoute'),
+        message: t('targets.confirm.disableRoute', {
+          name,
+          target: target.label ?? target.id,
+        }),
+        confirmLabel: t('targets.actions.disableRoute'),
+        cancelLabel: t('common.cancel'),
+        tone: 'danger',
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    onRouteEnable?.({
+      targetId: target.id,
+      name,
+      enabled: enabled === false,
+    });
+  }
+
+  async function removeRoute(
+    target: TargetRoute,
+    name: string,
+  ): Promise<void> {
+    const confirmed = await confirm({
+      title: t('targets.actions.removeRoute'),
+      message: t('targets.confirm.removeRoute', {
+        name,
+        target: target.label ?? target.id,
+      }),
+      confirmLabel: t('targets.actions.removeRoute'),
+      cancelLabel: t('common.cancel'),
+      tone: 'danger',
+    });
+    if (confirmed) {
+      onRemoveRoute?.(createRouteRemoveInput(target.id, name));
+    }
   }
 
   const statusByTarget = new Map<string, StatusEntry[]>();
@@ -172,82 +387,22 @@ export function TargetsView({
 
   return (
     <main className="view">
-
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">{t('targets.form.targetEyebrow')}</p>
-            <h2>{t('targets.form.addTarget')}</h2>
-          </div>
-        </div>
-
-        <form className="form-grid" onSubmit={submitTarget}>
-          <label className="field field-wide">
-            <span>{t('targets.form.directoryPath')}</span>
-            <div className="input-row">
-              <input
-                value={targetPath}
-                onChange={(event) => setTargetPath(event.target.value)}
-                placeholder={t('targets.form.pathPlaceholder')}
-                required
-              />
-              <button
-                className="secondary"
-                type="button"
-                onClick={() => void browse()}
-                disabled={busy || !onBrowse}
-              >
-                {t('common.browse')}
-              </button>
-            </div>
-          </label>
-          <label className="field">
-            <span>{t('targets.form.targetId')}</span>
-            <input
-              value={targetId}
-              onChange={(event) => setTargetId(event.target.value)}
-              placeholder={t('targets.form.targetIdPlaceholder')}
-            />
-          </label>
-          <label className="field">
-            <span>{t('targets.form.label')}</span>
-            <input
-              value={targetLabel}
-              onChange={(event) => setTargetLabel(event.target.value)}
-              placeholder={t('targets.form.labelPlaceholder')}
-            />
-          </label>
-          <label className="field">
-            <span>{t('targets.form.mode')}</span>
-            <select
-              value={mode}
-              onChange={(event) => setMode(event.target.value as TargetMode)}
-            >
-              <option value="link">{t('targets.mode.link')}</option>
-              <option value="copy" disabled>
-                {t('targets.mode.copy')}
-              </option>
-            </select>
-          </label>
-          <div className="form-actions">
-            <button
-              className="primary"
-              type="submit"
-              disabled={busy || !onAddTarget}
-            >
-              {t('targets.form.addTarget')}
-            </button>
-          </div>
-        </form>
-      </section>
-
       <section className="panel">
         <div className="panel-heading">
           <div>
             <p className="eyebrow">{t('targets.routes.eyebrow')}</p>
             <h2>{t('targets.routes.title')}</h2>
           </div>
-          <div className="row-actions">
+          <div className="panel-heading-tools">
+            <span className="count">{targets.length}</span>
+            <button
+              className="secondary"
+              type="button"
+              onClick={() => setAddTargetOpen(true)}
+              disabled={busy || !onAddTarget}
+            >
+              {t('targets.form.addTarget')}
+            </button>
             <button
               className="secondary"
               type="button"
@@ -340,26 +495,9 @@ export function TargetsView({
                               className="secondary"
                               type="button"
                               disabled={busy || !onRouteEnable}
-                              onClick={() => {
-                                if (
-                                  lock.enabled !== false &&
-                                  !confirmRemoval(
-                                    t('targets.confirm.disableRoute', {
-                                      name,
-                                      target: target.label ?? target.id,
-                                    }),
-                                  )
-                                ) {
-                                  return;
-                                }
-                                onRouteEnable?.(
-                                  createRouteEnableInput(
-                                    target.id,
-                                    name,
-                                    lock,
-                                  ),
-                                );
-                              }}
+                              onClick={() =>
+                                void toggleRoute(target, name, lock.enabled)
+                              }
                             >
                               {lock.enabled === false
                                 ? t('targets.actions.enableRoute')
@@ -369,20 +507,7 @@ export function TargetsView({
                               className="danger"
                               type="button"
                               disabled={busy || !onRemoveRoute}
-                              onClick={() => {
-                                if (
-                                  confirmRemoval(
-                                    t('targets.confirm.removeRoute', {
-                                      name,
-                                      target: target.label ?? target.id,
-                                    }),
-                                  )
-                                ) {
-                                  onRemoveRoute?.(
-                                    createRouteRemoveInput(target.id, name),
-                                  );
-                                }
-                              }}
+                              onClick={() => void removeRoute(target, name)}
                             >
                               {t('targets.actions.removeRoute')}
                             </button>
@@ -395,7 +520,7 @@ export function TargetsView({
                   {assigning ? (
                     <form
                       className="target-package-form form-grid"
-                      onSubmit={(event) => submitRoute(event, target.id)}
+                      onSubmit={(event) => void submitRoute(event, target.id)}
                     >
                       <label className="field">
                         <span>{t('targets.form.package')}</span>
@@ -459,22 +584,7 @@ export function TargetsView({
                       className="secondary"
                       type="button"
                       disabled={busy || !onTargetEnable}
-                      onClick={() => {
-                        if (
-                          target.enabled &&
-                          !confirmRemoval(
-                            t('targets.confirm.disableTarget', {
-                              name: target.label ?? target.id,
-                            }),
-                          )
-                        ) {
-                          return;
-                        }
-                        onTargetEnable?.({
-                          id: target.id,
-                          enabled: !target.enabled,
-                        });
-                      }}
+                      onClick={() => void toggleTarget(target)}
                     >
                       {target.enabled
                         ? t('targets.actions.disableTarget')
@@ -484,17 +594,7 @@ export function TargetsView({
                       className="danger"
                       type="button"
                       disabled={busy || !onRemoveTarget}
-                      onClick={() => {
-                        if (
-                          confirmRemoval(
-                            t('targets.confirm.removeTarget', {
-                              name: target.label ?? target.id,
-                            }),
-                          )
-                        ) {
-                          onRemoveTarget?.({ id: target.id });
-                        }
-                      }}
+                      onClick={() => void removeTarget(target)}
                     >
                       {t('targets.actions.removeTarget')}
                     </button>
@@ -543,6 +643,14 @@ export function TargetsView({
           ))}
         </section>
       ) : null}
+
+      <AddTargetDialog
+        open={addTargetOpen}
+        busy={busy}
+        onClose={() => setAddTargetOpen(false)}
+        onBrowse={onBrowse}
+        onSubmit={onAddTarget}
+      />
     </main>
   );
 }

@@ -1,9 +1,21 @@
 import { formatDoctorIssue } from '@skillink/shared';
 import type { DesktopSnapshot } from '../../shared.js';
 import { useI18n } from './i18n.js';
-import { compositionText, formatBytes } from './format.js';
+import { compositionText } from './format.js';
 
-export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
+export type OverviewDestination = 'targets' | 'skills' | 'packages' | 'doctor';
+
+export interface SnapshotViewProps {
+  snapshot: DesktopSnapshot;
+  onApply?: () => void;
+  onNavigate?: (destination: OverviewDestination) => void;
+}
+
+export function SnapshotView({
+  snapshot,
+  onApply,
+  onNavigate,
+}: SnapshotViewProps) {
   const { t, translator } = useI18n();
   const skillEntries = Object.entries(snapshot.skills.skills);
   const skillVersionCount = skillEntries.reduce(
@@ -34,6 +46,24 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
           <p className="eyebrow">{t('overview.hero.eyebrow')}</p>
           <h1>{t('overview.hero.title')}</h1>
           <p className="lede">{t('overview.hero.lede')}</p>
+          <div className="hero-actions">
+            <button
+              className="primary"
+              type="button"
+              onClick={onApply}
+              disabled={!onApply}
+            >
+              {t('app.actions.applyRoutes')}
+            </button>
+            <button
+              className="secondary"
+              type="button"
+              onClick={() => onNavigate?.('targets')}
+              disabled={!onNavigate}
+            >
+              {t('app.actions.manageTargets')}
+            </button>
+          </div>
         </div>
         <div className={snapshot.doctor.ok ? 'health ok' : 'health warn'}>
           {snapshot.doctor.ok
@@ -43,7 +73,12 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
       </section>
 
       <section className="stats">
-        <article className="stat">
+        <button
+          className="stat"
+          type="button"
+          onClick={() => onNavigate?.('skills')}
+          disabled={!onNavigate}
+        >
           <span className="stat-label">{t('overview.stats.skills.label')}</span>
           <strong>
             {t('overview.stats.skills', { count: skillEntries.length })}
@@ -51,8 +86,13 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
           <span>
             {t('overview.stats.versions', { count: skillVersionCount })}
           </span>
-        </article>
-        <article className="stat">
+        </button>
+        <button
+          className="stat"
+          type="button"
+          onClick={() => onNavigate?.('packages')}
+          disabled={!onNavigate}
+        >
           <span className="stat-label">
             {t('overview.stats.packages.label')}
           </span>
@@ -62,8 +102,13 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
           <span>
             {t('overview.stats.versions', { count: packageVersionCount })}
           </span>
-        </article>
-        <article className="stat">
+        </button>
+        <button
+          className="stat"
+          type="button"
+          onClick={() => onNavigate?.('targets')}
+          disabled={!onNavigate}
+        >
           <span className="stat-label">{t('overview.stats.targets.label')}</span>
           <strong>{t('overview.stats.targets', { count: targetCount })}</strong>
           <span>
@@ -72,8 +117,13 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
                 .length,
             })}
           </span>
-        </article>
-        <article className="stat">
+        </button>
+        <button
+          className="stat"
+          type="button"
+          onClick={() => onNavigate?.('doctor')}
+          disabled={!onNavigate}
+        >
           <span className="stat-label">{t('overview.stats.links.label')}</span>
           <strong>{t('overview.stats.links', { count: okLinks })}</strong>
           <span>
@@ -81,7 +131,7 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
               count: snapshot.status.entries.length,
             })}
           </span>
-        </article>
+        </button>
       </section>
 
       <section className="panel">
@@ -90,7 +140,17 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
             <p className="eyebrow">{t('overview.routes.eyebrow')}</p>
             <h2>{t('overview.routes.title')}</h2>
           </div>
-          <span className="count">{targetCount}</span>
+          <div className="panel-heading-tools">
+            <span className="count">{targetCount}</span>
+            <button
+              className="secondary"
+              type="button"
+              onClick={() => onNavigate?.('targets')}
+              disabled={!onNavigate}
+            >
+              {t('app.actions.manageTargets')}
+            </button>
+          </div>
         </div>
 
         {targetCount === 0 ? (
@@ -130,77 +190,93 @@ export function SnapshotView({ snapshot }: { snapshot: DesktopSnapshot }) {
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">{t('overview.packages.eyebrow')}</p>
-            <h2>{t('overview.packages.title')}</h2>
+            <p className="eyebrow">{t('overview.library.eyebrow')}</p>
+            <h2>{t('overview.library.title')}</h2>
           </div>
-          <span className="count">{packageEntries.length}</span>
         </div>
 
-        {packageEntries.length === 0 ? (
-          <p className="empty">{t('overview.packages.empty')}</p>
-        ) : (
-          <div className="package-grid">
-            {packageEntries.map(([name, entry]) => (
-              <article className="package-card" key={name}>
-                <div className="package-title">
-                  <strong>{name}</strong>
-                  <span>{t('overview.badge.package')}</span>
-                </div>
-                {entry.description ? <p>{entry.description}</p> : null}
-                <div className="version-list">
-                  {Object.entries(entry.versions).map(([version, value]) => (
-                    <div className="version-row" key={version}>
-                      <code>{version}</code>
+        <div className="library-grid">
+          <div className="library-column">
+            <div className="library-column-heading">
+              <h3>{t('overview.library.skills')}</h3>
+              <span className="count">{skillEntries.length}</span>
+            </div>
+            {skillEntries.length === 0 ? (
+              <p className="empty">{t('overview.skills.empty')}</p>
+            ) : (
+              <ul className="library-list">
+                {skillEntries.slice(0, 5).map(([name, entry]) => (
+                  <li key={name}>
+                    <strong>{name}</strong>
+                    <span>
+                      {t('overview.library.versions', {
+                        count: Object.keys(entry.versions).length,
+                      })}
+                    </span>
+                    <small>
+                      {entry.description ||
+                        Object.keys(entry.versions).join(', ')}
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button
+              className="secondary library-open"
+              type="button"
+              onClick={() => onNavigate?.('skills')}
+              disabled={!onNavigate}
+            >
+              {t('app.actions.viewAll')}
+            </button>
+          </div>
+
+          <div className="library-column">
+            <div className="library-column-heading">
+              <h3>{t('overview.library.packages')}</h3>
+              <span className="count">{packageEntries.length}</span>
+            </div>
+            {packageEntries.length === 0 ? (
+              <p className="empty">{t('overview.packages.empty')}</p>
+            ) : (
+              <ul className="library-list">
+                {packageEntries.slice(0, 5).map(([name, entry]) => {
+                  const versions = Object.entries(entry.versions);
+                  return (
+                    <li key={name}>
+                      <strong>{name}</strong>
                       <span>
-                        {compositionText(value, t, {
-                          skills: 'overview.composition.skills',
-                          packages: 'overview.composition.packages',
+                        {t('overview.library.versions', {
+                          count: versions.length,
                         })}
                       </span>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            ))}
+                      <small>
+                        {entry.description ||
+                          versions
+                            .slice(0, 2)
+                            .map(([, value]) =>
+                              compositionText(value, t, {
+                                skills: 'overview.composition.skills',
+                                packages: 'overview.composition.packages',
+                              }),
+                            )
+                            .join(' · ')}
+                      </small>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <button
+              className="secondary library-open"
+              type="button"
+              onClick={() => onNavigate?.('packages')}
+              disabled={!onNavigate}
+            >
+              {t('app.actions.viewAll')}
+            </button>
           </div>
-        )}
-      </section>
-
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">{t('overview.skills.eyebrow')}</p>
-            <h2>{t('overview.skills.title')}</h2>
-          </div>
-          <span className="count">{skillEntries.length}</span>
         </div>
-
-        {skillEntries.length === 0 ? (
-          <p className="empty">{t('overview.skills.empty')}</p>
-        ) : (
-          <div className="package-grid">
-            {skillEntries.map(([name, entry]) => (
-              <article className="package-card" key={name}>
-                <div className="package-title">
-                  <strong>{name}</strong>
-                  <span>{t('overview.badge.skill')}</span>
-                </div>
-                {entry.description ? <p>{entry.description}</p> : null}
-                <div className="version-list">
-                  {Object.entries(entry.versions).map(([version, info]) => (
-                    <div className="version-row" key={version}>
-                      <code>{version}</code>
-                      <span>
-                        {t('overview.files', { count: info.fileCount })}
-                      </span>
-                      <span>{formatBytes(info.size)}</span>
-                    </div>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
       </section>
 
       {issueCount > 0 ? (

@@ -2,10 +2,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { createEmptyPackageFile, createEmptySkillFile } from '@skillink/shared';
 import { renderWithMessages } from './i18n.test-utils.js';
-import { PackagesView } from './PackagesView.js';
+import {
+  CopyPackageDialog,
+  CreatePackageDialog,
+  PackagesView,
+} from './PackagesView.js';
 
 describe('PackagesView', () => {
-  it('renders the empty state and both forms', () => {
+  it('renders the empty state and both create actions', () => {
     const html = renderToStaticMarkup(
       <PackagesView
         packages={createEmptyPackageFile()}
@@ -57,7 +61,40 @@ describe('PackagesView', () => {
     expect(html).toContain('1.0.0');
     expect(html).toContain('pdf@1.0.0');
     expect(html).toContain('base@2.0.0');
-    expect(html).toContain('Available skills');
+    expect(html).not.toContain('Available skills');
+  });
+
+  it('renders the create and copy forms inside dialogs', () => {
+    const skills = {
+      schemaVersion: 2 as const,
+      skills: {
+        pdf: {
+          versions: {
+            '1.0.0': {
+              integrity: 'sha512-pdf',
+              fileCount: 1,
+              size: 1,
+              built: false,
+            },
+          },
+        },
+      },
+    };
+    const create = renderToStaticMarkup(
+      <CreatePackageDialog
+        open
+        skills={skills}
+        onClose={() => undefined}
+      />,
+    );
+    const copy = renderToStaticMarkup(
+      <CopyPackageDialog open onClose={() => undefined} />,
+    );
+
+    expect(create).toContain('Package name');
+    expect(create).toContain('Available skills:');
+    expect(copy).toContain('Source package');
+    expect(copy).toContain('Target version');
   });
 
   it('renders translated package headings and actions', () => {

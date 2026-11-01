@@ -2,7 +2,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { TargetRoute } from '@skillink/shared';
 import { renderWithMessages } from './i18n.test-utils.js';
-import { TargetsView, invokeTargetsAction } from './TargetsView.js';
+import {
+  AddTargetDialog,
+  TargetsView,
+  invokeTargetsAction,
+} from './TargetsView.js';
 
 const target: TargetRoute = {
   id: 'project-a',
@@ -45,10 +49,15 @@ describe('TargetsView', () => {
     expect(html).toContain('Add target');
   });
 
-  it('disables the unimplemented copy mode option', () => {
-    const html = renderToStaticMarkup(<TargetsView targets={[]} />);
+  it('keeps the add-target form in a dialog instead of the page body', () => {
+    const page = renderToStaticMarkup(<TargetsView targets={[]} />);
+    const dialog = renderToStaticMarkup(
+      <AddTargetDialog open onClose={() => undefined} />,
+    );
 
-    expect(html).toMatch(/<option value="copy"[^>]*disabled/);
+    expect(page).not.toContain('<select');
+    expect(dialog).toMatch(/<option value="copy"[^>]*disabled/);
+    expect(dialog).toContain('Directory path');
   });
 
   it('renders package and resolved skill counts', () => {
@@ -81,7 +90,6 @@ describe('TargetsView', () => {
     expect(projectB).toContain('No packages assigned yet.');
     expect(projectB).not.toContain('frontend');
     expect(projectB.match(/Assign package/g)).toHaveLength(1);
-    expect(html.match(/<select/g)).toHaveLength(1);
     expect(html).not.toContain('Package assignments');
   });
 

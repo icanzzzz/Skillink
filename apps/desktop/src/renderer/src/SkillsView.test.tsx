@@ -4,6 +4,7 @@ import { createEmptySkillFile } from '@skillink/shared';
 import { renderWithMessages } from './i18n.test-utils.js';
 import {
   SkillBatchCard,
+  SkillImportDialog,
   SkillsView,
   resolveSkillBatchName,
 } from './SkillsView.js';
@@ -16,8 +17,17 @@ describe('SkillsView', () => {
 
     expect(html).toContain('No skills yet');
     expect(html).toContain('SKILL.md');
+    expect(html).toContain('Import skills');
+  });
+
+  it('renders the scan workflow inside the import dialog', () => {
+    const html = renderToStaticMarkup(
+      <SkillImportDialog open onClose={() => undefined} />,
+    );
+
     expect(html).toContain('Install skill packages');
     expect(html).toContain('Scan folder');
+    expect(html).toContain('Source folder to scan for SKILL.md');
   });
 
   it('renders skill names, versions, tags, and the scan controls', () => {
@@ -53,7 +63,7 @@ describe('SkillsView', () => {
     expect(html).toContain('1.1.0');
     expect(html).toContain('stable');
     expect(html).toContain('latest');
-    expect(html).toContain('Scan folder');
+    expect(html).toContain('Import skills');
   });
 
   it('groups installed versions into one card with a single action panel', () => {
