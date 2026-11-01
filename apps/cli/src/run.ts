@@ -27,7 +27,7 @@ export async function runCli(
   program
     .name('skillink')
     .description('Local skill and package manager')
-    .version('0.0.0', '-V, --app-version', 'Show the CLI version')
+    .version('1.0.0', '-V, --app-version', 'Show the CLI version')
     .exitOverride()
     .configureOutput({
       writeOut: (value) => context.stdout(value.replace(/\n$/, '')),

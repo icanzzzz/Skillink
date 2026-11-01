@@ -862,8 +862,8 @@ Windows 安装包由 `pnpm package:win` 生成：
 
 ```text
 apps/desktop/release/
-├─ Skillink Setup 0.0.0.exe     # NSIS 安装包
-├─ Skillink 0.0.0.exe           # portable
+├─ Skillink Setup 1.0.0.exe     # NSIS 安装包
+├─ Skillink 1.0.0.exe           # portable
 └─ win-unpacked/
    ├─ Skillink.exe              # GUI 入口
    └─ resources/cli/

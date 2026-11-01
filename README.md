@@ -436,8 +436,8 @@ pnpm package:win
 `package:win` 会先构建 CLI，再构建桌面端，最后生成：
 
 ```text
-apps/desktop/release/Skillink Setup 0.0.0.exe   # NSIS 安装包
-apps/desktop/release/Skillink 0.0.0.exe         # portable
+apps/desktop/release/Skillink Setup 1.0.0.exe   # NSIS 安装包
+apps/desktop/release/Skillink 1.0.0.exe         # portable
 apps/desktop/release/win-unpacked/              # 未压缩目录
 ```
 
