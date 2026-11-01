@@ -665,7 +665,12 @@ button {
 
 .table-row {
   display: grid;
-  grid-template-columns: 1.05fr 2.05fr 0.55fr 0.55fr 1.2fr;
+  grid-template-columns:
+    minmax(0, 1.05fr)
+    minmax(0, 2.05fr)
+    minmax(0, 0.55fr)
+    minmax(0, 0.55fr)
+    minmax(0, 1.2fr);
   gap: 16px;
   align-items: center;
   padding: 13px 6px;
@@ -673,6 +678,16 @@ button {
   color: var(--ink-soft);
   font-size: 12px;
   transition: background-color 0.15s ease;
+}
+
+/*
+ * Every row is its own grid, so cells must be allowed to shrink below their
+ * content width. Otherwise a long path or target id expands that row's tracks
+ * and the cells no longer line up with the column labels above.
+ */
+.table-row > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .table-row:not(.table-head):hover {
@@ -1648,7 +1663,12 @@ button {
   }
 
   .table-row {
-    grid-template-columns: 1fr 1.7fr 0.45fr 0.45fr 1.1fr;
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(0, 1.7fr)
+      minmax(0, 0.45fr)
+      minmax(0, 0.45fr)
+      minmax(0, 1.1fr);
   }
 
   .split,
