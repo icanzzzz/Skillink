@@ -257,6 +257,52 @@ describe.skipIf(!gitReady)('CLI', () => {
     );
   });
 
+  it('switches a target between link and copy projections', async () => {
+    const root = await tempDir('skillink-cli-mode-');
+    const home = path.join(root, 'home');
+    const source = await makeSkillSource();
+    const targetPath = path.join(root, 'target');
+    await mkdir(targetPath, { recursive: true });
+    const ctx = context(home);
+
+    await runCli(['init'], ctx);
+    await runCli(
+      ['skill', 'add', source, '--name', 'pdf', '--version', '1.0.0'],
+      ctx,
+    );
+    await runCli(
+      ['package', 'create', 'demo@1.0.0', '--skill', 'pdf@1.0.0'],
+      ctx,
+    );
+    await runCli(['target', 'add', targetPath, '--id', 'project-a'], ctx);
+    await runCli(['route', 'add', 'project-a', 'demo@1.0.0'], ctx);
+    await runCli(['apply'], ctx);
+
+    const entryPath = path.join(targetPath, 'pdf');
+    expect((await lstat(entryPath)).isSymbolicLink()).toBe(true);
+
+    ctx.out.length = 0;
+    expect(
+      await runCli(['target', 'mode', 'project-a', 'copy', '--json'], ctx),
+    ).toBe(0);
+    expect(JSON.parse(ctx.out.join('\n'))).toMatchObject({
+      id: 'project-a',
+      mode: 'copy',
+    });
+    expect((await readJson(path.join(home, 'route.json'))).targets[0].mode).toBe(
+      'copy',
+    );
+
+    expect(await runCli(['apply'], ctx)).toBe(0);
+    expect((await lstat(entryPath)).isSymbolicLink()).toBe(false);
+    expect((await lstat(entryPath)).isDirectory()).toBe(true);
+
+    expect(await runCli(['target', 'mode', 'project-a', 'link'], ctx)).toBe(0);
+    expect(await runCli(['apply'], ctx)).toBe(0);
+    expect((await lstat(entryPath)).isSymbolicLink()).toBe(true);
+    expect(ctx.out.join('\n')).toContain('Set target project-a mode to link');
+  });
+
   it('removes route-resolved skill directories on target remove', async () => {
     const root = await tempDir('skillink-cli-');
     const home = path.join(root, 'home');

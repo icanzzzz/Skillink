@@ -10,6 +10,7 @@ import {
   buildLanguageUseArgs,
   buildRouteAddArgs,
   buildScanSkillsArgs,
+  buildTargetModeArgs,
 } from './cli-commands.js';
 
 describe('CLI argv builders', () => {
@@ -28,6 +29,16 @@ describe('CLI argv builders', () => {
       'project-a',
       '--mode',
       'link',
+      '--json',
+    ]);
+  });
+
+  it('maps target mode requests', () => {
+    expect(buildTargetModeArgs({ id: 'project-a', mode: 'copy' })).toEqual([
+      'target',
+      'mode',
+      'project-a',
+      'copy',
       '--json',
     ]);
   });

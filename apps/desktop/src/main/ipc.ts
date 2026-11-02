@@ -30,6 +30,7 @@ import {
   SkillRemoveRequestSchema,
   SkillTagRequestSchema,
   TargetEnableRequestSchema,
+  TargetModeRequestSchema,
   TargetRemoveRequestSchema,
 } from '../ipc-schemas.js';
 import { createCliAdapter } from './cli-adapter.js';
@@ -54,6 +55,7 @@ import {
   buildSkillRemoveArgs,
   buildSkillTagArgs,
   buildTargetEnableArgs,
+  buildTargetModeArgs,
 } from './cli-commands.js';
 import { assertTrustedSender, type SenderPolicy } from './sender-policy.js';
 
@@ -222,6 +224,11 @@ export function registerIpcHandlers(
   handle('skillink:target-enable', async (_event, input: unknown) => {
     const request = TargetEnableRequestSchema.parse(input);
     return cli.invoke<TargetRoute>(buildTargetEnableArgs(request));
+  });
+
+  handle('skillink:target-mode', async (_event, input: unknown) => {
+    const request = TargetModeRequestSchema.parse(input);
+    return cli.invoke<TargetRoute>(buildTargetModeArgs(request));
   });
 
   handle('skillink:gc', async (_event, input: unknown) => {

@@ -741,7 +741,7 @@ skillink init
 skillink migrate
 skillink skill add|scan|list|tag|remove
 skillink package create|list|tag|remove|check
-skillink target add|list|remove|enable|disable
+skillink target add|list|mode|remove|enable|disable
 skillink route add|remove|list|enable|disable
 skillink snapshot
 skillink apply|status|doctor|gc
@@ -764,7 +764,7 @@ init
 migrate
 skill list|add|scan|tag|remove
 package list|create|tag|remove|check
-target list|add|remove|enable|disable
+target list|add|mode|remove|enable|disable
 route list|add|remove|enable|disable
 snapshot
 apply
@@ -817,7 +817,7 @@ drift / missing       -> apply
 ### 7.2 GUI
 
 - **Overview**：skills、packages、targets、links、doctor；
-- **Targets**：target 列表、package 数、解析后的 skill 数、分配 package、target/package enable/disable（禁用时清理不再需要的投影）、删除 target/route（按 route 清理目标目录条目）、apply 预览（dry-run）、apply 结果；
+- **Targets**：target 列表、package 数、解析后的 skill 数、分配 package、target 在链接/复制模式间切换（只改 route，下一次 apply 重建投影）、target/package enable/disable（禁用时清理不再需要的投影）、删除 target/route（按 route 清理目标目录条目）、apply 预览（dry-run）、apply 结果；
 - **Skills**：选择目录批量扫描 `SKILL.md`，逐个确认安装；扫描名称只作为名称输入框 placeholder，留空确认时作为默认名称；版本输入框显示自动生成版本的 semver 主体 `1.0.0`，不显示 `+<hash8>` 构建元数据；确认时检测包内目录链接，命中则提示绝对路径并取消该包安装；已安装技能按技能名聚合为一张卡片，通过版本切换标签选择版本，再对当前版本执行标记/移除，标签可直接切换到对应版本；GC；
 - **Packages**：创建 package、组合列表、标签、删除；复制某个版本时用该版本数据预填创建表单，提交仍走 `package create`；
 - **Doctor**：健康检查；

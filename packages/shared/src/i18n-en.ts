@@ -149,6 +149,8 @@ export const EN_MESSAGES = {
   'targets.actions.enableTarget': 'Enable target',
   'targets.actions.disableTarget': 'Disable target',
   'targets.actions.removeTarget': 'Remove target',
+  'targets.actions.switchToLink': 'Switch to link',
+  'targets.actions.switchToCopy': 'Switch to copy',
   'targets.actions.enableRoute': 'Enable route',
   'targets.actions.disableRoute': 'Disable route',
   'targets.actions.removeRoute': 'Remove route',
@@ -156,6 +158,8 @@ export const EN_MESSAGES = {
     'Remove target "{name}"? Its route-resolved skill directories will be deleted from the target directory, even if they were not created by Skillink. Regular files and the target directory itself are kept.',
   'targets.confirm.disableTarget':
     'Disable target "{name}"? Its route-resolved skill directories will be deleted from the target directory, even if they were not created by Skillink.',
+  'targets.confirm.switchMode':
+    'Switch target "{name}" to {mode} mode? Existing skill entries are rebuilt on the next apply.',
   'targets.confirm.disableRoute':
     'Disable package "{name}" on target "{target}"? Skill directories no longer needed by the target will be deleted, even if they were not created by Skillink.',
   'targets.confirm.removeRoute':
@@ -301,6 +305,7 @@ export const EN_MESSAGES = {
   'toast.target.removed': 'Target removed.',
   'toast.target.enabled': 'Target enabled.',
   'toast.target.disabled': 'Target disabled.',
+  'toast.target.modeChanged': 'Target mode updated.',
   'toast.route.added': 'Package assigned.',
   'toast.route.removed': 'Package removed from target.',
   'toast.route.enabled': 'Route enabled.',

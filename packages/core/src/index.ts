@@ -63,5 +63,10 @@ export {
   writeSkillFile,
 } from './skill-store.js';
 export { status } from './status.js';
-export { addTarget, removeTarget, setTargetEnabled } from './target.js';
+export {
+  addTarget,
+  removeTarget,
+  setTargetEnabled,
+  setTargetMode,
+} from './target.js';
 export { summarizeTargetSkills } from './target-resolution.js';

@@ -15,7 +15,12 @@ import {
   type TargetMode,
 } from '@skillink/shared';
 import { createDirectoryLink } from './links.js';
-import { addTarget, removeTarget, setTargetEnabled } from './target.js';
+import {
+  addTarget,
+  removeTarget,
+  setTargetEnabled,
+  setTargetMode,
+} from './target.js';
 import {
   addRouteEntry,
   readRouteFile,
@@ -264,6 +269,40 @@ describe('targets', () => {
 
     await expect(
       setTargetEnabled(paths, 'missing', false),
+    ).rejects.toMatchObject({ code: 'TARGET_NOT_FOUND' });
+  });
+
+  it('switches a target mode between link and copy', async () => {
+    const { paths, targetPath } = await setup();
+    await addTarget({ paths, id: 'project-a', path: targetPath });
+
+    const copied = await setTargetMode(paths, 'project-a', 'copy');
+
+    expect(copied.mode).toBe('copy');
+    expect((await readRouteFile(paths)).targets[0]?.mode).toBe('copy');
+
+    const linked = await setTargetMode(paths, 'project-a', 'link');
+
+    expect(linked.mode).toBe('link');
+    expect((await readRouteFile(paths)).targets[0]?.mode).toBe('link');
+  });
+
+  it('rejects switching an unknown target mode', async () => {
+    const { paths, targetPath } = await setup();
+    await addTarget({ paths, id: 'project-a', path: targetPath });
+
+    await expect(
+      setTargetMode(paths, 'project-a', 'zip' as TargetMode),
+    ).rejects.toMatchObject({ code: 'ROUTE_INVALID' });
+
+    expect((await readRouteFile(paths)).targets[0]?.mode).toBe('link');
+  });
+
+  it('rejects switching the mode of a missing target', async () => {
+    const { paths } = await setup();
+
+    await expect(
+      setTargetMode(paths, 'missing', 'copy'),
     ).rejects.toMatchObject({ code: 'TARGET_NOT_FOUND' });
   });
 

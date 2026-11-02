@@ -65,6 +65,13 @@ export const TargetEnableRequestSchema = z
   })
   .strict();
 
+export const TargetModeRequestSchema = z
+  .object({
+    id: NonEmptyString,
+    mode: TargetModeSchema,
+  })
+  .strict();
+
 export const SkillTagRequestSchema = z
   .object({
     name: NonEmptyString,
@@ -153,6 +160,7 @@ export type RouteRemoveRequest = z.infer<typeof RouteRemoveRequestSchema>;
 export type RouteEnableRequest = z.infer<typeof RouteEnableRequestSchema>;
 export type TargetRemoveRequest = z.infer<typeof TargetRemoveRequestSchema>;
 export type TargetEnableRequest = z.infer<typeof TargetEnableRequestSchema>;
+export type TargetModeRequest = z.infer<typeof TargetModeRequestSchema>;
 export type SkillTagRequest = z.infer<typeof SkillTagRequestSchema>;
 export type SkillRemoveRequest = z.infer<typeof SkillRemoveRequestSchema>;
 export type PackageTagRequest = z.infer<typeof PackageTagRequestSchema>;

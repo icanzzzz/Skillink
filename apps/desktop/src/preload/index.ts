@@ -15,6 +15,7 @@ const api: DesktopApi = {
   addTarget: (input) => ipcRenderer.invoke('skillink:add-target', input),
   removeTarget: (input) => ipcRenderer.invoke('skillink:remove-target', input),
   targetEnable: (input) => ipcRenderer.invoke('skillink:target-enable', input),
+  targetMode: (input) => ipcRenderer.invoke('skillink:target-mode', input),
   routeAdd: (input) => ipcRenderer.invoke('skillink:route-add', input),
   routeRemove: (input) => ipcRenderer.invoke('skillink:route-remove', input),
   routeEnable: (input) => ipcRenderer.invoke('skillink:route-enable', input),
