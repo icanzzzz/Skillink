@@ -17,6 +17,7 @@ import {
   SkillRemoveRequestSchema,
   SkillTagRequestSchema,
   TargetEnableRequestSchema,
+  TargetModeRequestSchema,
   TargetRemoveRequestSchema,
 } from './ipc-schemas.js';
 
@@ -132,6 +133,14 @@ describe('IPC request schemas', () => {
     ).toEqual({ id: 'project-a', enabled: false });
     expect(
       TargetEnableRequestSchema.safeParse({ id: 'project-a' }).success,
+    ).toBe(false);
+
+    expect(
+      TargetModeRequestSchema.parse({ id: 'project-a', mode: 'copy' }),
+    ).toEqual({ id: 'project-a', mode: 'copy' });
+    expect(
+      TargetModeRequestSchema.safeParse({ id: 'project-a', mode: 'hardlink' })
+        .success,
     ).toBe(false);
 
     expect(

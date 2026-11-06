@@ -189,6 +189,23 @@ describe('TargetsView', () => {
     expect(html).toContain('Apply routes');
   });
 
+  it('offers a mode switch from link to copy and back', () => {
+    const linkHtml = renderToStaticMarkup(
+      <TargetsView targets={[target]} onTargetMode={() => {}} />,
+    );
+    const copyHtml = renderToStaticMarkup(
+      <TargetsView
+        targets={[{ ...target, mode: 'copy' }]}
+        onTargetMode={() => {}}
+      />,
+    );
+
+    expect(linkHtml).toContain('Switch to copy');
+    expect(linkHtml).not.toContain('Switch to link');
+    expect(copyHtml).toContain('Switch to link');
+    expect(copyHtml).not.toContain('Switch to copy');
+  });
+
   it('renders translated headings', () => {
     const html = renderWithMessages(<TargetsView targets={[]} />, {
       'targets.routes.title': '目标目录',

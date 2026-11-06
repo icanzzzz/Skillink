@@ -50,6 +50,11 @@ export interface TargetEnableFormInput {
   enabled: boolean;
 }
 
+export interface TargetModeFormInput {
+  id: string;
+  mode: TargetMode;
+}
+
 export interface TargetsViewProps {
   targets: TargetRoute[];
   statusEntries?: StatusEntry[];
@@ -60,6 +65,7 @@ export interface TargetsViewProps {
   onAddTarget?: AddTargetSubmit;
   onRemoveTarget?: (input: TargetRemoveFormInput) => void;
   onTargetEnable?: (input: TargetEnableFormInput) => void;
+  onTargetMode?: (input: TargetModeFormInput) => void;
   onRouteAdd?: (
     input: RouteAddFormInput,
   ) => Promise<boolean> | boolean | void;
@@ -249,6 +255,7 @@ export function TargetsView({
   onAddTarget,
   onRemoveTarget,
   onTargetEnable,
+  onTargetMode,
   onRouteAdd,
   onRemoveRoute,
   onRouteEnable,
@@ -303,6 +310,26 @@ export function TargetsView({
       id: target.id,
       enabled: !target.enabled,
     });
+  }
+
+  async function switchMode(target: TargetRoute): Promise<void> {
+    const nextMode: TargetMode = target.mode === 'link' ? 'copy' : 'link';
+    const nextLabel =
+      nextMode === 'copy'
+        ? t('targets.actions.switchToCopy')
+        : t('targets.actions.switchToLink');
+    const confirmed = await confirm({
+      title: nextLabel,
+      message: t('targets.confirm.switchMode', {
+        name: target.label ?? target.id,
+        mode: t(`targets.mode.${nextMode}`, {}, nextMode),
+      }),
+      confirmLabel: nextLabel,
+      cancelLabel: t('common.cancel'),
+    });
+    if (confirmed) {
+      onTargetMode?.({ id: target.id, mode: nextMode });
+    }
   }
 
   async function removeTarget(target: TargetRoute): Promise<void> {
@@ -583,6 +610,16 @@ export function TargetsView({
                       onClick={() => beginAssignment(target.id)}
                     >
                       {t('targets.form.assignPackage')}
+                    </button>
+                    <button
+                      className="secondary"
+                      type="button"
+                      disabled={busy || !onTargetMode}
+                      onClick={() => void switchMode(target)}
+                    >
+                      {target.mode === 'link'
+                        ? t('targets.actions.switchToCopy')
+                        : t('targets.actions.switchToLink')}
                     </button>
                     <button
                       className="secondary"

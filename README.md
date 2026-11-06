@@ -71,6 +71,10 @@ pnpm dev:cli -- route add project-a frontend@1.0.0
 pnpm dev:cli -- target add <empty-target-dir> --id project-copy --mode copy
 pnpm dev:cli -- route add project-copy frontend@1.0.0
 
+# 在链接和复制之间切换已有 target 的模式，然后 apply 重建条目
+pnpm dev:cli -- target mode project-copy link
+pnpm dev:cli -- apply
+
 # 投影 skill 到 target
 pnpm dev:cli -- apply
 
@@ -281,6 +285,10 @@ skillink target add <path> [--id <id>] [--label <label>] [--mode <link|copy>] [-
 
 # 列出所有 target 的 id、路径、投影模式和启用状态。
 skillink target list [--json]
+
+# 在 link 和 copy 之间切换 target 的投影模式。
+# 只修改 route.json；执行 apply 后才会把现有条目重建为新模式。
+skillink target mode <id> <link|copy> [--json]
 
 # 从 route.json 删除 target，并清理它在 target 目录中由 route 解析出的 skill 条目。
 # target 目录本身不会被删除。

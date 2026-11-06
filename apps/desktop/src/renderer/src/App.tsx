@@ -18,6 +18,7 @@ import type {
   SkillRemoveRequest,
   SkillTagRequest,
   TargetEnableRequest,
+  TargetModeRequest,
   TargetRemoveRequest,
 } from '../../ipc-schemas.js';
 import type { DesktopApi, DesktopSnapshot } from '../../shared.js';
@@ -203,6 +204,15 @@ export function App({ api }: AppProps) {
         await client!.targetEnable(input);
       },
       input.enabled ? t('toast.target.enabled') : t('toast.target.disabled'),
+    );
+  }
+
+  function targetMode(input: TargetModeRequest): void {
+    void runAction(
+      async () => {
+        await client!.targetMode(input);
+      },
+      t('toast.target.modeChanged'),
     );
   }
 
@@ -407,6 +417,7 @@ export function App({ api }: AppProps) {
               onAddTarget={addTarget}
               onRemoveTarget={removeTarget}
               onTargetEnable={targetEnable}
+              onTargetMode={targetMode}
               onRouteAdd={routeAdd}
               onRemoveRoute={removeRoute}
               onRouteEnable={routeEnable}

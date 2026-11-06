@@ -129,6 +129,36 @@ export async function setTargetEnabled(
   return target;
 }
 
+export async function setTargetMode(
+  paths: SkillinkPaths,
+  targetId: string,
+  mode: TargetMode,
+): Promise<TargetRoute> {
+  if (mode !== 'link' && mode !== 'copy') {
+    throw new SkillinkError(
+      'ROUTE_INVALID',
+      `Unsupported target mode "${String(mode)}".`,
+      { mode },
+    );
+  }
+
+  const route = await readRouteFile(paths);
+  const target = route.targets.find((entry) => entry.id === targetId);
+
+  if (!target) {
+    throw new SkillinkError(
+      'TARGET_NOT_FOUND',
+      `Target "${targetId}" does not exist.`,
+      { targetId },
+    );
+  }
+
+  target.mode = mode;
+  await writeRouteFile(paths, route);
+
+  return target;
+}
+
 export interface RemoveTargetInput {
   paths: SkillinkPaths;
   id: string;

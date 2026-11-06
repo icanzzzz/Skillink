@@ -5,6 +5,7 @@ import {
   readRouteFile,
   removeTarget,
   setTargetEnabled,
+  setTargetMode,
 } from '@skillink/core';
 import { addCommonOptions, printJson } from '../cli-context.js';
 import type { CommandRuntime } from '../command-runtime.js';
@@ -60,6 +61,33 @@ export function registerTargetCommands(
         context.stdout(`Added target ${created.id} -> ${created.path}`);
       },
     );
+
+  target
+    .command('mode')
+    .description(
+      'Switch a target projection mode; run apply to rebuild existing entries',
+    )
+    .argument('<id>', 'Target id')
+    .argument('<mode>', 'Projection mode (link or copy)')
+    .option('--json', 'Print machine-readable JSON')
+    .action(async (id: string, mode: TargetMode, options: { json?: boolean }) => {
+      const paths = runtime.paths();
+      const updated = await runtime.mutate(
+        paths,
+        'target mode',
+        'mode',
+        `${id} ${mode}`,
+        async () => {
+          await runtime.ensureHome();
+          return setTargetMode(paths, id, mode);
+        },
+      );
+      if (options.json) {
+        printJson(context, updated);
+        return;
+      }
+      context.stdout(`Set target ${id} mode to ${updated.mode}`);
+    });
 
   addCommonOptions(
     target.command('list').description('List target directories'),

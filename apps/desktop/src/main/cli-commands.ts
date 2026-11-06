@@ -14,6 +14,7 @@ import type {
   SkillRemoveRequest,
   SkillTagRequest,
   TargetEnableRequest,
+  TargetModeRequest,
   TargetRemoveRequest,
 } from '../ipc-schemas.js';
 
@@ -119,6 +120,10 @@ export function buildTargetEnableArgs(request: TargetEnableRequest): string[] {
     request.id,
     '--json',
   ];
+}
+
+export function buildTargetModeArgs(request: TargetModeRequest): string[] {
+  return ['target', 'mode', request.id, request.mode, '--json'];
 }
 
 export function buildRouteAddArgs(request: RouteAddRequest): string[] {

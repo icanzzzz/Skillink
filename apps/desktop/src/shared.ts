@@ -26,6 +26,7 @@ import type {
   SkillRemoveRequest,
   SkillTagRequest,
   TargetEnableRequest,
+  TargetModeRequest,
   TargetRemoveRequest,
 } from './ipc-schemas.js';
 
@@ -49,6 +50,7 @@ export interface DesktopApi {
   addTarget(input: AddTargetRequest): Promise<TargetRoute>;
   removeTarget(input: TargetRemoveRequest): Promise<TargetRoute>;
   targetEnable(input: TargetEnableRequest): Promise<TargetRoute>;
+  targetMode(input: TargetModeRequest): Promise<TargetRoute>;
   routeAdd(input: RouteAddRequest): Promise<PackageLock>;
   routeRemove(input: RouteRemoveRequest): Promise<boolean>;
   routeEnable(input: RouteEnableRequest): Promise<PackageLock>;

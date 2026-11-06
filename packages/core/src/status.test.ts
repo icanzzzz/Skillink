@@ -14,6 +14,7 @@ import {
   type SkillinkPaths,
 } from '@skillink/shared';
 import { apply } from './apply.js';
+import { doctor } from './doctor/index.js';
 import { importSkill } from './import-skill.js';
 import { createDirectoryLink } from './links.js';
 import { computePackageIntegrity } from './package-graph.js';
@@ -28,7 +29,7 @@ import {
   writeRouteFile,
 } from './route.js';
 import { status } from './status.js';
-import { addTarget } from './target.js';
+import { addTarget, setTargetMode } from './target.js';
 
 const tempDirs: string[] = [];
 
@@ -166,6 +167,42 @@ describe('status', () => {
         expect.objectContaining({ name: 'pdf', state: 'wrong-mode' }),
       ]),
     );
+  });
+
+  it('reports wrong-mode after a mode switch until the user applies', async () => {
+    const { paths } = await setup();
+    await addRouteEntry({
+      paths,
+      targetId: 'project-a',
+      name: 'combo',
+      requested: '1.0.0',
+    });
+    await apply({ paths });
+
+    await setTargetMode(paths, 'project-a', 'copy');
+
+    const beforeApply = await status({ paths });
+    expect(beforeApply.healthy).toBe(false);
+    expect(beforeApply.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'pdf', state: 'wrong-mode' }),
+        expect.objectContaining({ name: 'review', state: 'wrong-mode' }),
+      ]),
+    );
+    const diagnosis = await doctor({ paths, statusReport: beforeApply });
+    expect(diagnosis.ok).toBe(false);
+    expect(diagnosis.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'LINK_ISSUE',
+          targetId: 'project-a',
+        }),
+      ]),
+    );
+
+    await apply({ paths });
+
+    expect((await status({ paths })).healthy).toBe(true);
   });
 
   it('reports broken-link for a dangling skill link', async () => {
