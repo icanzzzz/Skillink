@@ -1,5 +1,5 @@
 import type { Command } from 'commander';
-import { ensureDirectories, migrateV1ToV2 } from '@skillink/core';
+import { addControlPlane, ensureDirectories, migrateV1ToV2 } from '@skillink/core';
 import { initializeHome } from '../bootstrap.js';
 import { printJson } from '../cli-context.js';
 import type { CommandRuntime } from '../command-runtime.js';
@@ -17,6 +17,10 @@ export function registerInitCommands(
     .action(async (options: { json?: boolean }) => {
       const paths = runtime.paths();
       const result = await initializeHome(paths, runtime.argv);
+
+      if (runtime.homeSource !== 'context') {
+        await addControlPlane(paths.home);
+      }
 
       if (options.json) {
         printJson(context, { ok: true, home: paths.home, ...result });

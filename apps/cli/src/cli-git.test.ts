@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/p
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { gitHead, gitLog, gitShowFile, gitStatus, isGitAvailable } from '@skillink/core';
 import { getSkillinkPaths } from '@skillink/shared';
 import { runCli, type CliContext } from './run.js';
@@ -18,7 +18,7 @@ async function tempDir(prefix: string): Promise<string> {
   return dir;
 }
 
-function context(home: string): CliContext & { out: string[]; err: string[] } {
+function context(home?: string): CliContext & { out: string[]; err: string[] } {
   const out: string[] = [];
   const err: string[] = [];
   return {
@@ -55,6 +55,7 @@ async function seedSkill(home: string, ctx: CliContext): Promise<void> {
 }
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(
     tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
   );
@@ -529,5 +530,27 @@ describe.skipIf(!(await isGitAvailable()))('CLI git integration', () => {
     expect((await gitLog(paths, 'control'))[0]?.reason).toBe(
       `skillink(rollback): restore ${revision!.slice(0, 7)}`,
     );
+  });
+
+  it('registers a successfully initialized control plane', async () => {
+    const root = await tempDir('skillink-cli-init-register-');
+    const home = path.join(root, 'planes', 'init');
+    if (process.platform === 'win32') {
+      vi.stubEnv('APPDATA', path.join(root, 'appdata'));
+    } else {
+      vi.stubEnv('XDG_CONFIG_HOME', path.join(root, 'config'));
+    }
+    vi.stubEnv('SKILLINK_HOME', home);
+
+    const initCtx = context();
+    expect(await runCli(['init'], initCtx)).toBe(0);
+
+    vi.stubEnv('SKILLINK_HOME', '');
+    const listCtx = context();
+    expect(await runCli(['control-plane', 'list', '--json'], listCtx)).toBe(0);
+    expect(JSON.parse(listCtx.out.join('\n'))).toMatchObject({
+      active: path.resolve(home),
+      controlPlanes: [path.resolve(home)],
+    });
   });
 });
