@@ -6,7 +6,7 @@ Skillink 是一个纯本地、以 **skill** 为实体、以 **package** 为组�
 target -> package -> skill -> 实体内容
 ```
 
-- **Skill 是唯一安装单位，也是唯一实体**：内容存放在 `%USERPROFILE%\.agents\skillink\skills\<skill>\<version>\`，根目录必须有 `SKILL.md`。
+- **Skill 是唯一安装单位，也是唯一实体**：内容存放在当前控制面的 `skills/<skill>/<version>/`，根目录必须有 `SKILL.md`。
 - **Package 只是配置文件**：`package.json` 描述 package 版本如何组合 skill 和其他 package；它没有内容目录，也不会投影到 target。
 - **Route 只依赖 package**：`route.json` 的 target 声明 package 版本，不直接声明 skill。
 - **Target 最终只包含 skill**：apply 会把 package 图展开为 skill 集合，再链接或复制 skill 文件夹（`link` / `copy` 两种投影模式）。
@@ -36,6 +36,8 @@ target -> package -> skill -> 实体内容
 - GUI 通过 CLI command layer 在进程内执行所有业务操作，CLI 是唯一业务入口；
 - 可安装、可切换的数据型语言包（`locale` 命令 + GUI 语言弹窗），当前语言保存到 `settings.json`；
 - 控制面是 git 仓库：`route.json` / `package.json` / `skill.json` / `locales/` 自动提交，可用 `history` 查看、`rollback` 回退；
+- 控制面没有隐式默认路径：首次使用需要先登记并选择控制面，或设置 `SKILLINK_HOME`；
+- 支持登记多个控制面并在 CLI / GUI 中切换；控制面清单独立于控制面保存；
 - `skills/` 是独立 git 仓库，保存 skill 内容历史；控制面 git 忽略 `skills/`；
 - 所有写命令自动提交，无变化不提交；读命令、`apply`、`package check`、dry-run 不提交；
 - 写命令通过 `<home>/.skillink.lock` 串行化；
@@ -46,8 +48,13 @@ target -> package -> skill -> 实体内容
 ## 快速开始
 
 ```bash
+# 首次使用：登记一个控制面目录；目录不存在时会自动创建。
+# 清单中没有当前控制面时，第一个登记项自动成为当前控制面。
+pnpm dev:cli -- control-plane add ~/.agents/skillink
+
 # 初始化控制面：route.json + package.json + skill.json
 # 同时初始化控制面 git 与 skills 独立 git，并建立 baseline commit
+# init 成功后会把该目录登记进控制面清单（已登记则不重复）。
 pnpm dev:cli -- init
 
 # 导入 skill；文件夹根目录必须有 SKILL.md
@@ -94,16 +101,53 @@ pnpm dev:cli -- locale install ./locales/zh-CN.json --use
 
 ```text
 <target>/
-├─ pdf     -> ~/.agents/skillink/skills/pdf/1.0.0
-└─ review  -> ~/.agents/skillink/skills/review/1.0.0
+├─ pdf     -> <当前控制面>/skills/pdf/1.0.0
+└─ review  -> <当前控制面>/skills/review/1.0.0
 ```
 
 不会出现 `frontend` 或 `base` 目录，因为 package 只是配置。
 
+## 控制面选择与清单
+
+Skillink 不再隐式使用 `~/.agents/skillink`。当前控制面按以下顺序解析：
+
+1. 程序化上下文 `CliContext.home`（仅测试或内嵌调用使用）；
+2. 环境变量 `SKILLINK_HOME`；
+3. 控制面清单中的 `active`；
+4. 都没有时，需要控制面的命令返回 `CONTROL_PLANE_REQUIRED`。
+
+控制面清单独立于任何控制面保存，也不进入控制面 git：
+
+| 平台 | 清单路径 |
+|---|---|
+| Windows | `%APPDATA%\Skillink\control-planes.json`；`APPDATA` 缺失时回退到 `%USERPROFILE%\AppData\Roaming\Skillink\control-planes.json` |
+| macOS | `~/Library/Application Support/Skillink/control-planes.json` |
+| Linux | `$XDG_CONFIG_HOME/skillink/control-planes.json`；缺失时回退到 `~/.config/skillink/control-planes.json` |
+
+```json
+{
+  "schemaVersion": 1,
+  "active": "C:\\Users\\me\\.agents\\skillink",
+  "controlPlanes": [
+    "C:\\Users\\me\\.agents\\skillink",
+    "D:\\skillink\\work"
+  ]
+}
+```
+
+- `control-plane add <path>` 只创建/登记目录，不初始化配置和 git；路径不存在时会创建，存在但不是目录时返回 `CONTROL_PLANE_NOT_FOUND`。
+- 第一个登记的控制面自动成为当前控制面；后续 `add` 不改变当前选择。
+- `control-plane use <path>` 只切换已经登记的控制面；未登记的路径返回 `CONTROL_PLANE_NOT_FOUND`。
+- `SKILLINK_HOME` 始终优先于清单中的当前控制面；设置后所有命令都使用该目录。`control-plane` 命令仍可读写清单，但 `list` 显示的当前控制面仍是环境变量路径。
+- `init` 成功后会把初始化的目录登记进清单；如果清单没有当前控制面，同时设为当前控制面。
+- 清单文件不存在时视为 `{ "active": null, "controlPlanes": [] }`；清单损坏时命令报错，不会静默回退到默认目录。
+
 ## 控制面目录与 git
 
+以下以 `%USERPROFILE%\.agents\skillink\` 为例；实际路径由当前控制面决定（清单 `active` 或 `SKILLINK_HOME`）。
+
 ```text
-%USERPROFILE%\.agents\skillink\
+<控制面>\
 ├─ .git/              控制面 git
 ├─ .gitignore
 ├─ .gitattributes
@@ -195,15 +239,30 @@ skillink <command> [subcommand] [arguments] [options]
 - `<value>` 为必填参数，`[value]` 为可选参数，`...` 表示可以重复传入；
 - 所有命令都支持 `--json`，用于输出机器可读 JSON；失败时向 stderr 输出结构化错误；
 - 所有命令都支持 `-h` / `--help`，例如 `skillink skill add --help`；也可以用 `skillink help <command>`；
-- 所有命令默认操作 `%USERPROFILE%\.agents\skillink`，可用环境变量 `SKILLINK_HOME` 覆盖；
+- 当前控制面按 `SKILLINK_HOME` > 控制面清单 `active` 的顺序解析；两者都没有时，需要控制面的命令返回 `CONTROL_PLANE_REQUIRED`；
 - 退出码：`0` 成功；`1` 用法错误、运行失败，或 `status` / `doctor` 报告不健康；
 - 写命令成功后会按需自动提交；读命令和 dry-run 不提交。
+
+### 控制面
+
+```bash
+# 列出已登记控制面、当前控制面和来源（env / registry）。
+skillink control-plane list [--json]
+
+# 登记一个控制面目录；目录不存在时自动创建。
+# 清单没有当前控制面时，第一个登记项自动成为当前控制面。
+skillink control-plane add <path> [--json]
+
+# 切换当前控制面；路径必须已经在清单中。
+skillink control-plane use <path> [--json]
+```
 
 ### 初始化、迁移与快照
 
 ```bash
-# 初始化控制面：创建 route.json、package.json、skill.json、settings.json 和所需目录。
+# 初始化当前控制面：创建 route.json、package.json、skill.json、settings.json 和所需目录。
 # 同时初始化控制面 git 与 skills 独立 git，并提交 baseline。
+# 成功后把该目录登记进控制面清单（已登记则去重）。
 # 如果检测到 v1 的 skills.json，会自动执行全有或全无的 v1 -> v2 迁移。
 skillink init [--json]
 
@@ -388,7 +447,10 @@ GUI 页面：
 - **Skills**：选择一个目录批量扫描 `SKILL.md`，逐个确认安装；确认时检测目录链接，命中则提示链接路径并跳过该包；标签、删除、GC；
 - **Packages**：创建 package、查看组合、标签、删除；复制某个版本时用该版本数据预填创建表单；
 - **Doctor**：健康问题与重新 apply；
-- **Language**：安装、切换、删除语言包，显示当前语言和翻译覆盖率。
+- **Language**：安装、切换、删除语言包，显示当前语言和翻译覆盖率；
+- **控制面**：侧栏底部按钮显示当前控制面，点击打开选择弹窗；可查看已登记控制面、切换，或通过文件夹选择器添加。没有当前控制面时主区域显示添加面板；`SKILLINK_HOME` 生效时显示覆盖提示并禁用切换。
+
+切换控制面后，GUI 会重新读取清单、`snapshot`、git 状态和语言包，使新控制面的配置、健康状况和语言立即生效。
 
 > 本阶段 GUI 不提供 History 页面；查看和回退历史请使用 CLI 的 `history` / `rollback`。
 
@@ -405,7 +467,7 @@ skillink locale remove zh-CN
 
 语言包格式、key 规则、覆盖率、回退和安全限制见 [docs/language-packs.md](./docs/language-packs.md)。CLI 的普通帮助和命令输出仍为英文。
 
-Windows NSIS 安装包会在安装时把内置的 `zh-CN.json` 复制到 `%USERPROFILE%\.agents\skillink\locales\zh-cn.json`（已存在则不覆盖）。应用启动时如果发现该文件仍是内置语言包，且缺少新版本文案或内置包版本更新，会自动刷新它；自定义语言包不会被覆盖。应用仍按 `settings.json` / 系统语言规则决定是否启用；portable 包不执行安装步骤，不会自动复制首次安装的语言包。
+Windows NSIS 安装包会在安装时把内置的 `zh-CN.json` 复制到旧默认目录 `%USERPROFILE%\.agents\skillink\locales\zh-cn.json`（已存在则不覆盖）。应用启动时会检查当前控制面的 `locales/zh-cn.json`；如果该文件仍是内置语言包，且缺少新版本文案或内置包版本更新，会自动刷新它，自定义语言包不会被覆盖。应用仍按 `settings.json` / 系统语言规则决定是否启用；portable 包不执行安装步骤，不会自动复制首次安装的语言包。该安装步骤不会跟随控制面清单，使用其他控制面时请用 `skillink locale install` 手动安装语言包。
 
 ## 开发
 
@@ -458,18 +520,18 @@ NSIS 安装包会把 CLI 注册到 PATH；portable 版以 GUI 为主，CLI 文�
 
 CLI bundle 位于 `resources/cli/skillink.mjs`，启动器是 `resources/cli/skillink.cmd`。NSIS 安装时会把 `resources\cli` 加入当前用户 PATH；卸载时移除。启动器通过 `ELECTRON_RUN_AS_NODE=1` 使用安装包自带的 Electron 运行 CLI，因此不需要另外安装 Node.js。
 
-卸载时卸载向导会显示“Delete Skillink data and configuration”复选框，默认不勾选；勾选后删除 `%USERPROFILE%\.agents\skillink\`，包括 skills、三个数据配置、settings 和语言包。静默卸载可传 `--delete-app-data`（兼容 electron-builder）或 `--delete-skillink-data` 直接删除；覆盖安装/升级不会删除用户数据：
+卸载时卸载向导会显示“Delete Skillink data and configuration”复选框，默认不勾选；勾选后删除旧默认目录 `%USERPROFILE%\.agents\skillink\`，包括 skills、三个数据配置、settings 和语言包。静默卸载可传 `--delete-app-data`（兼容 electron-builder）或 `--delete-skillink-data` 直接删除；覆盖安装/升级不会删除用户数据：
 
 ```powershell
 & "<install-dir>\Uninstall Skillink.exe" /S --delete-app-data
 ```
 
-如果通过 `SKILLINK_HOME` 自定义了控制面，卸载程序只处理默认目录，需要手动删除自定义目录。
+如果通过控制面清单选择了其他目录，或通过 `SKILLINK_HOME` 自定义了控制面，卸载程序只处理旧默认目录 `%USERPROFILE%\.agents\skillink`，需要手动删除其他控制面目录。
 
 GUI 和 CLI 共用同一个控制面：
 
 ```text
-%USERPROFILE%\.agents\skillink\     # 或 SKILLINK_HOME
+<当前控制面>     # 清单 active，或 SKILLINK_HOME
 ```
 
 两者读取和写入完全相同的 `route.json`、`package.json`、`skill.json` 与 `skills/` 内容；UI 语言偏好保存在 `settings.json`，已安装语言包位于 `locales/`。

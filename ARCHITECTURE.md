@@ -1,7 +1,7 @@
 # Skillink 项目架构（v2.0）
 
 > 日期：2026-11-01
-> 状态：v2.0 MVP + hardening + i18n + batch import + language pack refresh + installed skill version grouping + git-first control plane（2026-11-01）
+> 状态：v2.0 MVP + hardening + i18n + batch import + language pack refresh + installed skill version grouping + git-first control plane（2026-11-01）+ control plane switching（2026-11-06）
 > 文档基线：`013c5e2 feat(core): make route the sole source for target projection` + 2026-11-01 git 控制面、自动提交与回退修订
 > 取代：v1.2 的 `skills.json` 公用库模型
 > 路径约定：`<user>`、`<repo>` 为占位符；Windows 使用 `%USERPROFILE%`，Linux/macOS 使用 `~`。
@@ -93,7 +93,7 @@ route.json
 ### 3.3 三个数据配置与用户偏好
 
 ```text
-%USERPROFILE%\.agents\skillink\          # 或 ~/.agents/skillink
+<当前控制面>\                            # 例如 %USERPROFILE%\.agents\skillink 或 ~/.agents/skillink
 ├─ .git\            # 控制面 git
 ├─ .gitignore
 ├─ .gitattributes
@@ -112,9 +112,39 @@ route.json
 └─ .skillink.lock   # 写命令跨进程锁；git 忽略
 ```
 
-`skill.json` 取代 v1 的 `skills.json`。`route.json`、`package.json`、`skill.json` 和 `locales/` 是控制面 git 跟踪的数据；`settings.json`、`cache/`、`logs/`、`tmp/` 和锁文件被忽略；`skills/` 是独立仓库。旧版本的 `history/` / `trash/` 如果存在会被忽略，不再使用。
+`skill.json` 取代 v1 的 `skills.json`。`route.json`、`package.json`、`skill.json` 和 `locales/` 是控制面 git 跟踪的数据；`settings.json`、`cache/`、`logs/`、`tmp/` 和锁文件被忽略；`skills/` 是独立仓库。旧版本的 `history/` / `trash/` 如果存在会被忽略，不再使用。控制面路径由控制面清单的 `active` 或 `SKILLINK_HOME` 决定，没有隐式默认路径。
 
-### 3.4 代码模块边界
+### 3.4 控制面清单与解析
+
+控制面清单独立于任何控制面保存，不进入控制面 git，也不受 `rollback` 影响。
+
+| 平台 | 清单路径 |
+|---|---|
+| Windows | `%APPDATA%\Skillink\control-planes.json`；`APPDATA` 缺失时回退到 `%USERPROFILE%\AppData\Roaming\Skillink\control-planes.json` |
+| macOS | `~/Library/Application Support/Skillink/control-planes.json` |
+| Linux | `$XDG_CONFIG_HOME/skillink/control-planes.json`；缺失时回退到 `~/.config/skillink/control-planes.json` |
+
+```json
+{
+  "schemaVersion": 1,
+  "active": "C:\\Users\\me\\.agents\\skillink",
+  "controlPlanes": [
+    "C:\\Users\\me\\.agents\\skillink",
+    "D:\\skillink\\work"
+  ]
+}
+```
+
+- 清单不存在时按 `{ active: null, controlPlanes: [] }` 读取；损坏时命令失败，不回退默认目录；
+- `active` 可以为 `null`；`controlPlanes` 只包含用户登记过的路径；
+- 路径写入前展开 `~`、`%USERPROFILE%`、`$HOME` 并规范化为绝对路径；Windows 按大小写不敏感去重，macOS/Linux 按原样去重；
+- `add` 会创建不存在的目录，存在但不是目录时抛 `CONTROL_PLANE_NOT_FOUND`；第一个登记项在 `active` 为空时自动成为当前控制面，后续 `add` 不改变当前选择；
+- `use` 只接受已登记路径；未登记路径抛 `CONTROL_PLANE_NOT_FOUND`，不检查目录是否仍存在；
+- 当前控制面解析顺序：`CliContext.home`（测试/程序化覆盖） > `SKILLINK_HOME` > 清单 `active` > `CONTROL_PLANE_REQUIRED`；
+- `SKILLINK_HOME` 存在时，`control-plane list` 返回的 `active` 为环境变量路径且 `activeSource: "env"`；`add` / `use` 仍写入清单，但不会改变实际使用的目录；
+- 清单只记录路径，不保存凭据，也不包含任何控制面内容。
+
+### 3.5 代码模块边界
 
 ```text
 apps/
@@ -127,11 +157,11 @@ apps/
 │     ├─ commit-message.ts   # CLI scope 与提交信息
 │     ├─ bootstrap.ts        # init 编排
 │     ├─ specs.ts            # name@version 参数解析
-│     └─ commands/           # init/migrate/env/snapshot/locale/skill/package/target/route/lifecycle
+│     └─ commands/           # init/migrate/env/snapshot/control-plane/locale/skill/package/target/route/lifecycle
 ├─ desktop/
-│  ├─ src/main/              # Electron 主进程：窗口、IPC、CLI 适配、错误本地化、内置语言包同步
+│  ├─ src/main/              # Electron 主进程：窗口、IPC、CLI 适配、控制面/语言 IPC、错误本地化、内置语言包同步
 │  ├─ src/preload/           # contextBridge 白名单 API
-│  └─ src/renderer/          # React 页面与 i18n Provider
+│  └─ src/renderer/          # React 页面与 i18n Provider（含控制面选择弹窗）
 packages/
 ├─ shared/                   # Zod schema、报告类型、错误、路径/语言/skill 目录名工具
 └─ core/                     # 业务实现：配置存储、package 图、apply/status/doctor/gc、导入/扫描、git、回退、语言包存储
@@ -162,10 +192,12 @@ CLI ------------------------> @skillink/core -> @skillink/shared
 | 模块 | 职责 |
 |---|---|
 | `shared/src/schemas.ts` | route/package/skill 三配置、settings 与语言包 schema |
+| `shared/src/control-plane.ts` | 控制面清单 schema、清单路径、路径展开/规范化与去重 |
 | `shared/src/reports.ts` | CLI/GUI 共用的报告、快照和错误类型 |
 | `shared/src/skill-directory.ts` | 解析 `<name>@<version>` 目录名 |
 | `shared/src/spec.ts` | 共享 `name@version` 解析 |
 | `core/src/config-store.ts` | 三份配置的唯一只读加载入口 |
+| `core/src/control-plane-store.ts` | 控制面清单的读写、`list` / `add` / `use` 与当前控制面解析 |
 | `core/src/initialize.ts` | home/目录/初始配置/settings 初始化 |
 | `core/src/package-graph.ts` | package DFS、环检测、skill 冲突、传递闭包哈希 |
 | `core/src/package-name.ts` | 大小写冲突检测与 package 名称校验 |
@@ -185,9 +217,12 @@ CLI ------------------------> @skillink/core -> @skillink/shared
 | `core/src/rollback.ts` | 回退规划、target 清理、配置/skill 内容恢复、单次提交 |
 | `core/src/import-skill.ts` / `skill-scan.ts` | 单包导入与批量扫描 |
 | `apps/cli/src/mutation.ts` | CLI 写命令加锁与自动提交编排；`init` 使用 `bootstrap.ts`，`rollback` 由 core 自带锁 |
+| `apps/cli/src/run.ts` | 启动时解析当前控制面并固定；无当前控制面时交给 runtime 报错 |
+| `apps/cli/src/commands/control-plane.ts` | `control-plane list/add/use` |
 | `desktop/src/main/ipc.ts` | IPC 白名单、Zod 输入校验、sender 校验 |
 | `desktop/src/main/bundled-language.ts` | 启动时刷新版本过旧或缺 key 的内置 `zh-CN` 语言包，保护自定义包 |
 | `desktop/src/main/cli-commands.ts` | IPC 请求 -> CLI argv |
+| `desktop/src/renderer/src/ControlPlaneDialog.tsx` | 控制面列表、添加、切换与错误展示 |
 | `desktop/src/preload/index.ts` | `window.skillink` 白名单 API |
 
 ---
@@ -672,7 +707,10 @@ ok | missing | wrong-mode | wrong-version | broken-link | conflict | disabled
 1. 创建目录与三个配置；
 2. 初始化控制面 `.git`（不存在时），补全 `.gitignore` / `.gitattributes`，不覆盖已有内容；
 3. 初始化 `skills/.git`，写入 `skills/.gitattributes`；
-4. 提交 baseline：控制面 `skillink(init): initialize control plane`，skills `skillink(skills): initialize skills`。
+4. 提交 baseline：控制面 `skillink(init): initialize control plane`，skills `skillink(skills): initialize skills`；
+5. 把初始化的目录登记进控制面清单；清单没有 `active` 时同时设为当前控制面。测试专用的 `CliContext.home` 覆盖不写清单。
+
+没有当前控制面时，`init` 也返回 `CONTROL_PLANE_REQUIRED`；首次使用应先 `control-plane add <path>` 或设置 `SKILLINK_HOME`。
 
 控制面 `.gitignore` 至少包含 `/skills/`、`/trash/`、`/history/`、`/cache/`、`/logs/`、`/tmp/`、`/settings.json`、`.skillink.lock`。两个仓库都写 `* -text`，避免 Windows `core.autocrlf` 改写内容。
 
@@ -739,6 +777,7 @@ scope 优先取命令路径（`skill`、`package`、`target`、`route`、`gc`、
 ```text
 skillink init
 skillink migrate
+skillink control-plane list|add|use
 skillink skill add|scan|list|tag|remove
 skillink package create|list|tag|remove|check
 skillink target add|list|mode|remove|enable|disable
@@ -753,6 +792,8 @@ skillink locale list|install|use|remove
 
 `add` 是 `skill add` 的顶层别名。`route remove` 支持 `--force`，用于移除会导致剩余图不可解析的 route entry。
 
+CLI 启动时解析一次当前控制面并在整个命令生命周期内固定：`SKILLINK_HOME` > 控制面清单 `active`；两者都没有时，需要控制面的命令抛 `CONTROL_PLANE_REQUIRED`，提示 `control-plane add <path>` 或设置 `SKILLINK_HOME`。`control-plane list|add|use`、`env` 等不依赖当前控制面的命令仍可运行。`init` 成功后把初始化的目录登记进清单。
+
 `target remove` 会先按 target 的 package 解析结果清理目标目录中的 skill 目录/链接，再删除 route 条目；普通文件、目标目录本身和 `skills/` 库内容保留。
 
 **JSON 输出**
@@ -762,6 +803,7 @@ skillink locale list|install|use|remove
 ```text
 init
 migrate
+control-plane list|add|use
 skill list|add|scan|tag|remove
 package list|create|tag|remove|check
 target list|add|mode|remove|enable|disable
@@ -787,7 +829,8 @@ env
 **AI 调用闭环**
 
 ```text
-init / migrate
+control-plane add <path> / control-plane use <path>
+  -> init / migrate
   -> skill list --json / package list --json
   -> skill add
   -> package create
@@ -806,7 +849,7 @@ drift / missing       -> apply
 清理                   -> package remove / skill remove / gc --json -> gc --apply
 ```
 
-隔离环境使用 `SKILLINK_HOME` 指定控制面。
+隔离环境使用 `SKILLINK_HOME` 指定控制面；它优先于清单，但仍可用 `control-plane` 命令维护清单。
 
 退出码：
 
@@ -821,7 +864,8 @@ drift / missing       -> apply
 - **Skills**：选择目录批量扫描 `SKILL.md`，逐个确认安装；扫描名称只作为名称输入框 placeholder，留空确认时作为默认名称；版本输入框显示自动生成版本的 semver 主体 `1.0.0`，不显示 `+<hash8>` 构建元数据；确认时检测包内目录链接，命中则提示绝对路径并取消该包安装；已安装技能按技能名聚合为一张卡片，通过版本切换标签选择版本，再对当前版本执行标记/移除，标签可直接切换到对应版本；GC；
 - **Packages**：创建 package、组合列表、标签、删除；复制某个版本时用该版本数据预填创建表单，提交仍走 `package create`；
 - **Doctor**：健康检查；
-- **Language**：安装/切换/删除语言包，显示 nativeName、版本和翻译覆盖率；切换后立即刷新界面，删除当前语言回到英文。
+- **Language**：安装/切换/删除语言包，显示 nativeName、版本和翻译覆盖率；切换后立即刷新界面，删除当前语言回到英文；
+- **控制面**：侧栏底部按钮显示当前控制面，点击打开选择弹窗；列表展示全部已登记路径，当前项显示徽标；点击非当前项或“切换”调用 `control-plane use`；“添加控制面”通过文件夹选择器调用 `control-plane add`。
 
 GUI 交互约定：
 
@@ -833,6 +877,13 @@ GUI 交互约定：
 - 表单 placeholder 遵循同一规则：留空提交时系统会采用默认值的字段（如扫描出的技能名称/版本、由标签或目录名推导的目标 ID），placeholder 显示该默认值；没有默认值的字段显示“必填”或“可选”，不再使用示例值。
 
 GUI 的刷新通过一次只读 `skillink snapshot --json` 获取 skills、packages、route、status、doctor 和 target 解析结果。Renderer 只调用 preload API；Electron 主进程负责 IPC 校验、argv 映射和串行队列，不直接调用 Core。语言包操作同样走 `locale ... --json` 命令层。
+
+控制面行为：
+
+- 应用启动先调用 `control-plane list --json`；`active` 为空时不调用 `snapshot`，主区域显示“没有当前控制面”的添加面板；
+- 切换或添加成功后依次刷新清单、`snapshot`、`env`（git 状态）和语言状态，并清空本次 apply/GC 报告；
+- `activeSource === 'env'` 时弹窗显示 `SKILLINK_HOME` 覆盖提示，并禁用添加和切换，避免命令成功但界面不变化；
+- 桌面端不直接读写清单或 core，全部经 CLI 命令层。
 
 本阶段 GUI 不提供 History 页面；`history` / `rollback` 只在 CLI 提供，GUI 后续可按需接入 `history --json`。
 
@@ -852,11 +903,10 @@ Renderer -> preload -> main/ipc.ts -> main/cli-adapter.ts
 CLI 和 GUI 仍共享同一个控制面：
 
 ```text
-%USERPROFILE%\.agents\skillink\     # 默认
-$env:SKILLINK_HOME                  # 覆盖
+<当前控制面>     # 控制面清单 active，或 SKILLINK_HOME
 ```
 
-两者读取/写入完全相同的 `route.json`、`package.json`、`skill.json` 和 `skills/`。在 GUI 里做的修改，CLI 下一条命令即可看到；反之亦然。
+两者读取/写入完全相同的 `route.json`、`package.json`、`skill.json` 和 `skills/`。在 GUI 里做的修改，CLI 下一条命令即可看到；反之亦然。切换控制面时，CLI 的下一条命令和 GUI 的刷新都会使用清单中的新 `active`。
 
 Windows 安装包由 `pnpm package:win` 生成：
 
@@ -887,7 +937,7 @@ apps/desktop/release/
 | 形式 | 安装向导，可选择安装目录 | 单文件自解压，运行即用 |
 | 系统写入 | 开始菜单、卸载项、Add/Remove Programs、用户 PATH | 基本不写；删除 exe 即可 |
 | CLI 入口 | `resources\cli` 加入 HKCU PATH，`skillink` 可直接调用 | 不修改 PATH；CLI 文件在包内，但 GUI 优先 |
-| 卸载 | 控制面板/开始菜单卸载，自动移除 PATH 条目；可选删除 `%USERPROFILE%\.agents\skillink\` 用户数据 | 删除 exe |
+| 卸载 | 控制面板/开始菜单卸载，自动移除 PATH 条目；可选删除旧默认目录 `%USERPROFILE%\.agents\skillink\` 用户数据 | 删除 exe |
 | 管理员权限 | 默认 `perMachine: false`，按当前用户安装，一般不需要管理员 | 不需要 |
 | 升级 | 运行新安装包覆盖 | 替换 exe |
 | 适用场景 | 日常使用，需要 GUI + CLI 双入口 | 试用、便携、不想安装 |
@@ -896,26 +946,27 @@ NSIS 安装细节：
 
 - `oneClick: false`，允许用户选择安装目录；
 - 安装时执行 `skillink-path.ps1 add`，把 `$INSTDIR\resources\cli` 放到当前用户 PATH 前面；
-- 安装时把 `resources\locales\zh-CN.json` 复制到 `%USERPROFILE%\.agents\skillink\locales\zh-cn.json`，目标已存在则不覆盖；应用启动时若内置 `zh-CN` 包版本更新或缺少新版本文案，且已安装文件仍匹配内置包身份，会自动刷新；应用仍按 `settings.json` / 系统语言决定是否启用；
+- 安装时把 `resources\locales\zh-CN.json` 复制到旧默认目录 `%USERPROFILE%\.agents\skillink\locales\zh-cn.json`，目标已存在则不覆盖；该步骤尚不读取控制面清单，使用其他控制面时需要手动安装语言包；应用启动时会按当前控制面检查 `locales/zh-cn.json`，若内置 `zh-CN` 包版本更新或缺少新版本文案，且已安装文件仍匹配内置包身份，会自动刷新；应用仍按 `settings.json` / 系统语言决定是否启用；
 - 卸载时执行 `skillink-path.ps1 remove`，只移除该条目；
-- 卸载向导提供“Delete Skillink data and configuration”复选框，默认不勾选；勾选后删除 `%USERPROFILE%\.agents\skillink\`（包括 `skills/`、三个数据配置、`settings.json` 和语言包）；
+- 卸载向导提供“Delete Skillink data and configuration”复选框，默认不勾选；勾选后删除旧默认目录 `%USERPROFILE%\.agents\skillink\`（包括 `skills/`、三个数据配置、`settings.json` 和语言包）；
 - 静默卸载可传 `--delete-app-data`（兼容 electron-builder）或 `--delete-skillink-data`，效果等同勾选；覆盖安装/升级时即使带参数也不会删除用户数据；
-- 卸载程序只处理默认路径；使用 `SKILLINK_HOME` 自定义控制面时，需要手动删除自定义目录；
+- 卸载程序只处理旧默认路径；使用其他控制面（清单中的其他项或 `SKILLINK_HOME`）时，需要手动删除对应目录；
 - 安装/卸载后广播 `WM_WININICHANGE`，新终端可直接识别 `skillink`。
 
 portable 细节：
 
 - electron-builder 生成单文件自解压 exe，运行时会解压到临时目录；
 - 不会创建开始菜单、卸载项或 PATH 条目；
-- 没有卸载向导；删除 exe 后如需清理数据，手动删除 `%USERPROFILE%\.agents\skillink\`；
+- 没有卸载向导；删除 exe 后如需清理数据，手动删除当前控制面目录（旧默认目录为 `%USERPROFILE%\.agents\skillink\`）；
 - CLI bundle 仍在包内，但不像 NSIS 安装包那样暴露为稳定的 `skillink` 命令；
 - 需要 GUI + CLI 双入口时，应使用 NSIS 安装包。
 
 两种包的数据位置：
 
-- 默认都使用 `%USERPROFILE%\.agents\skillink\`，因此 portable 和 NSIS 默认共享同一控制面；
+- 都使用控制面清单的当前 `active`；没有 `active` 时不会隐式回退到 `%USERPROFILE%\.agents\skillink\`；
+- 老用户手动 `control-plane add %USERPROFILE%\.agents\skillink` 后即可继续使用原数据；
 - portable 不会自动把数据放在 exe 旁边；
-- GUI 和 CLI 必须指向同一个 `SKILLINK_HOME`，才会管理同一空间。
+- GUI 和 CLI 必须指向同一个控制面（同一清单 `active`，或同一个 `SKILLINK_HOME`），才会管理同一空间。
 
 需要真正便携时，在启动前设置：
 
@@ -936,6 +987,7 @@ $env:SKILLINK_HOME = "$PSScriptRoot\skillink-data"
 |---|---|
 | 导入路径异常 | 规范化/展开路径；拒绝系统目录、根目录和符号链接源；限制文件数（10000）、大小（512 MiB）和深度（64） |
 | 配置中的恶意 name/version | `SafeNameSchema` / `SafeVersionSchema`；`getSkillDir` 断言安全路径段；apply/GC 做库/target 包含检查 |
+| 控制面清单被篡改 | 清单 schema 校验、原子写、路径展开与规范化；清单只保存路径，不保存凭据，也不进入控制面 git |
 | target 路径不安全/重复/嵌套 | `assertSafeTargetPath`；doctor 检查重复、重叠；`addTarget` 拒绝嵌套 |
 | 源目录符号链接 | MVP 直接拒绝 |
 | 恶意 package 图 | DFS 环检测、生命周期校验 |
@@ -952,7 +1004,8 @@ $env:SKILLINK_HOME = "$PSScriptRoot\skillink-data"
 
 - Windows 默认 junction，无需管理员权限；
 - Linux/macOS 默认 symlink；
-- 控制面、target、导入源路径支持 `~`、`%USERPROFILE%`、`$HOME`/`${HOME}`；`SKILLINK_HOME` 覆盖控制面；
+- 控制面、target、导入源路径支持 `~`、`%USERPROFILE%`、`$HOME`/`${HOME}`；`SKILLINK_HOME` 覆盖清单中的当前控制面；
+- 控制面清单按 OS 惯例保存：Windows `%APPDATA%\Skillink\`、macOS `~/Library/Application Support/Skillink/`、Linux `$XDG_CONFIG_HOME/skillink/`；路径去重在 Windows 上大小写不敏感；
 - Windows 大小写不敏感：package/skill/target 名称做显式大小写冲突检测，路径比较做归一化；
 - 中文路径、空格由 Node 文件系统 API 处理；长路径/OneDrive 仍需平台验证；
 - 文件被占用时指数退避重试并明确提示。
@@ -964,6 +1017,7 @@ $env:SKILLINK_HOME = "$PSScriptRoot\skillink-data"
 MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和 target 扫描得出。
 
 - 控制面 `.git`：跟踪 `route.json`、`package.json`、`skill.json`、`locales/` 和 ignore/attribute 文件；
+- 控制面清单 `control-planes.json`：位于 OS 配置目录，独立于控制面、不受控制面 git/rollback 影响；只保存已知路径和 `active`；
 - `skills/.git`：跟踪 skill 内容，控制面 git 通过 `/skills/` 忽略；
 - `.skillink.lock`：写命令跨进程锁，内容为 `{ pid, startedAt }`；
 - `settings.json`、`locales/`：UI 语言偏好与语言包；`locales/` 受版本控制，`settings.json` 不受控制；
@@ -974,7 +1028,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 
 ## 10. 测试策略
 
-当前验证（2026-11-01）：69 个测试文件、563 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
+当前验证（2026-11-07）：75 个测试文件、604 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
 
 | 层级 | 内容 |
 |---|---|
@@ -984,6 +1038,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 | Git 测试 | 控制面/skills 初始化、ignore/attributes、自动提交顺序、无空提交、锁、history、rollback 内容恢复与失败恢复 |
 | GUI 测试 | IPC schema、页面渲染、空状态、组合展示、target/route 生命周期、apply 预览、批量安装、已安装技能版本聚合与目录链接警告 |
 | 桌面/i18n 测试 | 语言包 schema/覆盖率、内置包启动刷新、安装卡片 placeholder 与默认名称、已安装技能版本切换 |
+| 控制面测试 | 清单 schema/路径去重、add/use、`init` 登记、`SKILLINK_HOME` 优先、无 `active` 时的 `CONTROL_PLANE_REQUIRED`、GUI 弹窗与切换重载 |
 | 安全测试 | 恶意源文件夹、路径穿越、断链、只读文件、同名冲突、内容篡改、非受信 IPC |
 | 兼容测试 | Windows 11 本地主验收；Windows/Ubuntu/macOS CI 矩阵 |
 
@@ -1006,7 +1061,11 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 15. CLI 重复 `--skill`/`--package` 和 drop 选项可用；
 16. 迁移和 skill 删除在写入失败时回滚内容/旧文件；
 17. 批量扫描只把包含根 `SKILL.md` 的目录识别为包，嵌套 `SKILL.md` 归入包内容；
-18. 批量扫描不跟随目录链接，返回包内链接的绝对路径；GUI 确认该包时取消安装并保留其他包。
+18. 批量扫描不跟随目录链接，返回包内链接的绝对路径；GUI 确认该包时取消安装并保留其他包；
+19. 控制面清单缺失时视为空清单；无当前控制面时依赖命令返回 `CONTROL_PLANE_REQUIRED`；
+20. `control-plane add` 首个项自动激活，后续 add 不改变 active；`use` 拒绝未登记路径；Windows 路径去重大小写不敏感；
+21. `SKILLINK_HOME` 覆盖清单 active；`init` 成功后登记控制面，测试专用 context 覆盖不写清单；
+22. GUI 无当前控制面时显示添加面板；切换后刷新 snapshot、git 状态和语言；`SKILLINK_HOME` 生效时禁用切换并显示提示。
 
 ### 10.1 已知限制
 
@@ -1068,13 +1127,17 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 31. 所有成功且有数据变化的写命令自动提交；无变化、只读、dry-run 不提交，不产生空提交；
 32. `history --json` 输出 commit 列表；`rollback <revision>` 清理当前 target、恢复配置和缺失内容、删除旧 catalog 不包含的受管 skill 版本、重新 apply，并只产生一次 rollback 提交；
 33. rollback 后 target 中不存在旧 route 的受管投影，`skills/.git` 不被 doctor 报为 orphan；
-34. README / ARCHITECTURE 不再包含旧 history/trash 快照语义。
+34. README / ARCHITECTURE 不再包含旧 history/trash 快照语义；
+35. 控制面清单按 OS 惯例路径保存，独立于控制面、不受 rollback 影响；不再有隐式 `~/.agents/skillink` 默认；
+36. `control-plane list|add|use` 可用；无当前控制面时依赖命令返回 `CONTROL_PLANE_REQUIRED`；
+37. `SKILLINK_HOME` 覆盖清单 active；`init` 成功后把目录登记进清单；
+38. GUI 侧栏可查看、添加、切换控制面；无当前控制面时显示添加面板；切换后重载 snapshot、runtime 和语言；`SKILLINK_HOME` 生效时显示覆盖提示并禁用切换。
 
 ---
 
 ### 11.1 当前实现验证
 
-- `pnpm test`：69 个测试文件、563 个测试通过（2026-11-01）；
+- `pnpm test`：75 个测试文件、604 个测试通过（2026-11-07）；
 - `pnpm typecheck`：通过；
 - `pnpm build`：CLI 与 Electron 桌面端构建成功；
 - 真实 CLI E2E：skill 安装、package 创建、target/route、apply、status/doctor、冲突修复、gc dry-run 均跑通；
