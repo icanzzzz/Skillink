@@ -1,5 +1,6 @@
 import type {
   ApplyReport,
+  ControlPlaneState,
   GcReport,
   ImportSkillResult,
   LanguageState,
@@ -63,4 +64,7 @@ export interface DesktopApi {
   ): Promise<LocaleInstallReport>;
   useLanguage(locale: string): Promise<void>;
   removeLanguage(locale: string): Promise<void>;
+  getControlPlanes(): Promise<ControlPlaneState>;
+  addControlPlane(path: string): Promise<ControlPlaneState>;
+  useControlPlane(path: string): Promise<ControlPlaneState>;
 }

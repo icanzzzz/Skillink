@@ -28,6 +28,11 @@ const api: DesktopApi = {
   useLanguage: (locale) => ipcRenderer.invoke('skillink:language-use', { locale }),
   removeLanguage: (locale) =>
     ipcRenderer.invoke('skillink:language-remove', { locale }),
+  getControlPlanes: () => ipcRenderer.invoke('skillink:control-plane-list'),
+  addControlPlane: (path) =>
+    ipcRenderer.invoke('skillink:control-plane-add', { path }),
+  useControlPlane: (path) =>
+    ipcRenderer.invoke('skillink:control-plane-use', { path }),
 };
 
 contextBridge.exposeInMainWorld('skillink', api);

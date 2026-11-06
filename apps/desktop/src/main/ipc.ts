@@ -3,6 +3,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type {
   ApplyReport,
+  ControlPlaneState,
   GcReport,
   ImportSkillResult,
   LanguageState,
@@ -15,6 +16,7 @@ import type {
 import {
   AddTargetRequestSchema,
   ApplyRequestSchema,
+  ControlPlanePathRequestSchema,
   CreatePackageRequestSchema,
   GcRequestSchema,
   ImportSkillRequestSchema,
@@ -38,6 +40,9 @@ import { localizeError } from './error-localization.js';
 import {
   buildAddTargetArgs,
   buildApplyArgs,
+  buildControlPlaneAddArgs,
+  buildControlPlaneListArgs,
+  buildControlPlaneUseArgs,
   buildCreatePackageArgs,
   buildGcArgs,
   buildImportSkillArgs,
@@ -234,5 +239,17 @@ export function registerIpcHandlers(
   handle('skillink:gc', async (_event, input: unknown) => {
     const request = GcRequestSchema.parse(input ?? {});
     return cli.invoke<GcReport>(buildGcArgs(request));
+  });
+
+  handle('skillink:control-plane-list', () =>
+    cli.invoke<ControlPlaneState>(buildControlPlaneListArgs()),
+  );
+  handle('skillink:control-plane-add', async (_event, input: unknown) => {
+    const request = ControlPlanePathRequestSchema.parse(input);
+    return cli.invoke<ControlPlaneState>(buildControlPlaneAddArgs(request));
+  });
+  handle('skillink:control-plane-use', async (_event, input: unknown) => {
+    const request = ControlPlanePathRequestSchema.parse(input);
+    return cli.invoke<ControlPlaneState>(buildControlPlaneUseArgs(request));
   });
 }

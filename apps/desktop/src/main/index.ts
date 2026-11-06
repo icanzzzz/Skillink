@@ -1,11 +1,12 @@
 import { app, BrowserWindow, Menu } from 'electron';
 import path from 'node:path';
-import { getSkillinkPaths } from '@skillink/shared';
+import type { ControlPlaneState } from '@skillink/shared';
 import {
   bundledLanguagePackPath,
   syncBundledLanguagePack,
 } from './bundled-language.js';
 import { createCliAdapter } from './cli-adapter.js';
+import { buildControlPlaneListArgs } from './cli-commands.js';
 import { isDevToolsShortcut } from './devtools.js';
 import { registerIpcHandlers } from './ipc.js';
 
@@ -13,16 +14,23 @@ let mainWindow: BrowserWindow | null = null;
 
 async function refreshBundledLanguagePack(): Promise<void> {
   const cli = createCliAdapter();
-  const paths = getSkillinkPaths();
 
   try {
+    const state = await cli.invoke<ControlPlaneState>(
+      buildControlPlaneListArgs(),
+    );
+    if (!state.active) {
+      return;
+    }
+    const installedPath = path.join(state.active, 'locales', 'zh-cn.json');
+
     await syncBundledLanguagePack({
       bundledPath: bundledLanguagePackPath({
         isPackaged: app.isPackaged,
         appPath: app.getAppPath(),
         resourcesPath: process.resourcesPath,
       }),
-      installedPath: path.join(paths.localesDir, 'zh-cn.json'),
+      installedPath,
       install: (sourcePath) =>
         cli.invoke(['locale', 'install', sourcePath, '--force']),
       log: (message) => console.log(message),

@@ -1,6 +1,7 @@
 import type {
   AddTargetRequest,
   ApplyRequest,
+  ControlPlanePathRequest,
   CreatePackageRequest,
   GcRequest,
   ImportSkillRequest,
@@ -184,4 +185,20 @@ export function buildLanguageUseArgs(locale: string): string[] {
 
 export function buildLanguageRemoveArgs(locale: string): string[] {
   return ['locale', 'remove', locale];
+}
+
+export function buildControlPlaneListArgs(): string[] {
+  return ['control-plane', 'list', '--json'];
+}
+
+export function buildControlPlaneAddArgs(
+  request: ControlPlanePathRequest,
+): string[] {
+  return ['control-plane', 'add', request.path, '--json'];
+}
+
+export function buildControlPlaneUseArgs(
+  request: ControlPlanePathRequest,
+): string[] {
+  return ['control-plane', 'use', request.path, '--json'];
 }

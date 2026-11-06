@@ -152,6 +152,11 @@ export const LanguageRemoveRequestSchema = z
   })
   .strict();
 
+export const ControlPlanePathRequestSchema = z
+  .object({ path: NonEmptyString })
+  .strict();
+export type ControlPlanePathRequest = z.infer<typeof ControlPlanePathRequestSchema>;
+
 export type ImportSkillRequest = z.infer<typeof ImportSkillRequestSchema>;
 export type ScanSkillsRequest = z.infer<typeof ScanSkillsRequestSchema>;
 export type AddTargetRequest = z.infer<typeof AddTargetRequestSchema>;
