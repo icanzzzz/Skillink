@@ -2160,6 +2160,22 @@ button {
   background: var(--accent-soft);
 }
 
+.control-plane-row[role="button"] {
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease;
+}
+
+.control-plane-row[role="button"]:hover {
+  border-color: var(--accent-line);
+}
+
+.control-plane-row[role="button"]:focus-visible {
+  outline: 2px solid rgba(31, 111, 92, 0.55);
+  outline-offset: 2px;
+}
+
 .control-plane-info {
   display: flex;
   flex-direction: column;

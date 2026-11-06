@@ -112,12 +112,29 @@ export function ControlPlaneDialog({
         <div className="control-plane-list">
           {controlPlanes.map((path) => {
             const isActive = path === active;
+            const selectable = !isActive && !envOverride && !busy;
             return (
               <div
                 className={
                   isActive ? 'control-plane-row active' : 'control-plane-row'
                 }
                 key={path}
+                role={selectable ? 'button' : undefined}
+                tabIndex={selectable ? 0 : -1}
+                onClick={selectable ? () => void switchTo(path) : undefined}
+                onKeyDown={
+                  selectable
+                    ? (event) => {
+                        if (event.target !== event.currentTarget) {
+                          return;
+                        }
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          void switchTo(path);
+                        }
+                      }
+                    : undefined
+                }
               >
                 <div className="control-plane-info">
                   <code>{path}</code>
@@ -134,7 +151,10 @@ export function ControlPlaneDialog({
                     className="secondary"
                     type="button"
                     disabled={busy || isActive || envOverride}
-                    onClick={() => void switchTo(path)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void switchTo(path);
+                    }}
                   >
                     {t('controlPlane.switch')}
                   </button>

@@ -42,4 +42,48 @@ describe('ControlPlaneDialog', () => {
     expect(html).toContain(EN_MESSAGES['controlPlane.envOverride']);
     expect(html).toContain('disabled');
   });
+
+  it('makes non-current rows clickable and leaves active or env rows inert', () => {
+    const registryHtml = renderWithMessages(
+      <ControlPlaneDialog
+        open
+        state={state}
+        onClose={() => undefined}
+        onChanged={async () => undefined}
+      />,
+      EN_MESSAGES,
+    );
+
+    // C:/planes/b is not active, so its row exposes the clickable affordance.
+    expect(registryHtml).toContain('role="button"');
+    expect(registryHtml).toContain('tabindex="0"');
+
+    // The active control plane alone must not be switchable again.
+    const activeOnlyHtml = renderWithMessages(
+      <ControlPlaneDialog
+        open
+        state={{ ...state, controlPlanes: ['C:/planes/a'] }}
+        onClose={() => undefined}
+        onChanged={async () => undefined}
+      />,
+      EN_MESSAGES,
+    );
+
+    expect(activeOnlyHtml).not.toContain('role="button"');
+    expect(activeOnlyHtml).toContain('tabindex="-1"');
+
+    // SKILLINK_HOME fixes the active control plane, so rows stay inert.
+    const envHtml = renderWithMessages(
+      <ControlPlaneDialog
+        open
+        state={{ ...state, active: 'C:/env', activeSource: 'env' }}
+        onClose={() => undefined}
+        onChanged={async () => undefined}
+      />,
+      EN_MESSAGES,
+    );
+
+    expect(envHtml).not.toContain('role="button"');
+    expect(envHtml).not.toContain('tabindex="0"');
+  });
 });
