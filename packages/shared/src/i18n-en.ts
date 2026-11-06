@@ -32,6 +32,22 @@ export const EN_MESSAGES = {
   'app.loading': 'Loading Skillink…',
   'app.errors.bridgeUnavailable': 'Skillink IPC bridge is unavailable.',
 
+  'controlPlane.title': 'Control plane',
+  'controlPlane.eyebrow': 'CONTROL PLANE',
+  'controlPlane.hint': 'Choose a control plane or add a new one.',
+  'controlPlane.add': 'Add control plane',
+  'controlPlane.addHint': 'Choose a folder to register as a control plane.',
+  'controlPlane.empty': 'No control planes yet.',
+  'controlPlane.current': 'Current',
+  'controlPlane.switch': 'Switch',
+  'controlPlane.notSelected': 'Not selected',
+  'controlPlane.envOverride':
+    'SKILLINK_HOME is set, so the active control plane is fixed by the environment and cannot be switched here.',
+  'controlPlane.error': 'Control plane operation failed.',
+  'controlPlane.noActive.title': 'No control plane selected',
+  'controlPlane.noActive.body':
+    'Add a control plane to start using Skillink.',
+
   'overview.stats.skills': {
     one: '{count} skill',
     other: '{count} skills',
@@ -320,6 +336,8 @@ export const EN_MESSAGES = {
   'toast.language.installed': 'Language pack installed.',
   'toast.language.changed': 'Language changed.',
   'toast.language.removed': 'Language pack removed.',
+  'toast.controlPlane.added': 'Control plane added.',
+  'toast.controlPlane.switched': 'Control plane switched.',
 
   'errors.INVALID_NAME': 'The name is invalid.',
   'errors.INVALID_VERSION': 'The version is invalid.',
