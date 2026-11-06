@@ -246,7 +246,7 @@ skillink <command> [subcommand] [arguments] [options]
 ### 控制面
 
 ```bash
-# 列出已登记控制面、当前控制面和来源（env / registry）。
+# 列出已登记控制面；人类可读输出显示当前路径，--json 额外包含来源字段 activeSource（env / registry）。
 skillink control-plane list [--json]
 
 # 登记一个控制面目录；目录不存在时自动创建。

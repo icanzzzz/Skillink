@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { ControlPlaneState } from '@skillink/shared';
 import type { DesktopApi } from '../../shared.js';
 import { useToast } from './Feedback.js';
@@ -24,6 +24,12 @@ export function ControlPlaneDialog({
   const { pushToast } = useToast();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setError(null);
+    }
+  }, [open]);
 
   const client =
     api ?? (typeof window !== 'undefined' ? window.skillink : undefined);

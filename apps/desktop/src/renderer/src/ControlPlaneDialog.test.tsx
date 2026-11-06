@@ -1,4 +1,3 @@
-import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { EN_MESSAGES, type ControlPlaneState } from '@skillink/shared';
 import { ControlPlaneDialog } from './ControlPlaneDialog.js';

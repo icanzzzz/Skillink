@@ -23,6 +23,7 @@ import type {
   TargetRemoveRequest,
 } from '../../ipc-schemas.js';
 import type { DesktopApi, DesktopSnapshot } from '../../shared.js';
+import { loadWorkspace } from './workspace-loader.js';
 import { ControlPlaneDialog } from './ControlPlaneDialog.js';
 import { DoctorView } from './DoctorView.js';
 import { useToast } from './Feedback.js';
@@ -142,19 +143,12 @@ export function App({ api }: AppProps) {
     }
 
     try {
-      const nextControlPlanes = await client.getControlPlanes();
-      setControlPlaneState(nextControlPlanes);
-
-      if (!nextControlPlanes.active) {
-        setSnapshot(null);
-        setError(null);
-        return;
-      }
-
-      const nextSnapshot = await client.getSnapshot();
-      setSnapshot(nextSnapshot);
-      setError(null);
+      const result = await loadWorkspace(client);
+      setControlPlaneState(result.controlPlanes);
+      setSnapshot(result.snapshot);
+      setError(result.error);
     } catch (cause) {
+      setSnapshot(null);
       setError(cause instanceof Error ? cause.message : String(cause));
     }
   }
@@ -178,6 +172,8 @@ export function App({ api }: AppProps) {
   async function handleControlPlaneChanged(): Promise<void> {
     setGcReport(null);
     setApplyReport(null);
+    setSnapshot(null);
+    setError(null);
     await refresh();
     await refreshLanguage();
     reloadRuntimeStatus();
@@ -510,6 +506,7 @@ export function App({ api }: AppProps) {
         onClose={() => setLanguageOpen(false)}
       />
       <ControlPlaneDialog
+        api={client}
         open={controlPlaneOpen}
         state={controlPlaneState}
         onClose={() => setControlPlaneOpen(false)}

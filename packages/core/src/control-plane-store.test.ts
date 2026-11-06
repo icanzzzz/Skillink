@@ -14,8 +14,20 @@ const tempDirs: string[] = [];
 
 function registryOptions(root: string): ControlPlanePathOptions {
   return process.platform === 'win32'
-    ? { env: { ...process.env, APPDATA: path.join(root, 'appdata') } }
-    : { env: { ...process.env, XDG_CONFIG_HOME: path.join(root, 'config') } };
+    ? {
+        env: {
+          ...process.env,
+          APPDATA: path.join(root, 'appdata'),
+          SKILLINK_HOME: '',
+        },
+      }
+    : {
+        env: {
+          ...process.env,
+          XDG_CONFIG_HOME: path.join(root, 'config'),
+          SKILLINK_HOME: '',
+        },
+      };
 }
 
 async function setup(): Promise<{
