@@ -30,6 +30,13 @@ export { importSkill } from './import-skill.js';
 export { stableStringify } from './json-store.js';
 export { resolveSkillinkPaths } from './paths.js';
 export {
+  addControlPlane,
+  listControlPlanes,
+  readControlPlaneFile,
+  resolveControlPlaneHome,
+  useControlPlane,
+} from './control-plane-store.js';
+export {
   getLanguageState,
   installLanguagePack,
   removeLanguagePack,
