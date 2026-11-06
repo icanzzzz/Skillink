@@ -14,7 +14,6 @@ import {
   SkillinkError,
   expandPath,
   getSkillDir,
-  getSkillinkPaths,
   parseSkillDirectoryName,
   type ImportSkillResult,
 } from '@skillink/shared';
@@ -38,6 +37,7 @@ import {
   createAutoVersion,
   normalizeVersion,
 } from './package-name.js';
+import { resolveSkillinkPaths } from './paths.js';
 
 export interface ImportSkillInput {
   sourceDir: string;
@@ -54,7 +54,7 @@ function sourceError(message: string, sourceDir: string): SkillinkError {
 export async function importSkill(
   input: ImportSkillInput,
 ): Promise<ImportSkillResult> {
-  const paths = getSkillinkPaths(input.home);
+  const paths = resolveSkillinkPaths(input);
   const sourceDir = path.resolve(expandPath(input.sourceDir));
   const sourceStat = await stat(sourceDir).catch((error: unknown) => {
     throw new SkillinkError(

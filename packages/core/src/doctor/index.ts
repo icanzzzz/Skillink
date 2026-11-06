@@ -1,5 +1,4 @@
 import {
-  getSkillinkPaths,
   type DoctorReport,
   type PackageFile,
   type RouteFile,
@@ -18,6 +17,7 @@ import type { DoctorContext } from './issues.js';
 import { checkTargetLinks } from './links.js';
 import { checkPackageGraph, checkPackageUsage } from './packages.js';
 import { checkSkillContent } from './skills.js';
+import { resolveSkillinkPaths } from '../paths.js';
 
 export interface DoctorInput {
   paths?: SkillinkPaths;
@@ -28,7 +28,7 @@ export interface DoctorInput {
 export async function doctor(
   input: DoctorInput = {},
 ): Promise<DoctorReport> {
-  const paths = input.paths ?? getSkillinkPaths(input.home);
+  const paths = resolveSkillinkPaths(input);
 
   let route: RouteFile;
   let packageFile: PackageFile;

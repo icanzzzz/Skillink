@@ -3,7 +3,6 @@ import path from 'node:path';
 import {
   SkillinkError,
   getSkillDir,
-  getSkillinkPaths,
   type SkillinkErrorCode,
   type SkillinkPaths,
   type StatusEntry,
@@ -20,6 +19,7 @@ import {
   resolveTargetGraph,
 } from './target-graph.js';
 import { isNodeError } from './node-error.js';
+import { resolveSkillinkPaths } from './paths.js';
 
 export interface StatusInput {
   paths?: SkillinkPaths;
@@ -48,7 +48,7 @@ function errorDetail(error: unknown): string {
 }
 
 export async function status(input: StatusInput = {}): Promise<StatusReport> {
-  const paths = input.paths ?? getSkillinkPaths(input.home);
+  const paths = resolveSkillinkPaths(input);
   const route = await readRouteFile(paths);
   const packageFile = await readPackageFile(paths);
   const skillFile = await readSkillFile(paths);

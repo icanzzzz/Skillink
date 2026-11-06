@@ -28,6 +28,7 @@ export { withHomeLock } from './git-lock.js';
 export type { HomeLockOptions } from './git-lock.js';
 export { importSkill } from './import-skill.js';
 export { stableStringify } from './json-store.js';
+export { resolveSkillinkPaths } from './paths.js';
 export {
   getLanguageState,
   installLanguagePack,
