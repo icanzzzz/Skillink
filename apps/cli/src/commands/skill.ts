@@ -13,13 +13,13 @@ import { parseSpec } from '../specs.js';
 async function runSkillAdd(
   folder: string,
   options: { name?: string; version?: string },
-  context: CliContext,
+  home: string,
 ) {
   return importSkill({
     sourceDir: folder,
     name: options.name,
     version: options.version,
-    home: context.home,
+    home,
   });
 }
 
@@ -129,7 +129,7 @@ export function registerSkillCommands(
         (added) => `${added.name}@${added.version}`,
         async () => {
           await runtime.ensureHome();
-          return runSkillAdd(folder, options, context);
+          return runSkillAdd(folder, options, paths.home);
         },
         { skills: true },
       );
@@ -160,7 +160,7 @@ export function registerSkillCommands(
         (added) => `${added.name}@${added.version}`,
         async () => {
           await runtime.ensureHome();
-          return runSkillAdd(folder, options, context);
+          return runSkillAdd(folder, options, paths.home);
         },
         { skills: true },
       );

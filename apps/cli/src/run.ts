@@ -1,7 +1,11 @@
 import { Command, CommanderError } from 'commander';
+import { resolveControlPlaneHome } from '@skillink/core';
 import { isSkillinkError } from '@skillink/shared';
 import { printJsonError, type CliContext } from './cli-context.js';
-import { createCommandRuntime } from './command-runtime.js';
+import {
+  createCommandRuntime,
+  type CliHomeSource,
+} from './command-runtime.js';
 import { registerInitCommands, registerMigrateCommands } from './commands/init.js';
 import { registerSkillCommands } from './commands/skill.js';
 import { registerPackageCommands } from './commands/package.js';
@@ -10,6 +14,7 @@ import { registerRouteCommands } from './commands/route.js';
 import { registerLocaleCommands } from './commands/locale.js';
 import { registerEnvironmentCommands, registerSnapshotCommands } from './commands/environment.js';
 import { registerLifecycleCommands } from './commands/lifecycle.js';
+import { registerControlPlaneCommands } from './commands/control-plane.js';
 
 export type { CliContext } from './cli-context.js';
 
@@ -38,15 +43,38 @@ export async function runCli(
       },
     });
 
-  const runtime = createCommandRuntime(context, argv, (code) => {
-    exitCode = code;
-  });
+  let home: string | null = null;
+  let homeSource: CliHomeSource = null;
+  let resolutionError: unknown;
+
+  if (context.home) {
+    home = context.home;
+    homeSource = 'context';
+  } else {
+    try {
+      const resolved = await resolveControlPlaneHome();
+      home = resolved.home;
+      homeSource = resolved.source;
+    } catch (error) {
+      resolutionError = error;
+    }
+  }
+
+  const runtime = createCommandRuntime(
+    context,
+    argv,
+    (code) => {
+      exitCode = code;
+    },
+    { home, homeSource, getResolutionError: () => resolutionError },
+  );
 
   registerInitCommands(program, runtime);
   registerEnvironmentCommands(program, runtime);
   registerLocaleCommands(program, runtime);
   registerMigrateCommands(program, runtime);
   registerSnapshotCommands(program, runtime);
+  registerControlPlaneCommands(program, runtime);
   registerSkillCommands(program, runtime);
   registerPackageCommands(program, runtime);
   registerTargetCommands(program, runtime);
