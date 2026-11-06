@@ -1,4 +1,3 @@
-import os from 'node:os';
 import path from 'node:path';
 import { expandPath } from './path-expand.js';
 import { assertSafeSegment, assertSafeVersion } from './safe-path.js';
@@ -24,18 +23,14 @@ export interface SkillinkPaths {
   tmpDir: string;
 }
 
-export function getDefaultSkillinkHome(
+export function getSkillinkHomeOverride(
   env: NodeJS.ProcessEnv = process.env,
-): string {
+): string | null {
   const override = env.SKILLINK_HOME?.trim();
-  if (override) {
-    return path.resolve(expandPath(override, { env }));
-  }
-
-  return path.join(os.homedir(), '.agents', 'skillink');
+  return override ? path.resolve(expandPath(override, { env })) : null;
 }
 
-export function getSkillinkPaths(home = getDefaultSkillinkHome()): SkillinkPaths {
+export function getSkillinkPaths(home: string): SkillinkPaths {
   const resolvedHome = path.resolve(expandPath(home));
 
   return {

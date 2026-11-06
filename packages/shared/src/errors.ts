@@ -36,6 +36,8 @@ export const SKILLINK_ERROR_CODES = [
   'LOCK_TIMEOUT',
   'SKILL_CONTENT_NOT_IN_GIT',
   'HISTORY_NOT_FOUND',
+  'CONTROL_PLANE_REQUIRED',
+  'CONTROL_PLANE_NOT_FOUND',
 ] as const;
 
 export type SkillinkErrorCode = (typeof SKILLINK_ERROR_CODES)[number];

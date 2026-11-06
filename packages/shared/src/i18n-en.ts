@@ -359,6 +359,9 @@ export const EN_MESSAGES = {
   'errors.SKILL_CONTENT_NOT_IN_GIT':
     'The skill content is not available in the skills repository.',
   'errors.HISTORY_NOT_FOUND': 'The requested revision was not found.',
+  'errors.CONTROL_PLANE_REQUIRED':
+    'A control plane is required. Add or select one first.',
+  'errors.CONTROL_PLANE_NOT_FOUND': 'The control plane was not found.',
 
   'doctorIssues.MISSING_CONTENT': 'Skill content is missing: {name}@{version}',
   'doctorIssues.ORPHAN_CONTENT': 'Skill content is orphaned: {name}@{version}',

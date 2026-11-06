@@ -20,6 +20,10 @@ describe('Skillink paths', () => {
     expect(getSkillinkPaths('~').home).toBe(path.resolve(os.homedir()));
   });
 
+  it('requires an explicit home instead of falling back to a default', () => {
+    expect(() => getSkillinkPaths(undefined as unknown as string)).toThrow();
+  });
+
   it('builds a skill version directory', () => {
     const paths = getSkillinkPaths('C:/tmp/skillink-home');
 
