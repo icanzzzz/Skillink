@@ -1235,7 +1235,7 @@ button {
   display: flex;
   flex: 0 0 auto;
   gap: 6px;
-  align-items: flex-start;
+  align-items: center;
   min-height: 30px;
   padding: 5px 6px;
   border-top: 1px solid var(--line-soft);
@@ -1267,7 +1267,6 @@ button {
 
 .target-package-row .mini-button {
   flex: 0 0 auto;
-  margin-top: 1px;
   padding: 2px 7px;
   font-size: 10.5px;
 }
