@@ -8,6 +8,7 @@
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
+    "dev:no-sandbox": "electron-vite dev --noSandbox",
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "prepackage:dir": "pnpm -w build:cli",
