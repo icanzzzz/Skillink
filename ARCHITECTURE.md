@@ -187,6 +187,15 @@ CLI ------------------------> @skillink/core -> @skillink/shared
 - `renderer` 不依赖 Node 内置模块、Electron 或 `@skillink/core`；
 - 每个 workspace 包必须在 `package.json` 中声明自己 import 的 `@skillink/*` 包。
 
+模块格式契约（由 `core/src/module-format.test.ts` 强制）：
+
+- 四个 workspace 一律 `"type": "module"`；源码内不出现 `.cjs` / `.mjs` / `.cts` / `.mts` 文件，也不用 `require()`；
+- 所有相对导入必须带扩展名（`.js` / `.json` / `.css`）。TypeScript 的 `moduleResolution: Bundler` 允许省略，但 ESM 运行时不会补后缀，统一写上可让源码与产物解析规则一致；
+- 唯一刻意产出的 CommonJS 是 preload：`apps/desktop/src/preload/index.ts` 经 `apps/desktop/electron.vite.config.ts` 的 `preload.build.rollupOptions.output.format = 'cjs'` 发成 `out/preload/index.cjs`，因为 preload 运行在沙箱化、不支持 ESM 的渲染上下文中；
+- 主进程保持 ESM：`apps/desktop/package.json` 的 `main` 指向 `./out/main/index.js`，其中 `import { app, BrowserWindow } from 'electron'` 可直接使用命名导入。
+
+> 排查提示：若在主进程看到 `SyntaxError: The requested module 'electron' does not provide an export named 'BrowserWindow'`，先检查当前 shell 是否继承了 `ELECTRON_RUN_AS_NODE=1`（Electron 自身进程会设置它）。该变量让 `electron.exe` 退化为纯 Node，`electron` 会解析成 npm shim 导出的可执行文件路径字符串，与模块格式无关；清掉该变量再试。
+
 关键模块：
 
 | 模块 | 职责 |
@@ -1038,7 +1047,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 
 ## 10. 测试策略
 
-当前验证（2026-11-07）：75 个测试文件、604 个测试通过；`pnpm typecheck`、`pnpm build` 通过。
+当前验证（2026-11-13）：87 个测试文件、662 个测试；`npx tsc -p tsconfig.json --noEmit` 与 `electron-vite build` 通过。依赖真实 junction/symlink 与特殊权限的 34 个用例在受限沙箱下失败，属环境限制而非实现缺陷。
 
 | 层级 | 内容 |
 |---|---|
@@ -1048,6 +1057,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 | Git 测试 | 控制面/skills 初始化、ignore/attributes、自动提交顺序、无空提交、锁、history、rollback 内容恢复与失败恢复 |
 | GUI 测试 | IPC schema、页面渲染、空状态、组合展示、target/route 生命周期、apply 预览、批量安装、已安装技能版本聚合与目录链接警告 |
 | 桌面/i18n 测试 | 语言包 schema/覆盖率、内置包启动刷新、安装卡片预填名称与默认版本、已安装技能版本切换 |
+| 模块格式测试 | 四个 workspace 均为 `type: module`、主进程入口为 ESM `.js`、相对导入带 `.js` 后缀、源码内无 CommonJS 文件 |
 | 控制面测试 | 清单 schema/路径去重、add/use、`init` 登记、`SKILLINK_HOME` 优先、无 `active` 时的 `CONTROL_PLANE_REQUIRED`、GUI 弹窗与切换重载 |
 | 安全测试 | 恶意源文件夹、路径穿越、断链、只读文件、同名冲突、内容篡改、非受信 IPC |
 | 兼容测试 | Windows 11 本地主验收；Windows/Ubuntu/macOS CI 矩阵 |
@@ -1147,7 +1157,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 
 ### 11.1 当前实现验证
 
-- `pnpm test`：75 个测试文件、604 个测试通过（2026-11-07）；
+- `pnpm test`：87 个测试文件、662 个测试（2026-11-13）；其中 34 个依赖 junction/symlink 与特殊权限的用例需在允许创建链接的机器上运行；
 - `pnpm typecheck`：通过；
 - `pnpm build`：CLI 与 Electron 桌面端构建成功；
 - 真实 CLI E2E：skill 安装、package 创建、target/route、apply、status/doctor、冲突修复、gc dry-run 均跑通；
