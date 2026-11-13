@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { deriveTargetIdDefault, type TargetMode } from '@skillink/shared';
 import { Modal } from '../Modal.js';
 import { useI18n } from '../i18n.js';
@@ -41,6 +41,7 @@ export function AddTargetDialog({
   onSubmit,
 }: AddTargetDialogProps) {
   const { t } = useI18n();
+  const formId = useId();
   const [targetPath, setTargetPath] = useState('');
   const [targetId, setTargetId] = useState('');
   const [targetLabel, setTargetLabel] = useState('');
@@ -92,9 +93,30 @@ export function AddTargetDialog({
       eyebrow={t('targets.form.targetEyebrow')}
       closeLabel={t('common.close')}
       onClose={onClose}
+      footer={
+        <>
+          <button
+            className="secondary"
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            className="primary"
+            type="submit"
+            form={formId}
+            disabled={busy || !onSubmit || targetPath.trim() === ''}
+          >
+            {t('targets.form.addTarget')}
+          </button>
+        </>
+      }
     >
       <form
-        className="form-grid"
+        className="form-grid target-form"
+        id={formId}
         onSubmit={(event) => void submit(event)}
       >
         <label className="field field-wide">
@@ -145,23 +167,6 @@ export function AddTargetDialog({
             <option value="copy">{t('targets.mode.copy')}</option>
           </select>
         </label>
-        <div className="form-actions">
-          <button
-            className="secondary"
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            className="primary"
-            type="submit"
-            disabled={busy || !onSubmit}
-          >
-            {t('targets.form.addTarget')}
-          </button>
-        </div>
       </form>
     </Modal>
   );

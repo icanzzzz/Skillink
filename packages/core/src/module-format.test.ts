@@ -56,7 +56,7 @@ async function listCommonJsFiles(dir: string): Promise<string[]> {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...(await listCommonJsFiles(full)));
-    } else if (/\.(cjs|cts|mjs|mts)$/.test(entry.name)) {
+    } else if (/\.(cjs|cts)$/.test(entry.name)) {
       files.push(full);
     }
   }

@@ -7,7 +7,6 @@ import {
 } from '../library.js';
 import { Modal } from '../Modal.js';
 import { useI18n } from '../i18n.js';
-import { VersionSelect } from '../ui/VersionSelect.js';
 import {
   EMPTY_ROUTE_DRAFT,
   createRouteDraft,
@@ -123,13 +122,43 @@ export function AssignPackageDialog({
       eyebrow={t('targets.assign.eyebrow')}
       closeLabel={t('common.close')}
       onClose={onClose}
+      footer={
+        <>
+          <button
+            className="secondary"
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            className="primary"
+            type="submit"
+            form="assign-package-form"
+            disabled={!canAssign}
+          >
+            {t('targets.form.assign')}
+          </button>
+        </>
+      }
     >
-      {options.length === 0 ? (
-        <p className="empty">{t('targets.assign.empty')}</p>
+      {target ? (
+        <p className="assign-target">
+          <span>{t('targets.assign.target')}</span>
+          <strong>{target.label ?? target.id}</strong>
+          <code>{target.path}</code>
+        </p>
       ) : null}
 
-      <form className="form-grid" onSubmit={(event) => void submit(event)}>
-        {options.length > 0 ? (
+      {options.length === 0 ? (
+        <p className="empty">{t('targets.assign.empty')}</p>
+      ) : (
+        <form
+          className="form-grid"
+          id="assign-package-form"
+          onSubmit={(event) => void submit(event)}
+        >
           <label className="field">
             <span>{t('targets.form.package')}</span>
             <select
@@ -154,45 +183,36 @@ export function AssignPackageDialog({
               })}
             </select>
           </label>
-        ) : null}
 
-        {selected ? (
-          <VersionSelect
-            label={t('targets.form.versionOrTag')}
-            name={selected.name}
-            options={choices}
-            value={draft.requested}
-            onChange={(value) =>
-              setDraft((current) => setRouteRequested(current, value))
-            }
-            disabled={busy}
-          />
-        ) : null}
+          <label className="field">
+            <span>{t('targets.form.versionOrTag')}</span>
+            <select
+              value={draft.requested}
+              onChange={(event) =>
+                setDraft((current) =>
+                  setRouteRequested(current, event.target.value),
+                )
+              }
+              disabled={busy || choices.length === 0}
+            >
+              {choices.map((choice) => (
+                <option value={choice.value} key={choice.value}>
+                  {choice.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        {count === null ? null : (
-          <p className="assign-preview">
-            {t('targets.assign.directSkills', { count })}
+          <p className="assign-preview field-wide">
+            {count === null
+              ? t('targets.assign.noSkills')
+              : t('targets.assign.directSkills', { count })}
+            <span>
+              {t('targets.assign.assignedCount', { count: assigned.length })}
+            </span>
           </p>
-        )}
-
-        <div className="form-actions">
-          <button
-            className="secondary"
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            className="primary"
-            type="submit"
-            disabled={!canAssign}
-          >
-            {t('targets.form.assign')}
-          </button>
-        </div>
-      </form>
+        </form>
+      )}
     </Modal>
   );
 }

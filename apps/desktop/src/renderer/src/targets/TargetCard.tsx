@@ -94,7 +94,7 @@ export function TargetCard({
               </span>
               <span className="target-package-actions row-actions">
                 <button
-                  className="secondary"
+                  className="link-button"
                   type="button"
                   disabled={busy || !onToggleRoute}
                   onClick={() =>
@@ -106,7 +106,7 @@ export function TargetCard({
                     : t('targets.actions.disableRoute')}
                 </button>
                 <button
-                  className="danger"
+                  className="link-button is-danger"
                   type="button"
                   disabled={busy || !onRemoveRoute}
                   onClick={() => onRemoveRoute?.(packageName)}
@@ -121,7 +121,7 @@ export function TargetCard({
 
       <div className="target-card-actions row-actions">
         <button
-          className="secondary"
+          className="primary"
           type="button"
           disabled={busy || !onAssign}
           onClick={onAssign}
@@ -149,7 +149,7 @@ export function TargetCard({
             : t('targets.actions.enableTarget')}
         </button>
         <button
-          className="danger"
+          className="link-button is-danger target-card-remove"
           type="button"
           disabled={busy || !onRemoveTarget}
           onClick={onRemoveTarget}

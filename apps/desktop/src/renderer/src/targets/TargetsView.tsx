@@ -240,6 +240,7 @@ export function TargetsView({
             >
               {t('targets.form.addTarget')}
             </button>
+            <span className="toolbar-sep" aria-hidden="true" />
             <button
               className="secondary"
               type="button"
@@ -320,7 +321,9 @@ export function TargetsView({
               })}
             </span>
           </div>
-          <p className="empty">
+          <p
+            className={`apply-summary${applyReport.ok ? ' is-ok' : ' is-warn'}`}
+          >
             {applyReport.dryRun
               ? t('targets.apply.dryRun')
               : t('targets.apply.applied')}

@@ -244,8 +244,6 @@ export function SkillImportDialog({
         </button>
       }
     >
-      <p className="hint">{t('skills.batch.hint')}</p>
-
       <div
         className={`drop-zone${dragOver ? ' is-over' : ''}`}
         onDragOver={handleDragOver}
@@ -254,8 +252,9 @@ export function SkillImportDialog({
         onDrop={handleDrop}
       >
         <p>{t(dragOver ? 'skills.import.dropActive' : 'skills.import.dropHint')}</p>
+        <small>{t('skills.batch.hint')}</small>
         <button
-          className="primary"
+          className="secondary"
           type="button"
           onClick={() => void browse()}
           disabled={busy || scanning || !onBrowse}

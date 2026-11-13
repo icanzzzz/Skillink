@@ -125,7 +125,7 @@ describe('TargetsView', () => {
     const html = renderToStaticMarkup(<TargetsView targets={[target]} />);
 
     expect(html).toMatch(
-      /<button class="secondary" type="button" disabled="">Assign package<\/button>/,
+      /<button class="primary" type="button" disabled="">Assign package<\/button>/,
     );
     expect(html).toMatch(
       /<button class="secondary" type="button" disabled="">Add target<\/button>/,

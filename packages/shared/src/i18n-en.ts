@@ -208,6 +208,9 @@ export const EN_MESSAGES = {
   'targets.assign.empty': 'No packages to assign. Create a package first.',
   'targets.assign.alreadyAssigned': 'already assigned',
   'targets.assign.directSkills': '{count} skills directly',
+  'targets.assign.noSkills': 'No direct skills recorded',
+  'targets.assign.target': 'Target',
+  'targets.assign.assignedCount': '{count} packages already assigned',
   'targets.mode.link': 'link',
   'targets.mode.copy': 'copy',
 

@@ -57,7 +57,9 @@ describe('AssignPackageDialog', () => {
     });
 
     expect(html).toContain('No packages to assign. Create a package first.');
-    expect(html).toMatch(/<button class="primary" type="submit" disabled="">Assign<\/button>/);
+    expect(html).toMatch(
+      /<button class="primary" type="submit" form="assign-package-form" disabled="">Assign<\/button>/,
+    );
   });
 
   it('marks packages already assigned to the target', () => {
@@ -94,8 +96,9 @@ describe('AssignPackageDialog', () => {
       },
     });
 
-    expect(html).toContain('class="assign-preview"');
+    expect(html).toContain('assign-preview');
     expect(html).toContain('2 skills directly');
+    expect(html).toContain('1 packages already assigned');
     expect(html).toContain('latest → 1.2.0');
   });
 
