@@ -18,12 +18,6 @@ export const EN_MESSAGES = {
   'app.controlPlane': 'Control plane',
   'app.git.missing':
     'Git not found. Version history, auto-commit, and rollback are unavailable.',
-  'app.titles.overview': 'Overview',
-  'app.titles.targets': 'Targets',
-  'app.titles.skills': 'Installed skills',
-  'app.titles.packages': 'Package compositions',
-  'app.titles.doctor': 'Doctor',
-  'app.eyebrow': 'WORKSPACE',
   'app.actions.applyRoutes': 'Apply routes',
   'app.actions.refresh': 'Refresh',
   'app.actions.viewAll': 'View all',

@@ -52,14 +52,6 @@ const NAV_ITEMS: Array<{ id: ViewId; labelKey: MessageKey }> = [
 
 const BRAND_ICON = new URL('./assets/icon.png', import.meta.url).href;
 
-const VIEW_TITLES: Record<ViewId, MessageKey> = {
-  overview: 'app.titles.overview',
-  targets: 'app.titles.targets',
-  skills: 'app.titles.skills',
-  packages: 'app.titles.packages',
-  doctor: 'app.titles.doctor',
-};
-
 function NavIcon({ view }: { view: ViewId }) {
   const props = {
     className: 'nav-icon',
@@ -399,10 +391,6 @@ export function App({ api }: AppProps) {
 
       <section className="workspace">
         <header className="topbar">
-          <div>
-            <p className="eyebrow">{t('app.eyebrow')}</p>
-            <h2>{t(VIEW_TITLES[view])}</h2>
-          </div>
           <div className="topbar-actions">
             {busy ? <span className="busy">{t('app.status.working')}</span> : null}
             <button
