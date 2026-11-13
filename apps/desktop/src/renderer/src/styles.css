@@ -2847,3 +2847,87 @@ button {
 .choice-reason {
   font-size: 11px;
 }
+
+/* Package composition: fixed-height scroll area, one skill per row. */
+.package-card .composition-legend {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 0 6px;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.package-card .composition-legend strong {
+  color: var(--ink-muted);
+  font-weight: 700;
+}
+
+.package-card .composition-legend span + strong {
+  margin-right: 10px;
+}
+
+.composition-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  height: 136px;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: var(--surface);
+  list-style: none;
+}
+
+.composition-row {
+  display: flex;
+  flex: 0 0 26px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.composition-row:hover {
+  background: var(--surface-muted);
+}
+
+.composition-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composition-badge {
+  padding: 1px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--ink-faint);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.composition-version {
+  color: var(--accent-strong);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* Keep cards the same height: descriptions clamp to two lines. */
+.package-card > p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}

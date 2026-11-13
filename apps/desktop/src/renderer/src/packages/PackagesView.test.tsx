@@ -69,8 +69,12 @@ describe('PackagesView', () => {
     expect(html).toContain('frontend');
     expect(html).toContain('Frontend baseline');
     expect(html).toContain('1.0.0');
-    expect(html).toContain('pdf@1.0.0');
-    expect(html).toContain('base@2.0.0');
+    expect(html).toContain('composition-list');
+    expect(html).toMatch(/<span class="composition-name">pdf<\/span>/);
+    expect(html).toMatch(/<code class="composition-version">1.0.0<\/code>/);
+    expect(html).toMatch(/<span class="composition-name">base<\/span>/);
+    expect(html).toContain('composition-badge');
+    expect(html).not.toContain('pdf@1.0.0');
     expect(html).toContain('Copy');
     expect(html).toContain('base');
     expect(html).toContain('version-tab');

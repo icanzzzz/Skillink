@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { PackageEntry, PackageFile, SkillFile } from '@skillink/shared';
 import { preferredVersion, sortVersionsDesc } from '@skillink/shared';
-import { compositionText } from '../format.js';
 import { useConfirm } from '../Feedback.js';
 import { useI18n } from '../i18n.js';
 import { TagEditor } from '../ui/TagEditor.js';
@@ -42,6 +41,12 @@ export function PackageCard({
       ? shownVersion
       : (preferredVersion(versions) ?? '');
   const composition = entry.versions[activeVersion];
+  const skillRows = Object.entries(composition?.skills ?? {}).sort(
+    ([left], [right]) => left.localeCompare(right),
+  );
+  const packageRows = Object.entries(composition?.packages ?? {}).sort(
+    ([left], [right]) => left.localeCompare(right),
+  );
 
   async function removeVersion(version: string): Promise<void> {
     const confirmed = await confirm({
@@ -82,14 +87,36 @@ export function PackageCard({
       {composition === undefined ? null : (
         <div className="version-detail">
           <div className="version-block">
-            <div className="version-row">
-              <span>
-                {compositionText(composition, t, {
-                  skills: 'packages.composition.skills',
-                  packages: 'packages.composition.packages',
-                })}
-              </span>
-            </div>
+            <p className="composition-legend">
+              <span>{t('packages.composition.skills')}</span>
+              <strong>{skillRows.length}</strong>
+              {packageRows.length === 0 ? null : (
+                <>
+                  <span>{t('packages.composition.packages')}</span>
+                  <strong>{packageRows.length}</strong>
+                </>
+              )}
+            </p>
+            <ul className="composition-list">
+              {skillRows.map(([skillName, version]) => (
+                <li className="composition-row" key={`skill:${skillName}`}>
+                  <span className="composition-name">{skillName}</span>
+                  <code className="composition-version">{version}</code>
+                </li>
+              ))}
+              {packageRows.map(([packageName, version]) => (
+                <li
+                  className="composition-row is-package"
+                  key={`package:${packageName}`}
+                >
+                  <span className="composition-name">{packageName}</span>
+                  <span className="composition-badge">
+                    {t('packages.badge')}
+                  </span>
+                  <code className="composition-version">{version}</code>
+                </li>
+              ))}
+            </ul>
             <TagEditor
               label={t('packages.tag.label')}
               tags={entry.tags ?? {}}
