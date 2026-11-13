@@ -161,7 +161,7 @@ apps/
 ├─ desktop/
 │  ├─ src/main/              # Electron 主进程：窗口、IPC、CLI 适配、控制面/语言 IPC、错误本地化、内置语言包同步
 │  ├─ src/preload/           # contextBridge 白名单 API
-│  └─ src/renderer/          # React 页面与 i18n Provider（含控制面选择弹窗）
+│  └─ src/renderer/          # React 页面与 i18n Provider；按领域分组（packages/、skills/、targets/），跨领域原语在 ui/
 packages/
 ├─ shared/                   # Zod schema、报告类型、错误、路径/语言/skill 目录名工具
 └─ core/                     # 业务实现：配置存储、package 图、apply/status/doctor/gc、导入/扫描、git、回退、语言包存储
@@ -222,8 +222,15 @@ CLI ------------------------> @skillink/core -> @skillink/shared
 | `desktop/src/main/ipc.ts` | IPC 白名单、Zod 输入校验、sender 校验 |
 | `desktop/src/main/bundled-language.ts` | 启动时刷新版本过旧或缺 key 的内置 `zh-CN` 语言包，保护自定义包 |
 | `desktop/src/main/cli-commands.ts` | IPC 请求 -> CLI argv |
+| `desktop/src/renderer/src/library.ts` | 快照 → 技能/包选项、版本选项与默认版本（跨领域派生） |
+| `desktop/src/renderer/src/ui/` | 跨领域展示原语：`ChoiceList`（搜索 + 复选，含禁用原因）、`VersionSelect`（版本/标签下拉）、`TagEditor`（标签 chips 与新建） |
+| `desktop/src/renderer/src/packages/` | `PackagesView`、`CreatePackageDialog`、`PackageCard`（版本标签页 + 标签编辑）与 `package-draft` |
+| `desktop/src/renderer/src/skills/` | `SkillsView`、`SkillImportDialog`、`SkillBatchCard`、`InstalledSkillCard` 与 `skill-batch` |
+| `desktop/src/renderer/src/targets/` | `TargetsView`、`AddTargetDialog`、`TargetCard`、`AssignPackageDialog` 与 `route-draft` |
 | `desktop/src/renderer/src/ControlPlaneDialog.tsx` | 控制面列表、添加、切换与错误展示 |
 | `desktop/src/preload/index.ts` | `window.skillink` 白名单 API |
+
+原根目录的 `PackagesView.tsx`、`SkillsView.tsx`、`TargetsView.tsx`、`targetAssignment.ts` 由上述按领域拆分的组件取代。
 
 ---
 
@@ -523,8 +530,8 @@ CLI 不提供 `package copy` 子命令。GUI 的复制操作只做表单预填�
 - 批量扫描不跟随目录链接，但会记录包内目录链接的绝对路径；
 - GUI 在点击确认时检测目录链接，命中则提示链接路径、取消该包安装，其他包不受影响；
 - 默认名/版本：源目录名为 `<name>@<version>` 时解析并分别使用；显式 `--name` / `--version` 优先；
-- 安装卡片把扫描名称保存为 `autoName`，名称输入框初始为空并只把扫描名称显示为 placeholder；用户留空确认时使用 `autoName`，手动输入时以输入值为准；
-- 版本输入框只显示自动生成版本的 semver 主体 `1.0.0`，不向用户展示 `+<hash8>` 构建元数据；用户留空确认时由导入按当前内容生成完整版本；
+- 安装卡片把扫描名称直接预填到名称输入框（可编辑），安装时使用输入框中可见的值；用户清空名称时回退扫描名称；
+- 版本输入框预填自动生成版本的 semver 主体 `1.0.0`，不向用户展示 `+<hash8>` 构建元数据；用户可修改，导入按提交时的值生成完整版本；
 - 目录名缺少名称时，GUI 要求用户手动填写；名称仍缺失时批量扫描回退 `SKILL.md` frontmatter 的 name；CLI 回退文件夹名；
 - 版本缺失或不是合法 semver 时回退 `1.0.0+<hash8>`；
 - 同 name@version + 同 integrity：复用；
@@ -861,7 +868,7 @@ drift / missing       -> apply
 
 - **Overview**：skills、packages、targets、links、doctor；
 - **Targets**：target 列表、package 数、解析后的 skill 数、分配 package、target 在链接/复制模式间切换（只改 route，下一次 apply 重建投影）、target/package enable/disable（禁用时清理不再需要的投影）、删除 target/route（按 route 清理目标目录条目）、apply 预览（dry-run）、apply 结果；
-- **Skills**：选择目录批量扫描 `SKILL.md`，逐个确认安装；扫描名称只作为名称输入框 placeholder，留空确认时作为默认名称；版本输入框显示自动生成版本的 semver 主体 `1.0.0`，不显示 `+<hash8>` 构建元数据；确认时检测包内目录链接，命中则提示绝对路径并取消该包安装；已安装技能按技能名聚合为一张卡片，通过版本切换标签选择版本，再对当前版本执行标记/移除，标签可直接切换到对应版本；GC；
+- **Skills**：通过拖拽或系统文件夹选择器选择目录，批量扫描 `SKILL.md`，逐个确认安装；扫描名称直接预填到名称输入框（可编辑），安装使用可见值；版本输入框预填自动生成版本的 semver 主体 `1.0.0`，不显示 `+<hash8>` 构建元数据；确认时检测包内目录链接，命中则提示绝对路径并取消该包安装；已安装技能按技能名聚合为一张卡片，通过版本切换标签选择版本，再对当前版本执行标记/移除，标签可直接切换到对应版本；GC；
 - **Packages**：创建 package、组合列表、标签、删除；复制某个版本时用该版本数据预填创建表单，提交仍走 `package create`；
 - **Doctor**：健康检查；
 - **Language**：安装/切换/删除语言包，显示 nativeName、版本和翻译覆盖率；切换后立即刷新界面，删除当前语言回到英文；
@@ -874,7 +881,10 @@ GUI 交互约定：
 - 写操作成功后用 toast 反馈，操作失败使用同一条反馈通道，页面顶部只保留加载错误；
 - 概览页只展示摘要、健康状态和跳转入口，不重复列出技能和包的完整卡片；
 - 顶栏只保留全局刷新，应用路由等页面级主操作放在对应页面内；
-- 表单 placeholder 遵循同一规则：留空提交时系统会采用默认值的字段（如扫描出的技能名称/版本、由标签或目录名推导的目标 ID），placeholder 显示该默认值；没有默认值的字段显示“必填”或“可选”，不再使用示例值。
+- 默认值可见：能从快照或上下文推导的默认值必须写入表单值并保持可编辑，不得让 placeholder 承担默认值职责；确实没有默认值的字段，placeholder 使用“必填”或“可选”，不使用示例值；
+- 选择优先：引用已有实体（技能、包、版本、标签、目标）的字段一律从快照派生选择器，不要求用户手写 `name@version`；只有“新建”语义才出现文本输入，并用显式模式切换区分；
+- 拖拽与选择器：文件夹类输入支持拖拽与系统文件夹选择器，手动输入路径是折叠的兜底入口；
+- renderer 目录：按领域分组（`packages/`、`skills/`、`targets/`），跨领域展示原语放 `ui/`，跨领域派生逻辑放根目录 `library.ts`。
 
 GUI 的刷新通过一次只读 `skillink snapshot --json` 获取 skills、packages、route、status、doctor 和 target 解析结果。Renderer 只调用 preload API；Electron 主进程负责 IPC 校验、argv 映射和串行队列，不直接调用 Core。语言包操作同样走 `locale ... --json` 命令层。
 
@@ -1037,7 +1047,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 | CLI 测试 | 完整 skill -> package -> route -> apply 闭环、迁移、回滚、批量扫描 |
 | Git 测试 | 控制面/skills 初始化、ignore/attributes、自动提交顺序、无空提交、锁、history、rollback 内容恢复与失败恢复 |
 | GUI 测试 | IPC schema、页面渲染、空状态、组合展示、target/route 生命周期、apply 预览、批量安装、已安装技能版本聚合与目录链接警告 |
-| 桌面/i18n 测试 | 语言包 schema/覆盖率、内置包启动刷新、安装卡片 placeholder 与默认名称、已安装技能版本切换 |
+| 桌面/i18n 测试 | 语言包 schema/覆盖率、内置包启动刷新、安装卡片预填名称与默认版本、已安装技能版本切换 |
 | 控制面测试 | 清单 schema/路径去重、add/use、`init` 登记、`SKILLINK_HOME` 优先、无 `active` 时的 `CONTROL_PLANE_REQUIRED`、GUI 弹窗与切换重载 |
 | 安全测试 | 恶意源文件夹、路径穿越、断链、只读文件、同名冲突、内容篡改、非受信 IPC |
 | 兼容测试 | Windows 11 本地主验收；Windows/Ubuntu/macOS CI 矩阵 |
@@ -1118,7 +1128,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 22. `locale` 命令能安装、切换、列出、删除语言包；缺失/损坏语言包回退英文；`zh-CN` 覆盖全部英文 key；
 23. `skill scan` 能批量发现技能包；每个包独立确认安装；包含目录链接的包提示绝对路径并取消该包安装，其余包不受影响；
 24. 内置 `zh-CN` 包版本更新或缺 key 时，应用启动后自动刷新已安装副本；身份不同的自定义语言包不被覆盖；
-25. 安装卡片中的扫描名称只显示为输入框 placeholder，留空确认时使用扫描名称；版本输入框显示自动生成版本的 semver 主体 `1.0.0`，不显示 `+<hash8>` 构建元数据；
+25. 安装卡片中的扫描名称直接预填到名称输入框且可编辑，安装使用可见值；版本输入框预填自动生成版本的 semver 主体 `1.0.0`，不显示 `+<hash8>` 构建元数据；
 26. 已安装技能按技能名聚合为一张卡片，版本切换控件选择版本后，标记/移除操作只作用于当前版本；
 27. `target remove` 解析 target 的全部 package lock（含 disabled）得到 skill 集合，删除目标目录中同名链接/真实目录，普通文件和其他类型保留；GC 失败或 route 写入失败时 route 不变并报错；目标目录和 `skills/` 内容保留；
 28. apply 对 route 期望集合中的同名条目按形态和内容接管：真实目录/文件直接删除并重建链接，链接内容不同则重建，集合外条目不动；`--prune` 不存在；

@@ -10,3 +10,4 @@ export * from './schemas.js';
 export * from './skill-directory.js';
 export * from './spec.js';
 export * from './target-id.js';
+export * from './version-order.js';
