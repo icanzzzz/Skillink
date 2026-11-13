@@ -41,6 +41,7 @@ export interface DesktopApi {
   getSnapshot(): Promise<DesktopSnapshot>;
   apply(options?: ApplyRequest): Promise<ApplyReport>;
   chooseFolder(): Promise<string | null>;
+  getPathForFile(file: File): string;
   scanSkills(input: ScanSkillsRequest): Promise<SkillPackageScanReport>;
   importSkill(input: ImportSkillRequest): Promise<ImportSkillResult>;
   createPackage(input: CreatePackageRequest): Promise<PackageVersion>;
