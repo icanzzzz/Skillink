@@ -30,10 +30,10 @@ import { useToast } from './Feedback.js';
 import { useI18n } from './i18n.js';
 import { LanguageDialog, LanguageTrigger } from './LanguageDialog.js';
 import { GitUnavailableNotice } from './GitUnavailableNotice.js';
-import { PackagesView } from './PackagesView.js';
-import { SkillsView } from './SkillsView.js';
+import { PackagesView } from './packages/PackagesView.js';
+import { SkillsView } from './skills/SkillsView.js';
 import { SnapshotView } from './SnapshotView.js';
-import { TargetsView } from './TargetsView.js';
+import { TargetsView } from './targets/TargetsView.js';
 
 type ViewId =
   | 'overview'
@@ -443,6 +443,7 @@ export function App({ api }: AppProps) {
               statusEntries={snapshot.status.entries}
               targetSkills={snapshot.targetSkills}
               applyReport={applyReport}
+              packages={snapshot.packages}
               busy={busy}
               onBrowse={() => client?.chooseFolder() ?? null}
               onAddTarget={addTarget}
@@ -466,6 +467,9 @@ export function App({ api }: AppProps) {
               onTag={skillTag}
               onRemove={skillRemove}
               onGc={runGc}
+              onResolveDroppedPath={(file) =>
+                client?.getPathForFile(file) ?? ''
+              }
             />
           ) : view === 'packages' ? (
             <PackagesView

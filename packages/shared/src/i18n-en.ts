@@ -283,8 +283,6 @@ export const EN_MESSAGES = {
   'packages.form.name': 'Package name',
   'packages.form.version': 'Version',
   'packages.form.description': 'Description',
-  'packages.form.skills': 'Skills (one skill@version per line)',
-  'packages.form.packages': 'Packages (one package@version per line)',
   'packages.form.modeExisting': 'Existing package',
   'packages.form.modeNew': 'New package',
   'packages.form.nameSelect': 'Package',
@@ -303,7 +301,6 @@ export const EN_MESSAGES = {
     'Copied from {spec}. Pick a new version and adjust dependencies.',
   'packages.form.selfReference': 'Cannot nest the package itself',
   'packages.create': 'Create package',
-  'packages.availableSkills': 'Available skills:',
   'packages.copyHint':
     'Prefilled from {name}@{version}. Change the version and dependencies to create a new version.',
   'packages.empty': 'No packages yet. Create a package from installed skills.',
