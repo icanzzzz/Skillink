@@ -81,41 +81,50 @@ export function TargetCard({
             {t('targets.packages.empty')}
           </p>
         ) : (
-          packageEntries.map(([packageName, lock]) => (
-            <div className="target-package-row" key={packageName}>
-              <span className="target-package-name">
-                <code>{packageName}</code>
-                <small>@{lock.resolved}</small>
-              </span>
-              <span className="target-package-state">
-                {lock.enabled === false
-                  ? t('status.disabled')
-                  : t('status.enabled')}
-              </span>
-              <span className="target-package-actions row-actions">
-                <button
-                  className="mini-button"
-                  type="button"
-                  disabled={busy || !onToggleRoute}
-                  onClick={() =>
-                    onToggleRoute?.(packageName, lock.enabled)
-                  }
-                >
-                  {lock.enabled === false
-                    ? t('targets.actions.enableRoute')
-                    : t('targets.actions.disableRoute')}
-                </button>
-                <button
-                  className="mini-button is-danger"
-                  type="button"
-                  disabled={busy || !onRemoveRoute}
-                  onClick={() => onRemoveRoute?.(packageName)}
-                >
-                  {t('targets.actions.removeRoute')}
-                </button>
-              </span>
-            </div>
-          ))
+          <ul className="target-package-list">
+            {packageEntries.map(([packageName, lock]) => {
+              const enabled = lock.enabled !== false;
+              return (
+                <li className="target-package-row" key={packageName}>
+                  <span className="target-package-name">{packageName}</span>
+                  <code className="target-package-version">
+                    {lock.resolved}
+                  </code>
+                  <button
+                    className="mini-button"
+                    type="button"
+                    disabled={busy || !onToggleRoute}
+                    aria-label={
+                      enabled
+                        ? t('targets.actions.disableRoute')
+                        : t('targets.actions.enableRoute')
+                    }
+                    title={
+                      enabled
+                        ? t('targets.actions.disableRoute')
+                        : t('targets.actions.enableRoute')
+                    }
+                    aria-pressed={enabled}
+                    onClick={() => onToggleRoute?.(packageName, lock.enabled)}
+                  >
+                    {enabled
+                      ? t('targets.row.disable')
+                      : t('targets.row.enable')}
+                  </button>
+                  <button
+                    className="mini-button is-danger"
+                    type="button"
+                    disabled={busy || !onRemoveRoute}
+                    aria-label={t('targets.actions.removeRoute')}
+                    title={t('targets.actions.removeRoute')}
+                    onClick={() => onRemoveRoute?.(packageName)}
+                  >
+                    {t('targets.row.remove')}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
 

@@ -1210,59 +1210,58 @@ button {
 }
 
 .target-packages {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+/* Same shape as the package composition list: fixed height, one row each. */
+.target-package-list {
   display: flex;
   flex-direction: column;
-  margin: 12px 0 0;
-  padding-top: 2px;
-  border-top: 1px solid var(--line-soft);
+  gap: 1px;
+  height: 132px;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: var(--surface);
+  list-style: none;
 }
 
 .target-package-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
+  flex: 0 0 30px;
+  gap: 6px;
   align-items: center;
-  padding: 8px 0;
-  border-top: 1px solid var(--line-soft);
-  color: var(--ink-soft);
-  font-size: 12.5px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 12px;
 }
 
-.target-package-row:first-child {
-  border-top: 0;
+.target-package-row:hover {
+  background: var(--surface-muted);
 }
 
 .target-package-name {
-  display: flex;
-  flex: 1 1 120px;
-  flex-wrap: wrap;
-  gap: 2px 5px;
-  align-items: baseline;
+  flex: 1;
   min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.target-package-name code {
+.target-package-version {
   color: var(--accent-strong);
   font-family: var(--font-mono);
-  font-size: 11.5px;
-  overflow-wrap: anywhere;
-}
-
-.target-package-name small {
-  color: var(--ink-faint);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-}
-
-.target-package-state {
-  flex: 0 0 auto;
-  color: var(--ink-muted);
   font-size: 11px;
 }
 
-.target-package-actions {
-  flex: 0 1 auto;
-  margin-left: auto;
+.target-package-row .mini-button {
+  padding: 2px 7px;
+  font-size: 10.5px;
 }
 
 .target-package-empty {

@@ -156,6 +156,17 @@ describe('TargetsView', () => {
     expect(html).toContain('Remove route');
   });
 
+  it('lists each assigned package as one scrollable row', () => {
+    const html = renderToStaticMarkup(<TargetsView targets={[target]} />);
+
+    expect(html).toContain('class="target-package-list"');
+    expect(html).toMatch(
+      /<li class="target-package-row"><span class="target-package-name">frontend<\/span><code class="target-package-version">1\.0\.0<\/code>/,
+    );
+    expect(html).not.toContain('class="target-package-state"');
+    expect(html).not.toContain('frontend<small>@');
+  });
+
   it('invokes apply and preview actions without options', () => {
     const action = vi.fn();
 

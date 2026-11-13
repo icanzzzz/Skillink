@@ -165,6 +165,9 @@ export const EN_MESSAGES = {
   'targets.actions.enableRoute': 'Enable route',
   'targets.actions.disableRoute': 'Disable route',
   'targets.actions.removeRoute': 'Remove route',
+  'targets.row.enable': 'Enable',
+  'targets.row.disable': 'Disable',
+  'targets.row.remove': 'Remove',
   'targets.confirm.removeTarget':
     'Remove target "{name}"? Its route-resolved skill directories will be deleted from the target directory, even if they were not created by Skillink. Regular files and the target directory itself are kept.',
   'targets.confirm.disableTarget':
