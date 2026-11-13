@@ -196,7 +196,7 @@ CLI ------------------------> @skillink/core -> @skillink/shared
 
 > 排查提示：若在主进程看到 `SyntaxError: The requested module 'electron' does not provide an export named 'BrowserWindow'`，先检查当前 shell 是否继承了 `ELECTRON_RUN_AS_NODE=1`（Electron 自身进程会设置它）。该变量让 `electron.exe` 退化为纯 Node，`electron` 会解析成 npm shim 导出的可执行文件路径字符串，与模块格式无关；清掉该变量再试。
 
-> 排查提示：若 `pnpm dev:desktop` 在 `starting electron app...` 之后**没有任何输出**就退出、退出码为 `-2147483645`（`0x80000003`，STATUS_BREAKPOINT），且 `electron.exe --version` 同样崩，则死在 Chromium 沙箱引导阶段，与本仓库代码无关。用 `pnpm dev:desktop:no-sandbox` 绕开（`electron-vite dev --noSandbox` 会以 `--no-sandbox` 启动）。注意 Electron 是 GUI 子系统程序，PowerShell 不会等待它、`$LASTEXITCODE` 为空，需用 `Start-Process -PassThru -Wait -RedirectStandardError` 才能拿到退出码与日志。主进程启动期异常会写入 `%TEMP%\skillink-startup-error.log` 并弹窗。
+> 排查提示：若 `pnpm dev:desktop` 在 `starting electron app...` 之后**没有任何输出**就退出、退出码为 `-2147483645`（`0x80000003`，STATUS_BREAKPOINT），说明死在 Chromium 沙箱引导阶段，此时应用代码一行都还没跑。`apps/desktop/scripts/dev.mjs` 会自动识别这个退出码并以 `--no-sandbox` 重试一次（仅开发期），同时打印警告；要跳过第一次尝试可直接用 `pnpm dev:desktop:no-sandbox`。注意 Electron 是 GUI 子系统程序，`cmd` 不会等待它，`%ERRORLEVEL%` 因此不可信；PowerShell 里也要用 `Start-Process -PassThru -Wait -RedirectStandardError` 才能拿到真实退出码与日志。主进程启动期异常会写入 `%TEMP%\skillink-startup-error.log` 并弹窗。
 
 关键模块：
 
