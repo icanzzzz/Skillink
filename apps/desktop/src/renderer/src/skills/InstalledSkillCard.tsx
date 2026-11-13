@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { sortVersionsDesc, type SkillEntry } from '@skillink/shared';
+import {
+  preferredVersion,
+  sortVersionsDesc,
+  type SkillEntry,
+} from '@skillink/shared';
+import { useConfirm } from '../Feedback.js';
 import { useI18n } from '../i18n.js';
 import { formatBytes } from '../format.js';
 import { TagEditor } from '../ui/TagEditor.js';
@@ -31,15 +36,30 @@ export function InstalledSkillCard({
   onRemove,
 }: InstalledSkillCardProps) {
   const { t } = useI18n();
+  const confirm = useConfirm();
   const versions = sortVersionsDesc(Object.keys(entry.versions));
-  const [selectedVersion, setSelectedVersion] = useState(versions[0] ?? '');
+  const fallbackVersion = preferredVersion(versions) ?? '';
+  const [selectedVersion, setSelectedVersion] = useState(fallbackVersion);
   const activeVersion = entry.versions[selectedVersion]
     ? selectedVersion
-    : versions[0] ?? '';
+    : fallbackVersion;
   const activeInfo = activeVersion ? entry.versions[activeVersion] : undefined;
 
   if (!activeInfo) {
     return null;
+  }
+
+  async function removeVersion(): Promise<void> {
+    const confirmed = await confirm({
+      title: t('skills.confirm.removeTitle'),
+      message: t('skills.confirm.remove', { name, version: activeVersion }),
+      confirmLabel: t('common.remove'),
+      cancelLabel: t('common.cancel'),
+      tone: 'danger',
+    });
+    if (confirmed) {
+      onRemove?.({ name, version: activeVersion });
+    }
   }
 
   return (
@@ -87,10 +107,12 @@ export function InstalledSkillCard({
         />
         <div className="version-actions">
           <button
-            className="danger"
+            className="link-button is-danger"
             type="button"
             disabled={busy || !onRemove}
-            onClick={() => onRemove?.({ name, version: activeVersion })}
+            onClick={() => {
+              void removeVersion();
+            }}
           >
             {t('common.remove')}
           </button>

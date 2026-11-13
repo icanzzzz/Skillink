@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   compareVersionDesc,
   highestVersion,
+  preferredVersion,
   sortVersionsDesc,
   suggestNextVersion,
 } from './version-order.js';
@@ -32,6 +33,13 @@ describe('version order', () => {
 
   it('strips build metadata before bumping', () => {
     expect(suggestNextVersion(['1.2.0+abc'])).toBe('1.2.1');
+  });
+
+  it('prefers the highest stable version as the default', () => {
+    expect(preferredVersion(['1.0.0', '1.1.0', '1.1.1-beta.1'])).toBe('1.1.0');
+    expect(preferredVersion(['1.1.1-beta.1'])).toBe('1.1.1-beta.1');
+    expect(preferredVersion([])).toBeNull();
+    expect(preferredVersion(['1.2.0+abc', '1.3.0'])).toBe('1.3.0');
   });
 
   it('compares descending', () => {

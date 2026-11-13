@@ -47,7 +47,7 @@ export function TargetCard({
       <div className="target-card-heading">
         <div className="target-card-title">
           <strong>{name}</strong>
-          <small>{target.id}</small>
+          {name === target.id ? null : <small>{target.id}</small>}
         </div>
         <span className="target-card-status" data-state={status}>
           {statusLabel(status, t)}
@@ -129,7 +129,7 @@ export function TargetCard({
           {t('targets.form.assignPackage')}
         </button>
         <button
-          className="secondary"
+          className="link-button"
           type="button"
           disabled={busy || !onSwitchMode}
           onClick={onSwitchMode}
@@ -139,7 +139,7 @@ export function TargetCard({
             : t('targets.actions.switchToLink')}
         </button>
         <button
-          className="secondary"
+          className="link-button"
           type="button"
           disabled={busy || !onToggleEnabled}
           onClick={onToggleEnabled}

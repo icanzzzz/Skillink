@@ -895,6 +895,8 @@ GUI 交互约定：
 - 默认值可见：能从快照或上下文推导的默认值必须写入表单值并保持可编辑，不得让 placeholder 承担默认值职责；确实没有默认值的字段，placeholder 使用“必填”或“可选”，不使用示例值；
 - 选择优先：引用已有实体（技能、包、版本、标签、目标）的字段一律从快照派生选择器，不要求用户手写 `name@version`；只有“新建”语义才出现文本输入，并用显式模式切换区分；
 - 拖拽与选择器：文件夹类输入支持拖拽与系统文件夹选择器，手动输入路径是折叠的兜底入口；
+- 默认选中稳定版：卡片与选择器默认选中最高稳定版本（`preferredVersion`），只有全部版本都是预发布时才默认选中预发布版本；预发布版本仍可手动切换；
+- 状态用业务语言：`status.*` 显示为“已同步/版本不一致/未安装”一类句子，不在界面上直接暴露 `wrong-version` 这种机器枚举；
 - renderer 目录：按领域分组（`packages/`、`skills/`、`targets/`），跨领域展示原语放 `ui/`，跨领域派生逻辑放根目录 `library.ts`。
 
 GUI 的刷新通过一次只读 `skillink snapshot --json` 获取 skills、packages、route、status、doctor 和 target 解析结果。Renderer 只调用 preload API；Electron 主进程负责 IPC 校验、argv 映射和串行队列，不直接调用 Core。语言包操作同样走 `locale ... --json` 命令层。
@@ -1049,7 +1051,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 
 ## 10. 测试策略
 
-当前验证（2026-11-13）：87 个测试文件、662 个测试；`npx tsc -p tsconfig.json --noEmit` 与 `electron-vite build` 通过。依赖真实 junction/symlink 与特殊权限的 34 个用例在受限沙箱下失败，属环境限制而非实现缺陷。
+当前验证（2026-11-13）：87 个测试文件、663 个测试；`npx tsc -p tsconfig.json --noEmit` 与 `electron-vite build` 通过。依赖真实 junction/symlink 与特殊权限的 34 个用例在受限沙箱下失败，属环境限制而非实现缺陷。
 
 | 层级 | 内容 |
 |---|---|
@@ -1159,7 +1161,7 @@ MVP 不依赖数据库；所有状态从三个数据配置、`skills/` 内容和
 
 ### 11.1 当前实现验证
 
-- `pnpm test`：87 个测试文件、662 个测试（2026-11-13）；其中 34 个依赖 junction/symlink 与特殊权限的用例需在允许创建链接的机器上运行；
+- `pnpm test`：87 个测试文件、663 个测试（2026-11-13）；其中 34 个依赖 junction/symlink 与特殊权限的用例需在允许创建链接的机器上运行；
 - `pnpm typecheck`：通过；
 - `pnpm build`：CLI 与 Electron 桌面端构建成功；
 - 真实 CLI E2E：skill 安装、package 创建、target/route、apply、status/doctor、冲突修复、gc dry-run 均跑通；

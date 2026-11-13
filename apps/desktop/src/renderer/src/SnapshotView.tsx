@@ -142,14 +142,6 @@ export function SnapshotView({
           </div>
           <div className="panel-heading-tools">
             <span className="count">{targetCount}</span>
-            <button
-              className="secondary"
-              type="button"
-              onClick={() => onNavigate?.('targets')}
-              disabled={!onNavigate}
-            >
-              {t('app.actions.manageTargets')}
-            </button>
           </div>
         </div>
 
@@ -170,10 +162,10 @@ export function SnapshotView({
                 <div className="table-row" key={target.id}>
                   <span>
                     <strong>{target.label ?? target.id}</strong>
-                    <small>{target.id}</small>
+                    {target.label ? <small>{target.id}</small> : null}
                   </span>
                   <span className="path-value">{target.path}</span>
-                  <span>{target.mode}</span>
+                  <span>{t(`targets.mode.${target.mode}`, {}, target.mode)}</span>
                   <span>{Object.keys(target.packages).length}</span>
                   <span>
                     {summary?.error

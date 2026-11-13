@@ -254,7 +254,31 @@ export function CreatePackageDialog({
             </label>
           )}
 
-          <label className="field">
+          <div className="field">
+            <span>{t('packages.form.version')}</span>
+            <input
+              value={draft.version}
+              onChange={(event) => {
+                const value = event.target.value;
+                setDraft((current) => setDraftVersion(current, value));
+              }}
+              placeholder={t('common.required')}
+            />
+            {existingVersions.length === 0 ? null : (
+              <p className="field-note">
+                {t('packages.form.existingVersions', {
+                  versions: existingVersions.join(', '),
+                })}
+              </p>
+            )}
+            {versionTaken ? (
+              <p className="field-error">
+                {t('packages.form.versionTaken', { version: draft.version })}
+              </p>
+            ) : null}
+          </div>
+
+          <label className="field field-wide">
             <span>{t('packages.form.description')}</span>
             <input
               value={draft.description}
@@ -268,32 +292,6 @@ export function CreatePackageDialog({
         </section>
 
         <section className="form-section field-wide">
-          <label className="field">
-            <span>{t('packages.form.version')}</span>
-            <input
-              value={draft.version}
-              onChange={(event) => {
-                const value = event.target.value;
-                setDraft((current) => setDraftVersion(current, value));
-              }}
-              placeholder={t('common.required')}
-            />
-          </label>
-          {existingVersions.length === 0 ? null : (
-            <p className="field-note">
-              {t('packages.form.existingVersions', {
-                versions: existingVersions.join(', '),
-              })}
-            </p>
-          )}
-          {versionTaken ? (
-            <p className="field-error">
-              {t('packages.form.versionTaken', { version: draft.version })}
-            </p>
-          ) : null}
-        </section>
-
-        <section className="form-section field-wide">
           <ChoiceList
             legend={t('packages.form.pickSkills')}
             items={skillItems}
@@ -301,6 +299,7 @@ export function CreatePackageDialog({
             onToggle={toggleSkill}
             searchPlaceholder={t('packages.form.searchSkills')}
             emptyMessage={t('packages.form.noSkills')}
+            searchable={skillItems.length > 6}
           />
           {skillCount === 0 ? null : (
             <div className="selected-versions">
@@ -339,6 +338,7 @@ export function CreatePackageDialog({
             onToggle={toggleNested}
             searchPlaceholder={t('packages.form.searchPackages')}
             emptyMessage={t('packages.form.noNestedPackages')}
+            searchable={nestedItems.length > 6}
           />
           {packageCount === 0 ? null : (
             <div className="selected-versions">

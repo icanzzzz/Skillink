@@ -27,6 +27,20 @@ export function highestVersion(versions: readonly string[]): string | null {
   return sortVersionsDesc(versions)[0] ?? null;
 }
 
+/**
+ * The version a view should select first: the highest stable release, falling
+ * back to the highest version when only prereleases are published. Betas stay
+ * selectable, they just do not pre-empt a stable release as the default.
+ */
+export function preferredVersion(versions: readonly string[]): string | null {
+  const ordered = sortVersionsDesc(versions);
+  const stable = ordered.find((version) => {
+    const parsed = parse(version);
+    return parsed !== null && parsed.prerelease.length === 0;
+  });
+  return stable ?? ordered[0] ?? null;
+}
+
 export function suggestNextVersion(versions: readonly string[]): string {
   const highest = highestVersion(versions.filter(isValidVersion));
   if (highest === null) {

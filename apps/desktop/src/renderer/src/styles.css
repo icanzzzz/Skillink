@@ -173,7 +173,7 @@ button {
 
 .brand span:not(.brand-mark) {
   color: var(--gold);
-  font-size: 8.5px;
+  font-size: 9.5px;
   font-weight: 650;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -189,7 +189,7 @@ button {
   margin: 0 0 8px;
   padding: 0 11px;
   color: var(--gold);
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -263,7 +263,7 @@ button {
   border-radius: 12px;
   background: rgba(255, 253, 247, 0.55);
   color: var(--gold);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -287,7 +287,7 @@ button {
 .sidebar-foot code {
   color: var(--ink-muted);
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;
@@ -321,7 +321,7 @@ button {
 .eyebrow {
   margin: 0;
   color: var(--gold);
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -368,7 +368,7 @@ button {
   gap: 7px;
   align-items: center;
   color: var(--gold);
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -465,7 +465,7 @@ button {
   align-items: center;
   padding: 8px 13px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 700;
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -550,7 +550,7 @@ button {
 
 .stat-label {
   color: var(--gold);
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -569,13 +569,13 @@ button {
 
 .stat > span:last-child {
   color: var(--ink-muted);
-  font-size: 11.5px;
+  font-size: 12.5px;
 }
 
 .path-value {
   color: var(--ink-muted) !important;
   font-family: var(--font-mono) !important;
-  font-size: 10.5px !important;
+  font-size: 11.5px !important;
 }
 
 .panel {
@@ -614,7 +614,7 @@ button {
   border-radius: 8px;
   background: var(--gold-soft);
   color: var(--gold-strong);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 700;
   text-align: center;
 }
@@ -644,7 +644,7 @@ button {
   margin: 0 0 18px;
   padding: 0 2px;
   color: var(--ink-muted);
-  font-size: 12.5px;
+  font-size: 13.5px;
   line-height: 1.6;
 }
 
@@ -666,7 +666,7 @@ button {
   padding: 13px 6px;
   border-top: 1px solid var(--line-soft);
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: 13px;
   transition: background-color 0.15s ease;
 }
 
@@ -692,7 +692,7 @@ button {
   padding-top: 2px;
   padding-bottom: 9px;
   color: var(--gold);
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -713,16 +713,20 @@ button {
 .table-row small {
   color: var(--ink-faint);
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 10.5px;
 }
 
 .package-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(245px, 1fr));
+  align-items: stretch;
+  grid-template-columns: repeat(auto-fit, minmax(292px, 1fr));
   gap: 12px;
 }
 
 .package-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -753,16 +757,16 @@ button {
 
 .package-title span {
   color: var(--gold);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .package-card p {
-  margin: 8px 0 12px;
+  margin: 0;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -777,13 +781,13 @@ button {
   gap: 10px;
   justify-content: space-between;
   color: var(--ink-muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .version-row code {
   color: var(--accent-strong);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .issues .issue-row {
@@ -793,7 +797,7 @@ button {
   padding: 11px 2px;
   border-top: 1px solid var(--line-soft);
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .issue-row code {
@@ -803,7 +807,7 @@ button {
   background: var(--warn-soft);
   color: var(--warn);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   white-space: nowrap;
 }
 
@@ -815,7 +819,7 @@ button {
   background: var(--danger-soft);
   box-shadow: inset 3px 0 0 var(--danger);
   color: var(--danger);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
 }
 
@@ -917,7 +921,7 @@ button {
 }
 
 .install-alert strong {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -925,7 +929,7 @@ button {
 .install-alert p {
   margin: 6px 0 8px;
   color: var(--danger);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .install-link-list {
@@ -944,7 +948,7 @@ button {
 .install-result {
   margin: 10px 0 0;
   color: var(--accent-strong) !important;
-  font-size: 11px !important;
+  font-size: 12px !important;
 }
 
 .install-actions {
@@ -964,7 +968,7 @@ button {
 
 .field > span {
   color: var(--gold);
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -980,7 +984,7 @@ button {
   border-radius: 9px;
   background: var(--surface);
   color: var(--ink);
-  font-size: 12px;
+  font-size: 13px;
   transition:
     border-color 0.16s ease,
     box-shadow 0.16s ease,
@@ -1017,7 +1021,7 @@ button {
 .field textarea {
   min-height: 76px;
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.55;
   resize: vertical;
 }
@@ -1046,7 +1050,7 @@ button {
   background: var(--surface);
   box-shadow: 0 1px 1px rgba(55, 47, 33, 0.03);
   color: var(--ink-soft);
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 650;
   cursor: pointer;
   transition:
@@ -1146,7 +1150,7 @@ button {
   margin-top: 3px;
   color: var(--ink-faint);
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 10.5px;
   overflow-wrap: anywhere;
 }
 
@@ -1157,7 +1161,7 @@ button {
   border-radius: 999px;
   background: var(--surface-muted);
   color: var(--ink-muted);
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 650;
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -1195,7 +1199,7 @@ button {
   border-radius: 999px;
   background: var(--surface-muted);
   color: var(--ink-muted);
-  font-size: 9.5px;
+  font-size: 10.5px;
   line-height: 1.4;
 }
 
@@ -1221,7 +1225,7 @@ button {
   padding: 8px 0;
   border-top: 1px solid var(--line-soft);
   color: var(--ink-soft);
-  font-size: 11.5px;
+  font-size: 12.5px;
 }
 
 .target-package-row:first-child {
@@ -1240,20 +1244,20 @@ button {
 .target-package-name code {
   color: var(--accent-strong);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11.5px;
   overflow-wrap: anywhere;
 }
 
 .target-package-name small {
   color: var(--ink-faint);
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 10.5px;
 }
 
 .target-package-state {
   flex: 0 0 auto;
   color: var(--ink-muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .target-package-actions {
@@ -1265,7 +1269,7 @@ button {
   margin: 0;
   padding: 8px 0;
   color: var(--ink-faint);
-  font-size: 11.5px;
+  font-size: 12.5px;
 }
 
 .target-package-form {
@@ -1292,7 +1296,7 @@ button {
 .target-card .row-actions .secondary,
 .target-card .row-actions .danger {
   padding: 6px 9px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   white-space: nowrap;
 }
 
@@ -1304,7 +1308,7 @@ button {
 .table .row-actions .secondary,
 .table .row-actions .danger {
   padding: 6px 9px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   white-space: nowrap;
 }
 
@@ -1324,7 +1328,7 @@ button {
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent-strong);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .tag code {
@@ -1378,7 +1382,7 @@ button {
   background: var(--surface-muted);
   color: var(--ink-muted);
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 10.5px;
   line-height: 1.35;
   cursor: pointer;
   transition:
@@ -1407,6 +1411,7 @@ button {
 }
 
 .version-detail {
+  margin-top: auto;
   padding: 10px;
   border: 1px solid var(--line-soft);
   border-radius: 11px;
@@ -1431,12 +1436,12 @@ button {
 .version-actions input {
   flex: 1;
   padding: 6px 9px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .version-actions button {
   padding: 5px 10px;
-  font-size: 10.5px;
+  font-size: 11.5px;
 }
 
 .gc-report {
@@ -1448,7 +1453,7 @@ button {
 .gc-report > p:first-child {
   margin: 0 0 8px;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .sidebar-bottom {
@@ -1469,7 +1474,7 @@ button {
   border-radius: 10px;
   background: var(--warn-soft);
   color: var(--warn);
-  font-size: 10.5px;
+  font-size: 11.5px;
   line-height: 1.45;
 }
 
@@ -1505,7 +1510,7 @@ button {
 
 .language-trigger-label {
   color: var(--gold);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1515,7 +1520,7 @@ button {
   margin-left: auto;
   overflow: hidden;
   color: var(--ink);
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1556,14 +1561,14 @@ button {
 
 .language-info span {
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
 .language-info code {
   color: var(--ink-soft);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11.5px;
 }
 
 .language-badges {
@@ -1578,7 +1583,7 @@ button {
   border-radius: 999px;
   background: var(--surface);
   color: var(--ink-muted);
-  font-size: 8.5px;
+  font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1602,7 +1607,7 @@ button {
   border-radius: var(--radius-sm);
   background: var(--danger-soft);
   color: var(--danger);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 @media (max-width: 1020px) {
@@ -1814,7 +1819,7 @@ button {
 
 .library-list span {
   color: var(--gold-strong);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1825,7 +1830,7 @@ button {
   grid-column: 1 / -1;
   overflow-wrap: anywhere;
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -1954,7 +1959,7 @@ button {
   background: var(--surface);
   box-shadow: 0 20px 45px -32px rgba(55, 47, 33, 0.55);
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   pointer-events: auto;
   animation: toast-in 0.2s ease;
@@ -2104,7 +2109,7 @@ button {
   display: flex;
   gap: 7px;
   align-items: center;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -2122,7 +2127,7 @@ button {
 .control-plane-trigger code {
   color: var(--ink-muted);
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;
@@ -2176,7 +2181,7 @@ button {
 .control-plane-info code {
   color: var(--ink-soft);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 
@@ -2192,7 +2197,7 @@ button {
   border-radius: 999px;
   background: var(--surface);
   color: var(--ink-muted);
-  font-size: 8.5px;
+  font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2220,7 +2225,7 @@ button {
   border-radius: var(--radius-sm);
   background: var(--warn-soft);
   color: var(--warn);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -2231,7 +2236,7 @@ button {
   border-radius: var(--radius-sm);
   background: var(--danger-soft);
   color: var(--danger);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .control-plane-empty {
@@ -2313,7 +2318,7 @@ button {
   padding: 7px 9px;
   border-radius: 7px;
   color: var(--ink);
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
   transition:
     background-color 0.16s ease,
@@ -2341,25 +2346,25 @@ button {
 
 .choice-item small {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: 11.5px;
 }
 
 .choice-item code {
   color: var(--accent-strong);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11.5px;
 }
 
 .choice-item em {
   color: var(--warn);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-style: normal;
 }
 
 .choice-meta {
   color: var(--accent-strong);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11.5px;
   white-space: nowrap;
 }
 
@@ -2380,7 +2385,7 @@ button {
   overflow: hidden;
   color: var(--ink);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 12.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2393,7 +2398,7 @@ button {
   border-radius: 7px;
   background: var(--surface-raised);
   color: var(--ink);
-  font-size: 11.5px;
+  font-size: 12.5px;
   cursor: pointer;
   transition:
     border-color 0.16s ease,
@@ -2420,7 +2425,7 @@ button {
 .choice-legend {
   margin: 0;
   color: var(--gold);
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -2433,7 +2438,7 @@ button {
   border-radius: 8px;
   background: var(--surface);
   color: var(--ink);
-  font-size: 11.5px;
+  font-size: 12.5px;
   transition:
     border-color 0.16s ease,
     box-shadow 0.16s ease;
@@ -2471,7 +2476,7 @@ button {
   border-radius: 999px;
   background: var(--surface);
   color: var(--ink);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .tag-add input:focus {
@@ -2495,7 +2500,7 @@ button {
   border-radius: 7px;
   background: transparent;
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   transition:
     background-color 0.16s ease,
@@ -2515,7 +2520,7 @@ button {
 .selection-summary {
   margin: 8px 0 0;
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -2544,7 +2549,7 @@ button {
 
 .drop-zone strong {
   color: var(--ink);
-  font-size: 12.5px;
+  font-size: 13.5px;
 }
 
 .drop-zone.is-over strong {
@@ -2553,18 +2558,18 @@ button {
 
 .drop-zone small {
   color: var(--ink-faint);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .field-note {
   color: var(--ink-faint);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
 .field-error {
   color: var(--danger);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -2577,7 +2582,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .form-section {
@@ -2597,7 +2602,7 @@ button {
 .manual-path {
   margin-top: 10px;
   color: var(--ink-muted);
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.5;
 }
 
@@ -2621,7 +2626,7 @@ button {
   justify-content: space-between;
   margin: 12px 0 0;
   color: var(--ink-muted);
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.5;
 }
 
@@ -2639,7 +2644,7 @@ button {
   border: none;
   background: none;
   color: var(--ink-muted);
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.01em;
   cursor: pointer;
@@ -2682,7 +2687,7 @@ button {
   border-radius: 9px;
   background: var(--surface-muted);
   color: var(--ink-muted);
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.5;
 }
 
@@ -2708,12 +2713,12 @@ button {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface-muted);
-  font-size: 11.5px;
+  font-size: 12.5px;
 }
 
 .assign-target span {
   color: var(--gold);
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -2721,7 +2726,7 @@ button {
 
 .assign-target strong {
   color: var(--ink);
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 650;
 }
 
@@ -2730,7 +2735,7 @@ button {
   overflow-wrap: anywhere;
   color: var(--ink-faint);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .assign-preview {
@@ -2743,7 +2748,7 @@ button {
 
 .assign-preview span {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: 11.5px;
 }
 
 .target-form {

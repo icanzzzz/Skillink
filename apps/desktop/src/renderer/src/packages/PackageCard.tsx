@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { PackageEntry, PackageFile, SkillFile } from '@skillink/shared';
-import { sortVersionsDesc } from '@skillink/shared';
+import { preferredVersion, sortVersionsDesc } from '@skillink/shared';
 import { compositionText } from '../format.js';
 import { useConfirm } from '../Feedback.js';
 import { useI18n } from '../i18n.js';
@@ -36,12 +36,11 @@ export function PackageCard({
   const { t } = useI18n();
   const confirm = useConfirm();
   const versions = sortVersionsDesc(Object.keys(entry.versions));
-  const highest = versions[0];
   const [shownVersion, setShownVersion] = useState<string | null>(null);
   const activeVersion =
     shownVersion !== null && versions.includes(shownVersion)
       ? shownVersion
-      : (highest ?? '');
+      : (preferredVersion(versions) ?? '');
   const composition = entry.versions[activeVersion];
 
   async function removeVersion(version: string): Promise<void> {
@@ -110,7 +109,7 @@ export function PackageCard({
                 {t('packages.actions.copy')}
               </button>
               <button
-                className="danger"
+                className="link-button is-danger"
                 type="button"
                 disabled={busy || !onRemove}
                 onClick={() => {
