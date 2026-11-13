@@ -8,7 +8,7 @@ const items = [
     value: 'alpha',
     label: 'Alpha',
     description: 'First skill',
-    meta: '1.0.0',
+    tags: [{ tag: 'stable', version: '1.0.0' }],
   },
   {
     value: 'beta',
@@ -39,6 +39,8 @@ describe('ChoiceList', () => {
     expect(html).toContain('disabled=""');
     expect(html).toContain('aria-label="Skills"');
     expect(html).toContain('Already added');
+    expect(html).toContain('choice-tag');
+    expect(html).toContain('stable');
   });
 
   it('renders the empty message when there are no items', () => {

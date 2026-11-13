@@ -51,6 +51,23 @@ describe('CreatePackageDialog', () => {
     expect(html).toContain('data-size="lg"');
   });
 
+  it('lists skill candidates as name plus tags, without descriptions', () => {
+    const html = renderWithMessages(
+      <CreatePackageDialog
+        open
+        packages={packages}
+        skills={skills}
+        onClose={() => undefined}
+      />,
+      EN_MESSAGES,
+    );
+
+    expect(html).toContain('choice-tag');
+    expect(html).toContain('>latest<');
+    expect(html).not.toContain('PDF toolkit');
+    expect(html).not.toContain('Frontend baseline');
+  });
+
   it('prefills the version when copying an existing package version', () => {
     const html = renderWithMessages(
       <CreatePackageDialog

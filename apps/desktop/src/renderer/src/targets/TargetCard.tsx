@@ -94,7 +94,7 @@ export function TargetCard({
               </span>
               <span className="target-package-actions row-actions">
                 <button
-                  className="link-button"
+                  className="mini-button"
                   type="button"
                   disabled={busy || !onToggleRoute}
                   onClick={() =>
@@ -106,7 +106,7 @@ export function TargetCard({
                     : t('targets.actions.disableRoute')}
                 </button>
                 <button
-                  className="link-button is-danger"
+                  className="mini-button is-danger"
                   type="button"
                   disabled={busy || !onRemoveRoute}
                   onClick={() => onRemoveRoute?.(packageName)}
@@ -129,7 +129,7 @@ export function TargetCard({
           {t('targets.form.assignPackage')}
         </button>
         <button
-          className="link-button"
+          className="mini-button"
           type="button"
           disabled={busy || !onSwitchMode}
           onClick={onSwitchMode}
@@ -139,7 +139,7 @@ export function TargetCard({
             : t('targets.actions.switchToLink')}
         </button>
         <button
-          className="link-button"
+          className="mini-button"
           type="button"
           disabled={busy || !onToggleEnabled}
           onClick={onToggleEnabled}
@@ -149,7 +149,7 @@ export function TargetCard({
             : t('targets.actions.enableTarget')}
         </button>
         <button
-          className="link-button is-danger target-card-remove"
+          className="mini-button is-danger target-card-remove"
           type="button"
           disabled={busy || !onRemoveTarget}
           onClick={onRemoveTarget}

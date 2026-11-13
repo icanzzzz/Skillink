@@ -107,7 +107,7 @@ export function InstalledSkillCard({
         />
         <div className="version-actions">
           <button
-            className="link-button is-danger"
+            className="mini-button is-danger"
             type="button"
             disabled={busy || !onRemove}
             onClick={() => {

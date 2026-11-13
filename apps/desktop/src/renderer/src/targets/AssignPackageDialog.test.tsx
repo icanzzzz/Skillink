@@ -78,7 +78,8 @@ describe('AssignPackageDialog', () => {
     });
 
     expect(html).toContain('already assigned');
-    expect(html).toMatch(/<option[^>]*value="frontend"[^>]*disabled="">/);
+    expect(html).toMatch(/<button[^>]*class="picker-option"[^>]*disabled="">/);
+    expect(html).toContain('>frontend</span>');
   });
 
   it('previews the direct skill count of the selected version', () => {
@@ -102,13 +103,17 @@ describe('AssignPackageDialog', () => {
     expect(html).toContain('latest → 1.2.0');
   });
 
-  it('uses selectors instead of a free-text package field', () => {
+  it('offers package candidates as buttons that show only names and tags', () => {
     const html = renderAssign();
 
     expect(html).not.toContain('<datalist');
     expect(html).not.toContain('class="target-package-form"');
     expect(html).not.toContain('<input');
-    expect(html.match(/<select/g)).toHaveLength(2);
+    expect(html).toContain('class="picker-option"');
+    expect(html).toContain('choice-tag');
+    expect(html.match(/<select/g)).toHaveLength(1);
+    // Descriptions belong to the package page, not to a picker row.
+    expect(html).not.toContain('<small>');
   });
 
   it('renders nothing while closed', () => {

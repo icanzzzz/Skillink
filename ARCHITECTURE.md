@@ -897,6 +897,8 @@ GUI 交互约定：
 - 拖拽与选择器：文件夹类输入支持拖拽与系统文件夹选择器，手动输入路径是折叠的兜底入口；
 - 默认选中稳定版：卡片与选择器默认选中最高稳定版本（`preferredVersion`），只有全部版本都是预发布时才默认选中预发布版本；预发布版本仍可手动切换；
 - 状态用业务语言：`status.*` 显示为“已同步/版本不一致/未安装”一类句子，不在界面上直接暴露 `wrong-version` 这种机器枚举；
+- 可点即按钮：所有可点元素都是 `<button>`（卡片内的次级动作用 `.mini-button` 小按钮，不用文字链接伪装），每张卡片最多一个 `.primary`；
+- 选择器只写身份：候选行只显示名称与标签（tag），不搬运描述等正文信息，正文留给详情页；
 - renderer 目录：按领域分组（`packages/`、`skills/`、`targets/`），跨领域展示原语放 `ui/`，跨领域派生逻辑放根目录 `library.ts`。
 
 GUI 的刷新通过一次只读 `skillink snapshot --json` 获取 skills、packages、route、status、doctor 和 target 解析结果。Renderer 只调用 preload API；Electron 主进程负责 IPC 校验、argv 映射和串行队列，不直接调用 Core。语言包操作同样走 `locale ... --json` 命令层。

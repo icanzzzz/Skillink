@@ -1,10 +1,15 @@
 import { useState } from 'react';
 
+export interface ChoiceTag {
+  tag: string;
+  version: string;
+}
+
 export interface ChoiceItem {
   value: string;
   label: string;
   description?: string;
-  meta?: string;
+  tags?: readonly ChoiceTag[];
   disabled?: boolean;
   disabledReason?: string;
 }
@@ -41,7 +46,10 @@ export function ChoiceList({
       : items.filter(
           (item) =>
             item.label.toLowerCase().includes(term) ||
-            (item.description ?? '').toLowerCase().includes(term),
+            (item.description ?? '').toLowerCase().includes(term) ||
+            (item.tags ?? []).some((entry) =>
+              entry.tag.toLowerCase().includes(term),
+            ),
         );
 
   return (
@@ -75,16 +83,23 @@ export function ChoiceList({
                 />
                 <span className="choice-body">
                   <span className="choice-name">{item.label}</span>
+                  {item.tags === undefined || item.tags.length === 0 ? null : (
+                    <span className="choice-tags">
+                      {item.tags.map((entry) => (
+                        <span className="choice-tag" key={entry.tag}>
+                          {entry.tag}
+                          <em>{entry.version}</em>
+                        </span>
+                      ))}
+                    </span>
+                  )}
                   {item.description === undefined ? null : (
                     <small>{item.description}</small>
                   )}
                   {item.disabled && item.disabledReason !== undefined ? (
-                    <em>{item.disabledReason}</em>
+                    <em className="choice-reason">{item.disabledReason}</em>
                   ) : null}
                 </span>
-                {item.meta === undefined ? null : (
-                  <code className="choice-meta">{item.meta}</code>
-                )}
               </label>
             </li>
           ))}

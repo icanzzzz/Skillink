@@ -9,7 +9,7 @@ import { Modal } from '../Modal.js';
 import { useI18n } from '../i18n.js';
 import { useToast } from '../Feedback.js';
 import { errorMessage } from '../format.js';
-import { ChoiceList, type ChoiceItem } from '../ui/ChoiceList.js';
+import { ChoiceList, type ChoiceItem, type ChoiceTag } from '../ui/ChoiceList.js';
 import { VersionSelect } from '../ui/VersionSelect.js';
 import {
   copyPackageDraft,
@@ -70,13 +70,19 @@ export function CreatePackageDialog({
   const packageCount = Object.keys(draft.packages).length;
   const canSubmit = onCreatePackage !== undefined && issues.length === 0;
 
+  // The pickers stay deliberately thin: a candidate is a name plus the tags
+  // it carries, so scanning a long library is one line per entry. Version
+  // selection happens afterwards on the selected rows.
+  function tagChips(option: { tags: Record<string, string> }): ChoiceTag[] {
+    return Object.entries(option.tags)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([tag, version]) => ({ tag, version }));
+  }
+
   const skillItems: ChoiceItem[] = skillChoices.map((option) => ({
     value: option.name,
     label: option.name,
-    ...(option.description === undefined
-      ? {}
-      : { description: option.description }),
-    meta: t('overview.library.versions', { count: option.versions.length }),
+    tags: tagChips(option),
   }));
 
   const nestedItems: ChoiceItem[] = packageChoices.map((option) => {
@@ -84,10 +90,7 @@ export function CreatePackageDialog({
     return {
       value: option.name,
       label: option.name,
-      ...(option.description === undefined
-        ? {}
-        : { description: option.description }),
-      meta: t('overview.library.versions', { count: option.versions.length }),
+      tags: tagChips(option),
       disabled: selfReference,
       ...(selfReference
         ? { disabledReason: t('packages.form.selfReference') }

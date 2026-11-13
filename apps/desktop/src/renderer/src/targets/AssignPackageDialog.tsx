@@ -159,30 +159,42 @@ export function AssignPackageDialog({
           id="assign-package-form"
           onSubmit={(event) => void submit(event)}
         >
-          <label className="field">
+          <div className="field">
             <span>{t('targets.form.package')}</span>
-            <select
-              value={draft.name}
-              onChange={(event) => choosePackage(event.target.value)}
-              disabled={busy}
-              data-autofocus
-            >
+            <ul className="picker-list">
               {options.map((option) => {
                 const already = assigned.includes(option.name);
+                const active = draft.name === option.name;
                 return (
-                  <option
-                    value={option.name}
-                    key={option.name}
-                    disabled={already}
-                  >
-                    {already
-                      ? `${option.name} — ${t('targets.assign.alreadyAssigned')}`
-                      : option.name}
-                  </option>
+                  <li key={option.name}>
+                    <button
+                      className="picker-option"
+                      type="button"
+                      aria-pressed={active}
+                      data-autofocus={active ? 'true' : undefined}
+                      disabled={busy || already}
+                      onClick={() => choosePackage(option.name)}
+                    >
+                      <span className="picker-option-name">{option.name}</span>
+                      {Object.entries(option.tags)
+                        .sort(([left], [right]) => left.localeCompare(right))
+                        .map(([tag, version]) => (
+                          <span className="choice-tag" key={tag}>
+                            {tag}
+                            <em>{version}</em>
+                          </span>
+                        ))}
+                      {already ? (
+                        <em className="picker-option-note">
+                          {t('targets.assign.alreadyAssigned')}
+                        </em>
+                      ) : null}
+                    </button>
+                  </li>
                 );
               })}
-            </select>
-          </label>
+            </ul>
+          </div>
 
           <label className="field">
             <span>{t('targets.form.versionOrTag')}</span>
