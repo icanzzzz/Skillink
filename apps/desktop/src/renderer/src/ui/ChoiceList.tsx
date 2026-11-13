@@ -19,6 +19,11 @@ export interface ChoiceListProps {
   searchable?: boolean;
 }
 
+/**
+ * Searchable checkbox list used wherever the user picks existing library
+ * entries. The legend is rendered as a visible micro-caption so a dialog with
+ * two of these still reads as two labelled sections.
+ */
 export function ChoiceList({
   legend,
   items,
@@ -41,8 +46,10 @@ export function ChoiceList({
 
   return (
     <div className="choice-list">
+      <p className="choice-legend">{legend}</p>
       {searchable ? (
         <input
+          className="choice-search"
           type="search"
           aria-label={legend}
           placeholder={searchPlaceholder}
@@ -55,26 +62,31 @@ export function ChoiceList({
       ) : (
         <ul className="choice-items">
           {visible.map((item) => (
-            <label
-              className={`choice-item${item.disabled ? ' is-disabled' : ''}`}
-              data-disabled={item.disabled ? 'true' : undefined}
-              key={item.value}
-            >
-              <input
-                type="checkbox"
-                checked={selected.includes(item.value)}
-                disabled={item.disabled}
-                onChange={() => onToggle(item.value)}
-              />
-              <span className="choice-name">{item.label}</span>
-              {item.description === undefined ? null : (
-                <small>{item.description}</small>
-              )}
-              {item.meta === undefined ? null : <code>{item.meta}</code>}
-              {item.disabled && item.disabledReason !== undefined ? (
-                <em>{item.disabledReason}</em>
-              ) : null}
-            </label>
+            <li key={item.value}>
+              <label
+                className={`choice-item${item.disabled ? ' is-disabled' : ''}`}
+                data-disabled={item.disabled ? 'true' : undefined}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(item.value)}
+                  disabled={item.disabled}
+                  onChange={() => onToggle(item.value)}
+                />
+                <span className="choice-body">
+                  <span className="choice-name">{item.label}</span>
+                  {item.description === undefined ? null : (
+                    <small>{item.description}</small>
+                  )}
+                  {item.disabled && item.disabledReason !== undefined ? (
+                    <em>{item.disabledReason}</em>
+                  ) : null}
+                </span>
+                {item.meta === undefined ? null : (
+                  <code className="choice-meta">{item.meta}</code>
+                )}
+              </label>
+            </li>
           ))}
         </ul>
       )}

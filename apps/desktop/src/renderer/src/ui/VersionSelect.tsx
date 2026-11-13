@@ -1,7 +1,9 @@
 import type { VersionChoice } from '../library.js';
 
 export interface VersionSelectProps {
+  /** Caption for assistive tech; also the meaning of the value column. */
   label: string;
+  /** Library entry the version belongs to, shown next to the select. */
   name: string;
   options: VersionChoice[];
   value: string;
@@ -9,6 +11,11 @@ export interface VersionSelectProps {
   disabled?: boolean;
 }
 
+/**
+ * Compact "entry + version" row. Repeating a full-width labelled field for
+ * every picked skill made the package composer read as a wall of dropdowns,
+ * so the entry name lives on the left and the select keeps a fixed width.
+ */
 export function VersionSelect({
   label,
   name,
@@ -20,8 +27,10 @@ export function VersionSelect({
   const known = options.some((option) => option.value === value);
 
   return (
-    <label className="field version-select">
-      <span>{label}</span>
+    <div className="version-select">
+      <span className="version-select-name" title={name}>
+        {name}
+      </span>
       <select
         aria-label={`${label}: ${name}`}
         value={value}
@@ -35,6 +44,6 @@ export function VersionSelect({
           </option>
         ))}
       </select>
-    </label>
+    </div>
   );
 }

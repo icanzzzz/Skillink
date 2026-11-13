@@ -84,7 +84,6 @@ export function PackageCard({
         <div className="version-detail">
           <div className="version-block">
             <div className="version-row">
-              <code>{activeVersion}</code>
               <span>
                 {compositionText(composition, t, {
                   skills: 'packages.composition.skills',

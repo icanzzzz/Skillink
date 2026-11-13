@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import type { PackageFile, SkillFile } from '@skillink/shared';
 import {
   packageOptions,
@@ -52,6 +52,7 @@ export function CreatePackageDialog({
 }: CreatePackageDialogProps) {
   const { t } = useI18n();
   const { pushToast } = useToast();
+  const formId = useId();
   const [draft, setDraft] = useState<PackageDraft>(() =>
     preset
       ? copyPackageDraft(packages, preset.name, preset.version)
@@ -164,6 +165,26 @@ export function CreatePackageDialog({
       size="lg"
       closeLabel={t('common.close')}
       onClose={onClose}
+      footer={
+        <>
+          <button
+            className="secondary"
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+          >
+            {t('common.cancel')}
+          </button>
+          <button
+            className="primary"
+            type="submit"
+            form={formId}
+            disabled={busy || !canSubmit}
+          >
+            {t('packages.create')}
+          </button>
+        </>
+      }
     >
       {preset === null ? null : (
         <p className="hint">
@@ -173,7 +194,7 @@ export function CreatePackageDialog({
         </p>
       )}
 
-      <form className="form-grid" onSubmit={submit}>
+      <form className="form-grid" id={formId} onSubmit={submit}>
         <section className="form-section field-wide">
           <div
             className="segmented"
@@ -281,27 +302,33 @@ export function CreatePackageDialog({
             searchPlaceholder={t('packages.form.searchSkills')}
             emptyMessage={t('packages.form.noSkills')}
           />
-          {Object.keys(draft.skills).map((name) => {
-            const option = skillChoices.find((entry) => entry.name === name);
-            if (option === undefined) {
-              return null;
-            }
-            return (
-              <VersionSelect
-                key={name}
-                label={t('packages.form.version')}
-                name={name}
-                options={versionChoices(option, false)}
-                value={draft.skills[name] ?? ''}
-                onChange={(value) => {
-                  setDraft((current) =>
-                    setDraftSkillVersion(current, name, value),
-                  );
-                }}
-                disabled={busy}
-              />
-            );
-          })}
+          {skillCount === 0 ? null : (
+            <div className="selected-versions">
+              {Object.keys(draft.skills).map((name) => {
+                const option = skillChoices.find(
+                  (entry) => entry.name === name,
+                );
+                if (option === undefined) {
+                  return null;
+                }
+                return (
+                  <VersionSelect
+                    key={name}
+                    label={t('packages.form.version')}
+                    name={name}
+                    options={versionChoices(option, false)}
+                    value={draft.skills[name] ?? ''}
+                    onChange={(value) => {
+                      setDraft((current) =>
+                        setDraftSkillVersion(current, name, value),
+                      );
+                    }}
+                    disabled={busy}
+                  />
+                );
+              })}
+            </div>
+          )}
         </section>
 
         <section className="form-section field-wide">
@@ -313,27 +340,33 @@ export function CreatePackageDialog({
             searchPlaceholder={t('packages.form.searchPackages')}
             emptyMessage={t('packages.form.noNestedPackages')}
           />
-          {Object.keys(draft.packages).map((name) => {
-            const option = packageChoices.find((entry) => entry.name === name);
-            if (option === undefined) {
-              return null;
-            }
-            return (
-              <VersionSelect
-                key={name}
-                label={t('packages.form.version')}
-                name={name}
-                options={versionChoices(option, false)}
-                value={draft.packages[name] ?? ''}
-                onChange={(value) => {
-                  setDraft((current) =>
-                    setDraftPackageVersion(current, name, value),
-                  );
-                }}
-                disabled={busy}
-              />
-            );
-          })}
+          {packageCount === 0 ? null : (
+            <div className="selected-versions">
+              {Object.keys(draft.packages).map((name) => {
+                const option = packageChoices.find(
+                  (entry) => entry.name === name,
+                );
+                if (option === undefined) {
+                  return null;
+                }
+                return (
+                  <VersionSelect
+                    key={name}
+                    label={t('packages.form.version')}
+                    name={name}
+                    options={versionChoices(option, false)}
+                    value={draft.packages[name] ?? ''}
+                    onChange={(value) => {
+                      setDraft((current) =>
+                        setDraftPackageVersion(current, name, value),
+                      );
+                    }}
+                    disabled={busy}
+                  />
+                );
+              })}
+            </div>
+          )}
         </section>
 
         <p className="selection-summary field-wide">
@@ -346,24 +379,6 @@ export function CreatePackageDialog({
             packages: packageCount,
           })}
         </p>
-
-        <div className="form-actions field-wide">
-          <button
-            className="secondary"
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            className="primary"
-            type="submit"
-            disabled={busy || !canSubmit}
-          >
-            {t('packages.create')}
-          </button>
-        </div>
       </form>
     </Modal>
   );

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { SkillEntry } from '@skillink/shared';
+import { sortVersionsDesc, type SkillEntry } from '@skillink/shared';
 import { useI18n } from '../i18n.js';
 import { formatBytes } from '../format.js';
 import { TagEditor } from '../ui/TagEditor.js';
@@ -31,7 +31,7 @@ export function InstalledSkillCard({
   onRemove,
 }: InstalledSkillCardProps) {
   const { t } = useI18n();
-  const versions = Object.keys(entry.versions);
+  const versions = sortVersionsDesc(Object.keys(entry.versions));
   const [selectedVersion, setSelectedVersion] = useState(versions[0] ?? '');
   const activeVersion = entry.versions[selectedVersion]
     ? selectedVersion
