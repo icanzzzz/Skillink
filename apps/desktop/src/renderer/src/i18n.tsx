@@ -30,6 +30,7 @@ export interface I18nContextValue {
   ): Promise<LocaleInstallReport>;
   useLanguage(locale: string): Promise<void>;
   removeLanguage(locale: string): Promise<void>;
+  refreshLanguage(): Promise<void>;
 }
 
 const ENGLISH_STATE: LanguageState = {
@@ -53,6 +54,7 @@ const DEFAULT_CONTEXT: I18nContextValue = {
   },
   useLanguage: async () => undefined,
   removeLanguage: async () => undefined,
+  refreshLanguage: async () => undefined,
 };
 
 const I18nContext = createContext<I18nContextValue>(DEFAULT_CONTEXT);
@@ -68,6 +70,7 @@ export interface LanguageActions {
   ): Promise<LocaleInstallReport>;
   useLanguage(locale: string): Promise<void>;
   removeLanguage(locale: string): Promise<void>;
+  refreshLanguage(): Promise<void>;
 }
 
 /**
@@ -98,6 +101,7 @@ export function createLanguageActions(
       await api.removeLanguage(locale);
       await refresh();
     },
+    refreshLanguage: refresh,
   };
 }
 
@@ -201,6 +205,18 @@ export function I18nProvider({
     [actions],
   );
 
+  const refreshLanguage = useCallback(async (): Promise<void> => {
+    if (!actions) {
+      return;
+    }
+    try {
+      await actions.refreshLanguage();
+    } catch {
+      // A missing control plane leaves the current language intact so the UI
+      // keeps the English fallback instead of surfacing a read failure.
+    }
+  }, [actions]);
+
   const value = useMemo<I18nContextValue>(
     () => ({
       state,
@@ -212,6 +228,7 @@ export function I18nProvider({
       installLanguagePack,
       useLanguage,
       removeLanguage,
+      refreshLanguage,
     }),
     [
       state,
@@ -220,6 +237,7 @@ export function I18nProvider({
       installLanguagePack,
       useLanguage,
       removeLanguage,
+      refreshLanguage,
     ],
   );
 

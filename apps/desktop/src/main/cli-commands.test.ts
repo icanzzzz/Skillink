@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   buildAddTargetArgs,
   buildApplyArgs,
+  buildControlPlaneAddArgs,
+  buildControlPlaneListArgs,
+  buildControlPlaneUseArgs,
   buildCreatePackageArgs,
   buildGcArgs,
   buildImportSkillArgs,
@@ -138,6 +141,22 @@ describe('CLI argv builders', () => {
       'locale',
       'remove',
       'zh-CN',
+    ]);
+  });
+
+  it('maps control plane requests', () => {
+    expect(buildControlPlaneListArgs()).toEqual(['control-plane', 'list', '--json']);
+    expect(buildControlPlaneAddArgs({ path: 'C:/Users/Test User/plane' })).toEqual([
+      'control-plane',
+      'add',
+      'C:/Users/Test User/plane',
+      '--json',
+    ]);
+    expect(buildControlPlaneUseArgs({ path: 'C:/Users/Test User/plane' })).toEqual([
+      'control-plane',
+      'use',
+      'C:/Users/Test User/plane',
+      '--json',
     ]);
   });
 });

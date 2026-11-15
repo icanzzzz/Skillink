@@ -5,7 +5,7 @@ Skillink 的 GUI 界面、错误提示和 Doctor 诊断支持通过本地 JSON �
 ## 存储位置
 
 ```text
-%USERPROFILE%\.agents\skillink\        # 或 ~/.agents/skillink
+<当前控制面>\                          # 例如 %USERPROFILE%\.agents\skillink 或 ~/.agents/skillink
 ├─ settings.json                       # { "schemaVersion": 1, "locale": "zh-CN" }
 ├─ locales\
 │  ├─ zh-cn.json
@@ -16,10 +16,10 @@ Skillink 的 GUI 界面、错误提示和 Doctor 诊断支持通过本地 JSON �
 └─ skills\
 ```
 
-- 语言包安装到控制面的 `locales/`，文件名统一为 `locale.toLowerCase()`；例如 `zh-CN` 写入 `locales/zh-cn.json`。
+- 语言包安装到控制面的 `locales/`，文件名统一为 `locale.toLowerCase()`；例如 `zh-CN` 写入 `locales/zh-cn.json`。控制面由控制面清单的当前项或 `SKILLINK_HOME` 决定，没有隐式默认路径。
 - 内置英文 `en` 不落盘，始终可用，不能删除或覆盖。
 - `settings.json` 只保存用户偏好，不进入控制面 git 版本控制；`locales/` 受控制面 git 跟踪。
-- Windows NSIS 安装包会在安装阶段把仓库自带 `zh-CN.json` 复制到 `locales/zh-cn.json`；如果目标已存在则保留用户版本。portable 包不执行安装步骤，不会自动复制首次安装的语言包。应用启动时，如果已安装的 `zh-CN` 语言包与内置包的 `locale` / `name` / `nativeName` 一致，且内置包版本更新或缺少新版本文案，会自动刷新内置包；自定义语言包不会被覆盖。
+- Windows NSIS 安装包会在安装阶段把仓库自带 `zh-CN.json` 复制到旧默认目录 `%USERPROFILE%\.agents\skillink\locales\zh-cn.json`；如果目标已存在则保留用户版本。该步骤不读取控制面清单，使用其他控制面时需要手动安装语言包。portable 包不执行安装步骤，不会自动复制首次安装的语言包。应用启动时，如果当前控制面的 `zh-CN` 语言包与内置包的 `locale` / `name` / `nativeName` 一致，且内置包版本更新或缺少新版本文案，会自动刷新内置包；自定义语言包不会被覆盖。
 
 ## 语言包格式
 

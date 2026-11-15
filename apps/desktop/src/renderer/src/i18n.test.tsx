@@ -140,4 +140,27 @@ describe('I18nProvider', () => {
     expect(await installPickedLanguage(actions)).toBeNull();
     expect(installLanguagePack).not.toHaveBeenCalled();
   });
+
+  it('refreshes language state even when the locale did not change', async () => {
+    const refreshedState: LanguageState = {
+      current: 'en',
+      direction: 'ltr',
+      packs: [],
+      messages: { 'app.nav.overview': 'Refreshed' },
+    };
+    let calls = 0;
+    const api = {
+      getLanguageState: async () => {
+        calls += 1;
+        return refreshedState;
+      },
+    } as unknown as DesktopApi;
+    const updates: LanguageState[] = [];
+    const actions = createLanguageActions(api, (next) => updates.push(next));
+
+    await actions.refreshLanguage();
+
+    expect(calls).toBe(1);
+    expect(updates).toEqual([refreshedState]);
+  });
 });

@@ -5,7 +5,6 @@ import {
   SkillinkError,
   assertSafeSegment,
   assertSafeVersion,
-  getSkillinkPaths,
   type ApplyOperation,
   type ApplyReport,
   type PackageFile,
@@ -28,6 +27,7 @@ import { assertSkillContent, readSkillFile } from './skill-store.js';
 import { assertSkillIntegrity } from './skill-integrity.js';
 import { resolveTarget } from './target-graph.js';
 import { isNodeError } from './node-error.js';
+import { resolveSkillinkPaths } from './paths.js';
 
 export interface ApplyInput {
   paths?: SkillinkPaths;
@@ -427,7 +427,7 @@ async function executePlan(
 }
 
 export async function apply(input: ApplyInput = {}): Promise<ApplyReport> {
-  const paths = input.paths ?? getSkillinkPaths(input.home);
+  const paths = resolveSkillinkPaths(input);
   const route = await readRouteFile(paths);
   const packageFile = await readPackageFile(paths);
   const skillFile = await readSkillFile(paths);

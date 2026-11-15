@@ -1,5 +1,6 @@
 import type {
   ApplyReport,
+  ControlPlaneState,
   GcReport,
   ImportSkillResult,
   LanguageState,
@@ -40,6 +41,7 @@ export interface DesktopApi {
   getSnapshot(): Promise<DesktopSnapshot>;
   apply(options?: ApplyRequest): Promise<ApplyReport>;
   chooseFolder(): Promise<string | null>;
+  getPathForFile(file: File): string;
   scanSkills(input: ScanSkillsRequest): Promise<SkillPackageScanReport>;
   importSkill(input: ImportSkillRequest): Promise<ImportSkillResult>;
   createPackage(input: CreatePackageRequest): Promise<PackageVersion>;
@@ -63,4 +65,7 @@ export interface DesktopApi {
   ): Promise<LocaleInstallReport>;
   useLanguage(locale: string): Promise<void>;
   removeLanguage(locale: string): Promise<void>;
+  getControlPlanes(): Promise<ControlPlaneState>;
+  addControlPlane(path: string): Promise<ControlPlaneState>;
+  useControlPlane(path: string): Promise<ControlPlaneState>;
 }

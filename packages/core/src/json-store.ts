@@ -63,7 +63,16 @@ export async function readJsonFile<T>(
     );
   }
 
-  return schema.parse(raw);
+  try {
+    return schema.parse(raw);
+  } catch (error) {
+    throw new SkillinkError(
+      'IO_ERROR',
+      `Invalid data in ${filePath}`,
+      { filePath },
+      { cause: error },
+    );
+  }
 }
 
 export async function writeJsonAtomic<T>(

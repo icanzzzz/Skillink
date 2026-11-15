@@ -1,0 +1,15 @@
+#!/bin/sh
+# 本地 CI：与 .github/workflows/ci.yml 的 pnpm build 保持一致。
+# 单次绕过：git push --no-verify；跳过：SKILLINK_SKIP_CI=1 git push ...
+set -eu
+
+if [ -n "${SKILLINK_SKIP_CI:-}" ]; then
+  echo "skillink: SKILLINK_SKIP_CI 已设置，跳过本地 CI"
+  exit 0
+fi
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "skillink: 本地 CI [pre-push] pnpm build"
+pnpm build
+echo "skillink: 本地 CI [pre-push] 通过"

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type {
   ApplyReport,
+  ControlPlaneState,
   GcReport,
   ImportSkillResult,
   MessageKey,
@@ -22,15 +23,17 @@ import type {
   TargetRemoveRequest,
 } from '../../ipc-schemas.js';
 import type { DesktopApi, DesktopSnapshot } from '../../shared.js';
+import { loadWorkspace } from './workspace-loader.js';
+import { ControlPlaneDialog } from './ControlPlaneDialog.js';
 import { DoctorView } from './DoctorView.js';
 import { useToast } from './Feedback.js';
 import { useI18n } from './i18n.js';
 import { LanguageDialog, LanguageTrigger } from './LanguageDialog.js';
 import { GitUnavailableNotice } from './GitUnavailableNotice.js';
-import { PackagesView } from './PackagesView.js';
-import { SkillsView } from './SkillsView.js';
+import { PackagesView } from './packages/PackagesView.js';
+import { SkillsView } from './skills/SkillsView.js';
 import { SnapshotView } from './SnapshotView.js';
-import { TargetsView } from './TargetsView.js';
+import { TargetsView } from './targets/TargetsView.js';
 
 type ViewId =
   | 'overview'
@@ -48,14 +51,6 @@ const NAV_ITEMS: Array<{ id: ViewId; labelKey: MessageKey }> = [
 ];
 
 const BRAND_ICON = new URL('./assets/icon.png', import.meta.url).href;
-
-const VIEW_TITLES: Record<ViewId, MessageKey> = {
-  overview: 'app.titles.overview',
-  targets: 'app.titles.targets',
-  skills: 'app.titles.skills',
-  packages: 'app.titles.packages',
-  doctor: 'app.titles.doctor',
-};
 
 function NavIcon({ view }: { view: ViewId }) {
   const props = {
@@ -119,7 +114,7 @@ export interface AppProps {
 export function App({ api }: AppProps) {
   const client =
     api ?? (typeof window !== 'undefined' ? window.skillink : undefined);
-  const { t } = useI18n();
+  const { t, refreshLanguage } = useI18n();
   const { pushToast } = useToast();
   const [view, setView] = useState<ViewId>('overview');
   const [snapshot, setSnapshot] = useState<DesktopSnapshot | null>(null);
@@ -129,6 +124,9 @@ export function App({ api }: AppProps) {
   const [busy, setBusy] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const [gitAvailable, setGitAvailable] = useState<boolean | null>(null);
+  const [controlPlaneState, setControlPlaneState] =
+    useState<ControlPlaneState | null>(null);
+  const [controlPlaneOpen, setControlPlaneOpen] = useState(false);
 
   async function refresh(): Promise<void> {
     if (!client) {
@@ -137,17 +135,17 @@ export function App({ api }: AppProps) {
     }
 
     try {
-      const nextSnapshot = await client.getSnapshot();
-      setSnapshot(nextSnapshot);
-      setError(null);
+      const result = await loadWorkspace(client);
+      setControlPlaneState(result.controlPlanes);
+      setSnapshot(result.snapshot);
+      setError(result.error);
     } catch (cause) {
+      setSnapshot(null);
       setError(cause instanceof Error ? cause.message : String(cause));
     }
   }
 
-  useEffect(() => {
-    void refresh();
-
+  function reloadRuntimeStatus(): void {
     if (!client) {
       return;
     }
@@ -156,7 +154,22 @@ export function App({ api }: AppProps) {
       .getRuntimeStatus()
       .then((status) => setGitAvailable(status.gitAvailable))
       .catch(() => setGitAvailable(null));
+  }
+
+  useEffect(() => {
+    void refresh();
+    reloadRuntimeStatus();
   }, []);
+
+  async function handleControlPlaneChanged(): Promise<void> {
+    setGcReport(null);
+    setApplyReport(null);
+    setSnapshot(null);
+    setError(null);
+    await refresh();
+    await refreshLanguage();
+    reloadRuntimeStatus();
+  }
 
   async function runAction(
     action: () => Promise<void>,
@@ -359,19 +372,25 @@ export function App({ api }: AppProps) {
         <div className="sidebar-bottom">
           <GitUnavailableNotice visible={gitAvailable === false} />
           <LanguageTrigger onClick={() => setLanguageOpen(true)} />
-          <div className="sidebar-foot">
-            <span>{t('app.controlPlane')}</span>
-            <code>{snapshot?.home ?? '~/.agents/skillink'}</code>
-          </div>
+          <button
+            className="control-plane-trigger"
+            type="button"
+            onClick={() => setControlPlaneOpen(true)}
+            title={t('controlPlane.title')}
+            aria-label={t('controlPlane.title')}
+          >
+            <span className="control-plane-trigger-label">
+              {t('app.controlPlane')}
+            </span>
+            <code>
+              {controlPlaneState?.active ?? t('controlPlane.notSelected')}
+            </code>
+          </button>
         </div>
       </aside>
 
       <section className="workspace">
         <header className="topbar">
-          <div>
-            <p className="eyebrow">{t('app.eyebrow')}</p>
-            <h2>{t(VIEW_TITLES[view])}</h2>
-          </div>
           <div className="topbar-actions">
             {busy ? <span className="busy">{t('app.status.working')}</span> : null}
             <button
@@ -412,6 +431,7 @@ export function App({ api }: AppProps) {
               statusEntries={snapshot.status.entries}
               targetSkills={snapshot.targetSkills}
               applyReport={applyReport}
+              packages={snapshot.packages}
               busy={busy}
               onBrowse={() => client?.chooseFolder() ?? null}
               onAddTarget={addTarget}
@@ -435,6 +455,9 @@ export function App({ api }: AppProps) {
               onTag={skillTag}
               onRemove={skillRemove}
               onGc={runGc}
+              onResolveDroppedPath={(file) =>
+                client?.getPathForFile(file) ?? ''
+              }
             />
           ) : view === 'packages' ? (
             <PackagesView
@@ -453,6 +476,18 @@ export function App({ api }: AppProps) {
               onApply={applyRoutes}
             />
           )
+        ) : controlPlaneState && !controlPlaneState.active ? (
+          <div className="control-plane-empty">
+            <h3>{t('controlPlane.noActive.title')}</h3>
+            <p>{t('controlPlane.noActive.body')}</p>
+            <button
+              className="primary"
+              type="button"
+              onClick={() => setControlPlaneOpen(true)}
+            >
+              {t('controlPlane.add')}
+            </button>
+          </div>
         ) : (
           <div className="loading">{t('app.loading')}</div>
         )}
@@ -461,6 +496,13 @@ export function App({ api }: AppProps) {
       <LanguageDialog
         open={languageOpen}
         onClose={() => setLanguageOpen(false)}
+      />
+      <ControlPlaneDialog
+        api={client}
+        open={controlPlaneOpen}
+        state={controlPlaneState}
+        onClose={() => setControlPlaneOpen(false)}
+        onChanged={handleControlPlaneChanged}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -70,5 +70,18 @@ describe('atomic JSON store', () => {
     await expect(
       readJsonFile(file, TestSchema, { schemaVersion: 1, value: 'fallback' }),
     ).resolves.toEqual({ schemaVersion: 1, value: 'hello' });
+  });
+
+  it('wraps schema-invalid JSON in an IO_ERROR', async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, 'data.json');
+    await writeFile(file, JSON.stringify({ n: 'x' }), 'utf8');
+
+    await expect(
+      readJsonFile(file, z.object({ n: z.number() }), { n: 0 }),
+    ).rejects.toMatchObject({
+      code: 'IO_ERROR',
+      details: { filePath: file },
+    });
   });
 });

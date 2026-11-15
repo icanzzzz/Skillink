@@ -1,3 +1,4 @@
+export * from './control-plane.js';
 export * from './errors.js';
 export * from './i18n.js';
 export * from './i18n-en.js';
@@ -9,3 +10,4 @@ export * from './schemas.js';
 export * from './skill-directory.js';
 export * from './spec.js';
 export * from './target-id.js';
+export * from './version-order.js';

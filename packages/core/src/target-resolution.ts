@@ -1,6 +1,5 @@
 import {
   SkillinkError,
-  getSkillinkPaths,
   type SkillinkPaths,
   type TargetSkillSummary,
 } from '@skillink/shared';
@@ -11,6 +10,7 @@ import {
 import { readPackageFile } from './package-store.js';
 import { readRouteFile } from './route.js';
 import { readSkillFile } from './skill-store.js';
+import { resolveSkillinkPaths } from './paths.js';
 
 export interface SummarizeTargetSkillsInput {
   paths?: SkillinkPaths;
@@ -20,7 +20,7 @@ export interface SummarizeTargetSkillsInput {
 export async function summarizeTargetSkills(
   input: SummarizeTargetSkillsInput = {},
 ): Promise<TargetSkillSummary[]> {
-  const paths = input.paths ?? getSkillinkPaths(input.home);
+  const paths = resolveSkillinkPaths(input);
   const [route, packageFile, skillFile] = await Promise.all([
     readRouteFile(paths),
     readPackageFile(paths),

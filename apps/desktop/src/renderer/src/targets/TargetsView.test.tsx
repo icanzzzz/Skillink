@@ -1,12 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { TargetRoute } from '@skillink/shared';
-import { renderWithMessages } from './i18n.test-utils.js';
-import {
-  AddTargetDialog,
-  TargetsView,
-  invokeTargetsAction,
-} from './TargetsView.js';
+import { renderWithMessages } from '../i18n.test-utils.js';
+import { AddTargetDialog } from './AddTargetDialog.js';
+import { TargetsView, invokeTargetsAction } from './TargetsView.js';
 
 const target: TargetRoute = {
   id: 'project-a',
@@ -89,7 +86,7 @@ describe('TargetsView', () => {
 
   it('renders packages inside their target and one assign action per target', () => {
     const html = renderToStaticMarkup(
-      <TargetsView targets={[target, secondTarget]} />,
+      <TargetsView targets={[target, secondTarget]} onRouteAdd={() => {}} />,
     );
     const projectA = targetBlock(html, 'project-a');
     const projectB = targetBlock(html, 'project-b');
@@ -114,6 +111,27 @@ describe('TargetsView', () => {
     expect(html).not.toContain('table-head');
   });
 
+  it('no longer renders an inline package assignment form', () => {
+    const html = renderToStaticMarkup(
+      <TargetsView targets={[target]} onRouteAdd={() => {}} />,
+    );
+
+    expect(html).not.toContain('target-package-form');
+    expect(html).not.toContain('<datalist');
+    expect(html).not.toContain('modal-backdrop');
+  });
+
+  it('disables actions whose handlers are missing', () => {
+    const html = renderToStaticMarkup(<TargetsView targets={[target]} />);
+
+    expect(html).toMatch(
+      /<button class="primary" type="button" disabled="">Assign package<\/button>/,
+    );
+    expect(html).toMatch(
+      /<button class="secondary" type="button" disabled="">Add target<\/button>/,
+    );
+  });
+
   it('keeps disabled packages manageable from the target row', () => {
     const disabledTarget: TargetRoute = {
       ...target,
@@ -136,6 +154,17 @@ describe('TargetsView', () => {
 
     expect(html).toContain('Enable route');
     expect(html).toContain('Remove route');
+  });
+
+  it('lists each assigned package as one scrollable row', () => {
+    const html = renderToStaticMarkup(<TargetsView targets={[target]} />);
+
+    expect(html).toContain('class="target-package-list"');
+    expect(html).toMatch(
+      /<li class="target-package-row"><span class="target-package-name">frontend<\/span><code class="target-package-version">1\.0\.0<\/code>/,
+    );
+    expect(html).not.toContain('class="target-package-state"');
+    expect(html).not.toContain('frontend<small>@');
   });
 
   it('invokes apply and preview actions without options', () => {

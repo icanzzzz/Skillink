@@ -1,0 +1,17 @@
+#!/bin/sh
+# 本地 CI：与 .github/workflows/ci.yml 的 pnpm test / pnpm typecheck 保持一致。
+# 单次绕过：git commit --no-verify；跳过：SKILLINK_SKIP_CI=1 git commit ...
+set -eu
+
+if [ -n "${SKILLINK_SKIP_CI:-}" ]; then
+  echo "skillink: SKILLINK_SKIP_CI 已设置，跳过本地 CI"
+  exit 0
+fi
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "skillink: 本地 CI [pre-commit] pnpm test"
+pnpm test
+echo "skillink: 本地 CI [pre-commit] pnpm typecheck"
+pnpm typecheck
+echo "skillink: 本地 CI [pre-commit] 通过"
