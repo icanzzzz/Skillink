@@ -478,6 +478,14 @@ pnpm typecheck
 pnpm build
 ```
 
+本地 CI 走仓库自带的 git 钩子，执行内容与 `.github/workflows/ci.yml` 一致：`pre-commit` 跑 `pnpm test` 和 `pnpm typecheck`，`pre-push` 跑 `pnpm build`。克隆后启用一次：
+
+```bash
+pnpm hooks:install
+```
+
+单次绕过用 `git commit --no-verify` / `git push --no-verify`，整段跳过用 `SKILLINK_SKIP_CI=1`。钩子用 POSIX sh 编写，由 Git for Windows 自带的 sh 执行，因此本机不需要额外 shell。
+
 首次运行 GUI 前如 Electron 二进制缺失，执行：
 
 ```bash

@@ -1,0 +1,2 @@
+# git 钩子必须保持 LF，Git for Windows 的 sh 才能解析。
+.githooks/* text eol=lf
